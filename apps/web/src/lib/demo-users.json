@@ -1,0 +1,31 @@
+[
+  {
+    "id": "demo-owner",
+    "email": "owner@antara.club",
+    "name": "Mission Director",
+    "role": "OWNER",
+    "passwordHash": "$2a$12$g23qMdkz/jRmIy0GmTtxr.TWbTOsVPfnITsX6EvKjxqubj2D3MvRW"
+  },
+  {
+    "id": "demo-admin-avionics",
+    "email": "avionics@orbitalops.club",
+    "name": "Avionics Lead",
+    "role": "ADMIN",
+    "passwordHash": "$2a$12$g23qMdkz/jRmIy0GmTtxr.TWbTOsVPfnITsX6EvKjxqubj2D3MvRW"
+  },
+  {
+    "id": "demo-member-telemetry",
+    "email": "member@orbitalops.club",
+    "name": "Telemetry Engineer",
+    "role": "MEMBER",
+    "passwordHash": "$2a$12$g23qMdkz/jRmIy0GmTtxr.TWbTOsVPfnITsX6EvKjxqubj2D3MvRW"
+  },
+  {
+    "id": "demo-mentor",
+    "email": "mentor@orbitalops.club",
+    "name": "Faculty Mentor",
+    "role": "OWNER",
+    "passwordHash": "$2a$12$g23qMdkz/jRmIy0GmTtxr.TWbTOsVPfnITsX6EvKjxqubj2D3MvRW"
+  }
+]
+
