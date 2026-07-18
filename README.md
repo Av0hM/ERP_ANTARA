@@ -1,10 +1,10 @@
-# ORBITALOPS ERP
+# ANTARA ERP
 
 AI-powered operations and collaboration platform for satellite engineering clubs, aerospace organizations, and multidisciplinary technical teams.
 
 ## Product Positioning
 
-OrbitalOps ERP is a domain-specialized engineering operations platform focused on subsystem coordination, technical execution, real-time collaboration, work intelligence, and operational analytics. It is designed for student satellite teams that need startup-grade software without losing aerospace context.
+ANTARA ERP is a domain-specialized engineering operations platform focused on subsystem coordination, technical execution, real-time collaboration, work intelligence, and operational analytics. It is designed for student satellite teams that need startup-grade software without losing aerospace context.
 
 ## Monorepo Layout
 
@@ -38,7 +38,7 @@ npm run dev
 
 ## Demo Credentials
 
-- Email: `owner@orbitalops.club`
+- Email: `owner@ANTARA.club`
 - Password: `antara123erp`
 
 These credentials work after seeding the database with `apps/api/prisma/seed.ts`.
