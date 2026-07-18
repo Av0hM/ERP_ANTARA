@@ -35,15 +35,6 @@ npm install
 cp .env.example .env
 npm run dev
 ```
-
-## Demo Credentials
-
-- Email: `owner@ANTARA.club`
-- Password: `antara123erp`
-
-These credentials work after seeding the database with `apps/api/prisma/seed.ts`.
-Always provide a real `NEXTAUTH_SECRET`, and only set `AUTH_ALLOW_JSON_CREDENTIALS=true` when you intentionally want the API to verify demo users from the JSON fixture. The web login can fall back to the demo fixture when the API is unavailable, which is useful for local development and E2E runs.
-
 ## Core Stack
 
 - Next.js 15 + React + TypeScript
