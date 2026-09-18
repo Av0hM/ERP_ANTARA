@@ -25,6 +25,11 @@ function toBase64(file: File) {
 
 export function AttachmentVault() {
   const actor = useActorProfile();
+
+  if (!actor) {
+    return null;
+  }
+
   const { attachments, createAttachment, isCreating } = useAttachmentVault();
   const { data: taskData = [] } = useTaskCatalog();
   const [taskId, setTaskId] = useState("");

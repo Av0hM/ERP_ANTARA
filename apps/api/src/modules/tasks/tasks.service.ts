@@ -6,12 +6,14 @@ import { CreateTaskCommentDto } from "./dto/create-task-comment.dto";
 import { CreateTaskDto } from "./dto/create-task.dto";
 import { UpdateTaskStatusDto } from "./dto/update-task-status.dto";
 import { TaskEventsService } from "./events/task-events.service";
+import { AuditService } from "../audit/audit.service";
 
 @Injectable()
 export class TasksService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly taskEvents: TaskEventsService,
+    private readonly auditService: AuditService,
   ) {}
 
   findAll() {
@@ -55,7 +57,7 @@ export class TasksService {
     }));
   }
 
-  async create(payload: CreateTaskDto) {
+  async create(payload: CreateTaskDto, actorId: string) {
     const data = {
       title: payload.title,
       description: payload.description,
@@ -83,10 +85,20 @@ export class TasksService {
       task,
     });
 
+    await this.auditService.log({
+      action: "CREATE",
+      entityType: "Task",
+      entityId: task.id,
+      actorId,
+      payload: { title: task.title, status: task.status },
+    });
+
     return task;
   }
 
-  async updateStatus(taskId: string, payload: UpdateTaskStatusDto) {
+  async updateStatus(taskId: string, payload: UpdateTaskStatusDto, actorId: string) {
+    const oldTask = await this.prisma.task.findUnique({ where: { id: taskId } });
+
     const task = await this.prisma.task.update({
       where: { id: taskId },
       data: {
@@ -103,10 +115,20 @@ export class TasksService {
       task,
     });
 
+    await this.auditService.log({
+      action: "STATUS_CHANGE",
+      entityType: "Task",
+      entityId: taskId,
+      actorId,
+      payload: { oldStatus: oldTask?.status, newStatus: task.status },
+    });
+
     return task;
   }
 
-  async reassign(taskId: string, assignedToId: string | null) {
+  async reassign(taskId: string, assignedToId: string | null, actorId: string) {
+    const oldTask = await this.prisma.task.findUnique({ where: { id: taskId } });
+
     const task = await this.prisma.task.update({
       where: { id: taskId },
       data: {
@@ -130,10 +152,18 @@ export class TasksService {
       task,
     });
 
+    await this.auditService.log({
+      action: "REASSIGN",
+      entityType: "Task",
+      entityId: taskId,
+      actorId,
+      payload: { oldAssigneeId: oldTask?.assignedToId, newAssigneeId: assignedToId },
+    });
+
     return task;
   }
 
-  async addComment(taskId: string, payload: CreateTaskCommentDto) {
+  async addComment(taskId: string, payload: CreateTaskCommentDto, actorId: string) {
     const comment = await this.prisma.taskComment.create({
       data: {
         taskId,
@@ -147,7 +177,39 @@ export class TasksService {
     });
 
     this.taskEvents.emitCommentAdded(comment);
+
+    await this.auditService.log({
+      action: "COMMENT_ADD",
+      entityType: "TaskComment",
+      entityId: comment.id,
+      actorId,
+      payload: { taskId, content: payload.content },
+    });
+
     return comment;
+  }
+
+  async delete(taskId: string, actorId: string) {
+    const task = await this.prisma.task.findUnique({ where: { id: taskId } });
+
+    if (!task) {
+      return { deleted: false };
+    }
+
+    await this.prisma.task.update({
+      where: { id: taskId },
+      data: { deletedAt: new Date(), isArchived: true },
+    });
+
+    await this.auditService.log({
+      action: "DELETE",
+      entityType: "Task",
+      entityId: taskId,
+      actorId,
+      payload: { title: task.title },
+    });
+
+    return { deleted: true };
   }
 }
 

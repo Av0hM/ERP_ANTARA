@@ -18,9 +18,9 @@
 
 ## Remaining Future Enhancements
 
-- Replace fallback/demo identity with authenticated actor context everywhere
+- [x] Replace fallback/demo identity with authenticated actor context everywhere (P2)
 - Move AI recommendation generation from static heuristics to live OpenAI pipelines
-- Add email delivery and background jobs for notifications
+- [x] Add email delivery and background jobs for notifications (P4)
 - Sync Google Calendar and Google Drive with real external credentials
-- Add persistent audit and report export workflows
+- [x] Add persistent audit and report export workflows (P3)
 

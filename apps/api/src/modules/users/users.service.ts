@@ -2,10 +2,14 @@ import { Injectable } from "@nestjs/common";
 import { AppRole } from "@antara/contracts";
 
 import { PrismaService } from "../../common/prisma/prisma.service";
+import { AuditService } from "../audit/audit.service";
 
 @Injectable()
 export class UsersService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly auditService: AuditService,
+  ) {}
 
   findByEmail(email: string) {
     return this.prisma.user.findUnique({
@@ -35,6 +39,25 @@ export class UsersService {
         role: data.role,
       },
     });
+  }
+
+  async updateRole(userId: string, newRole: AppRole, actorId: string) {
+    const oldUser = await this.prisma.user.findUnique({ where: { id: userId } });
+
+    const user = await this.prisma.user.update({
+      where: { id: userId },
+      data: { role: newRole },
+    });
+
+    await this.auditService.log({
+      action: "ROLE_CHANGE",
+      entityType: "User",
+      entityId: userId,
+      actorId,
+      payload: { oldRole: oldUser?.role, newRole },
+    });
+
+    return user;
   }
 
   listMembers() {

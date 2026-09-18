@@ -10,6 +10,7 @@ import { LoginDto } from "./dto/login.dto";
 import { LogoutDto } from "./dto/logout.dto";
 import { RefreshSessionDto } from "./dto/refresh-session.dto";
 import { RegisterDto } from "./dto/register.dto";
+import { AuditService } from "../audit/audit.service";
 
 type AuthUser = {
   id: string;
@@ -32,6 +33,7 @@ export class AuthService {
     private readonly prisma: PrismaService,
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
+    private readonly auditService: AuditService,
   ) {}
 
   async register(payload: RegisterDto) {
@@ -67,12 +69,22 @@ export class AuthService {
       throw new UnauthorizedException("Invalid credentials");
     }
 
-    return this.createAuthResponse({
+    const response = this.createAuthResponse({
       id: user.id,
       email: user.email,
       name: user.name,
       role: user.role,
     });
+
+    await this.auditService.log({
+      action: "LOGIN",
+      entityType: "User",
+      entityId: user.id,
+      actorId: user.id,
+      payload: { email: user.email },
+    });
+
+    return response;
   }
 
   async googleCallback(payload: { email: string; name: string; avatarUrl?: string }) {
@@ -93,12 +105,22 @@ export class AuthService {
       });
     }
 
-    return this.createAuthResponse({
+    const response = this.createAuthResponse({
       id: user.id,
       email: user.email,
       name: user.name,
       role: user.role,
     });
+
+    await this.auditService.log({
+      action: "LOGIN",
+      entityType: "User",
+      entityId: user.id,
+      actorId: user.id,
+      payload: { email: user.email, provider: "google" },
+    });
+
+    return response;
   }
 
   async refreshSession(payload: RefreshSessionDto) {
@@ -148,10 +170,24 @@ export class AuthService {
   }
 
   async logout(payload: LogoutDto) {
+    const session = await this.prisma.session.findUnique({
+      where: { refreshToken: payload.refreshToken },
+      include: { user: true },
+    });
+
     await this.prisma.session.updateMany({
       where: { refreshToken: payload.refreshToken, revokedAt: null },
       data: { revokedAt: new Date() },
     });
+
+    if (session?.user) {
+      await this.auditService.log({
+        action: "LOGOUT",
+        entityType: "User",
+        entityId: session.user.id,
+        actorId: session.user.id,
+      });
+    }
 
     return { success: true };
   }

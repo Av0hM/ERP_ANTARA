@@ -7,6 +7,7 @@ describe("TasksService", () => {
     task: {
       create: jest.fn(),
       update: jest.fn(),
+      findUnique: jest.fn(),
     },
     taskComment: {
       create: jest.fn(),
@@ -19,11 +20,15 @@ describe("TasksService", () => {
     emitCommentAdded: jest.fn(),
   };
 
+  const auditService = {
+    log: jest.fn().mockResolvedValue(null),
+  };
+
   let service: TasksService;
 
   beforeEach(() => {
     jest.clearAllMocks();
-    service = new TasksService(prisma as never, taskEvents as never);
+    service = new TasksService(prisma as never, taskEvents as never, auditService as never);
   });
 
   it("emits a task update when a task is created", async () => {
@@ -44,9 +49,16 @@ describe("TasksService", () => {
       deadline: new Date().toISOString(),
       tags: ["firmware"],
       dependencyIds: [],
-    });
+    }, "actor-1");
 
     expect(taskEvents.emitTaskUpdated).toHaveBeenCalled();
+    expect(auditService.log).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: "CREATE",
+        entityType: "Task",
+        actorId: "actor-1",
+      }),
+    );
   });
 });
 

@@ -40,6 +40,10 @@ describe("AuthService", () => {
     }),
   } as unknown as ConfigService;
 
+  const auditService = {
+    log: jest.fn().mockResolvedValue(null),
+  };
+
   let service: AuthService;
 
   beforeEach(() => {
@@ -49,6 +53,7 @@ describe("AuthService", () => {
       prisma as never,
       jwtService,
       configService,
+      auditService as never,
     );
   });
 

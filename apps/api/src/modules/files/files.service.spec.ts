@@ -5,6 +5,8 @@ describe("FilesService", () => {
     attachment: {
       findMany: jest.fn(),
       create: jest.fn(),
+      findUnique: jest.fn(),
+      delete: jest.fn(),
     },
   };
 
@@ -12,11 +14,15 @@ describe("FilesService", () => {
     uploadDriveFile: jest.fn(),
   };
 
+  const auditService = {
+    log: jest.fn().mockResolvedValue(null),
+  };
+
   let service: FilesService;
 
   beforeEach(() => {
     jest.clearAllMocks();
-    service = new FilesService(prisma as never, googleIntegration as never);
+    service = new FilesService(prisma as never, googleIntegration as never, auditService as never);
   });
 
   it("creates a drive-backed attachment when content is provided", async () => {
@@ -52,5 +58,27 @@ describe("FilesService", () => {
       }),
     );
     expect(result.id).toBe("attachment-1");
+  });
+
+  it("deletes an attachment and logs audit", async () => {
+    prisma.attachment.findUnique.mockResolvedValue({
+      id: "attachment-1",
+      name: "test.pdf",
+      taskId: "task-1",
+    });
+    prisma.attachment.delete.mockResolvedValue({});
+
+    const result = await service.delete("attachment-1", "user-1");
+
+    expect(prisma.attachment.delete).toHaveBeenCalledWith({ where: { id: "attachment-1" } });
+    expect(auditService.log).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: "DELETE",
+        entityType: "Attachment",
+        entityId: "attachment-1",
+        actorId: "user-1",
+      }),
+    );
+    expect(result.deleted).toBe(true);
   });
 });

@@ -1,9 +1,3 @@
-import { AppRole } from "@antara/contracts";
-
-export const FALLBACK_USER_ID = "fallback-user";
-export const FALLBACK_USER_NAME = "Mission Member";
-export const FALLBACK_USER_ROLE = AppRole.MEMBER;
-
 export const subsystemIdMap = {
   Software: "software",
   Avionics: "avionics",
@@ -13,4 +7,3 @@ export const subsystemIdMap = {
   Thermal: "thermal",
   "Ground Station": "ground-station",
 } as const;
-

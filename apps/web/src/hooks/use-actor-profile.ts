@@ -3,16 +3,28 @@
 import { useSession } from "next-auth/react";
 import { AppRole } from "@antara/contracts";
 
-import { FALLBACK_USER_ID, FALLBACK_USER_NAME, FALLBACK_USER_ROLE } from "@/lib/demo-context";
-
-export function useActorProfile() {
-  const { data } = useSession();
-
-  return {
-    id: data?.user?.id ?? FALLBACK_USER_ID,
-    name: data?.user?.name ?? FALLBACK_USER_NAME,
-    role: (data?.user?.role as AppRole | undefined) ?? FALLBACK_USER_ROLE,
-    accessToken: data?.accessToken,
-  };
+export interface ActorProfile {
+  id: string;
+  name: string;
+  role: AppRole;
+  accessToken: string;
 }
 
+export function useActorProfile(): ActorProfile | null {
+  const { data, status } = useSession();
+
+  if (status === "loading") {
+    return null;
+  }
+
+  if (!data?.user) {
+    return null;
+  }
+
+  return {
+    id: data.user.id!,
+    name: data.user.name!,
+    role: data.user.role as AppRole,
+    accessToken: data.accessToken ?? "",
+  };
+}

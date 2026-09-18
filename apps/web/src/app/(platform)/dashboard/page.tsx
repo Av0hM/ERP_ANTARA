@@ -12,7 +12,13 @@ const roleGreeting: Record<AppRole, string> = {
 };
 
 export default function DashboardPage() {
-  const { role, name } = useActorProfile();
+  const actor = useActorProfile();
+
+  if (!actor) {
+    return null;
+  }
+
+  const { role, name } = actor;
 
   return (
     <main className="space-y-6">

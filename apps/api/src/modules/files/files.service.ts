@@ -2,6 +2,7 @@ import { Injectable } from "@nestjs/common";
 
 import { PrismaService } from "../../common/prisma/prisma.service";
 import { GoogleIntegrationService } from "../../common/integrations/google.integration.service";
+import { AuditService } from "../audit/audit.service";
 import { CreateAttachmentDto } from "./dto/create-attachment.dto";
 
 @Injectable()
@@ -9,6 +10,7 @@ export class FilesService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly googleIntegration: GoogleIntegrationService,
+    private readonly auditService: AuditService,
   ) {}
 
   async list() {
@@ -53,5 +55,29 @@ export class FilesService {
         uploadedBy: true,
       },
     });
+  }
+
+  async delete(attachmentId: string, actorId: string) {
+    const attachment = await this.prisma.attachment.findUnique({
+      where: { id: attachmentId },
+    });
+
+    if (!attachment) {
+      return { deleted: false };
+    }
+
+    await this.prisma.attachment.delete({
+      where: { id: attachmentId },
+    });
+
+    await this.auditService.log({
+      action: "DELETE",
+      entityType: "Attachment",
+      entityId: attachmentId,
+      actorId,
+      payload: { name: attachment.name, taskId: attachment.taskId },
+    });
+
+    return { deleted: true };
   }
 }

@@ -20,31 +20,35 @@ export function useTaskControl(initialTasks: TaskRecord[]) {
   const socketRef = useRef<Socket | null>(null);
 
   const tasksQuery = useQuery({
-    queryKey: ["tasks", actor.accessToken],
-    queryFn: () => fetchTasks(actor.accessToken),
+    queryKey: ["tasks", actor?.accessToken],
+    queryFn: () => fetchTasks(actor!.accessToken),
     initialData: initialTasks,
+    enabled: !!actor,
   });
 
   const activityQuery = useQuery<ActivityFeedRecord[]>({
-    queryKey: ["task-activity", actor.accessToken],
-    queryFn: () => fetchActivityFeed(actor.accessToken),
+    queryKey: ["task-activity", actor?.accessToken],
+    queryFn: () => fetchActivityFeed(actor!.accessToken),
+    enabled: !!actor,
   });
 
   useEffect(() => {
     let socket: Socket | null = null;
     let typingTimer: ReturnType<typeof setTimeout> | undefined;
 
+    if (!actor?.accessToken) {
+      return;
+    }
+
     try {
       socket = io(`${socketBaseUrl}/collaboration`, {
         transports: ["websocket"],
+        auth: { token: actor.accessToken },
       });
       socketRef.current = socket;
 
       socket.on("connect", () => {
-        socket?.emit("presence.join", {
-          userId: actor.id,
-          name: actor.name,
-        });
+        socket?.emit("presence.join");
       });
 
       socket.on("presence.snapshot", (snapshot: PresenceRecord[]) => {
@@ -60,7 +64,7 @@ export function useTaskControl(initialTasks: TaskRecord[]) {
       });
 
       socket.on("task.updated", (payload: { task: Partial<TaskRecord> & { id: string; status?: TaskStatus } }) => {
-        queryClient.setQueryData<TaskRecord[]>(["tasks", actor.accessToken], (current = []) =>
+        queryClient.setQueryData<TaskRecord[]>(["tasks", actor?.accessToken], (current = []) =>
           current.map((task) =>
             task.id === payload.task.id
               ? {
@@ -78,7 +82,7 @@ export function useTaskControl(initialTasks: TaskRecord[]) {
           return;
         }
 
-        queryClient.setQueryData<TaskRecord[]>(["tasks", actor.accessToken], (current = []) =>
+        queryClient.setQueryData<TaskRecord[]>(["tasks", actor?.accessToken], (current = []) =>
           current.map((task) =>
             task.id === taskId
               ? {
@@ -108,38 +112,38 @@ export function useTaskControl(initialTasks: TaskRecord[]) {
       socketRef.current = null;
       socket?.disconnect();
     };
-  }, [actor.id, actor.name, queryClient]);
+  }, [actor?.id, actor?.accessToken, queryClient]);
 
   const statusMutation = useMutation({
-    mutationFn: (input: { taskId: string; status: TaskStatus }) => updateTaskStatus(input, actor.accessToken),
+    mutationFn: (input: { taskId: string; status: TaskStatus }) => updateTaskStatus(input, actor!.accessToken),
     onMutate: async ({ taskId, status }) => {
-      await queryClient.cancelQueries({ queryKey: ["tasks", actor.accessToken] });
-      const previous = queryClient.getQueryData<TaskRecord[]>(["tasks", actor.accessToken]) ?? [];
-      queryClient.setQueryData<TaskRecord[]>(["tasks", actor.accessToken], (current = []) =>
+      await queryClient.cancelQueries({ queryKey: ["tasks", actor?.accessToken] });
+      const previous = queryClient.getQueryData<TaskRecord[]>(["tasks", actor?.accessToken]) ?? [];
+      queryClient.setQueryData<TaskRecord[]>(["tasks", actor?.accessToken], (current = []) =>
         current.map((task) => (task.id === taskId ? { ...task, status } : task)),
       );
       return { previous };
     },
     onError: (_error, _variables, context) => {
       if (context?.previous) {
-        queryClient.setQueryData(["tasks", actor.accessToken], context.previous);
+        queryClient.setQueryData(["tasks", actor?.accessToken], context.previous);
       }
     },
   });
 
   const commentMutation = useMutation({
-    mutationFn: (input: { taskId: string; authorId: string; content: string }) => addTaskComment(input, actor.accessToken),
+    mutationFn: (input: { taskId: string; authorId: string; content: string }) => addTaskComment(input, actor!.accessToken),
     onMutate: async (variables) => {
-      await queryClient.cancelQueries({ queryKey: ["tasks", actor.accessToken] });
-      const previous = queryClient.getQueryData<TaskRecord[]>(["tasks", actor.accessToken]) ?? [];
+      await queryClient.cancelQueries({ queryKey: ["tasks", actor?.accessToken] });
+      const previous = queryClient.getQueryData<TaskRecord[]>(["tasks", actor?.accessToken]) ?? [];
       const optimisticComment = {
         id: `optimistic-${Date.now()}`,
         content: variables.content,
         createdAt: new Date().toISOString(),
-        authorName: actor.name,
+        authorName: actor!.name,
       };
 
-      queryClient.setQueryData<TaskRecord[]>(["tasks", actor.accessToken], (current = []) =>
+      queryClient.setQueryData<TaskRecord[]>(["tasks", actor?.accessToken], (current = []) =>
         current.map((task) =>
           task.id === variables.taskId
             ? {
@@ -154,11 +158,11 @@ export function useTaskControl(initialTasks: TaskRecord[]) {
     },
     onError: (_error, _variables, context) => {
       if (context?.previous) {
-        queryClient.setQueryData(["tasks", actor.accessToken], context.previous);
+        queryClient.setQueryData(["tasks", actor?.accessToken], context.previous);
       }
     },
     onSuccess: (comment, variables) => {
-      queryClient.setQueryData<TaskRecord[]>(["tasks", actor.accessToken], (current = []) =>
+      queryClient.setQueryData<TaskRecord[]>(["tasks", actor?.accessToken], (current = []) =>
         current.map((task) =>
           task.id === variables.taskId
             ? {
@@ -172,10 +176,10 @@ export function useTaskControl(initialTasks: TaskRecord[]) {
   });
 
   const createTaskMutation = useMutation({
-    mutationFn: (input: CreateTaskInput) => createTask(input, actor.id, actor.accessToken),
+    mutationFn: (input: CreateTaskInput) => createTask(input, actor!.id, actor!.accessToken),
     onMutate: async (variables) => {
-      await queryClient.cancelQueries({ queryKey: ["tasks", actor.accessToken] });
-      const previous = queryClient.getQueryData<TaskRecord[]>(["tasks", actor.accessToken]) ?? [];
+      await queryClient.cancelQueries({ queryKey: ["tasks", actor?.accessToken] });
+      const previous = queryClient.getQueryData<TaskRecord[]>(["tasks", actor?.accessToken]) ?? [];
       const optimisticTask: TaskRecord = {
         id: `optimistic-task-${Date.now()}`,
         title: variables.title,
@@ -189,25 +193,25 @@ export function useTaskControl(initialTasks: TaskRecord[]) {
         tags: variables.tags,
         deadline: new Date(variables.deadline).toLocaleDateString("en-US", { month: "short", day: "numeric" }),
         assignedToId: variables.assignedToId,
-        assignedById: actor.id,
+        assignedById: actor!.id,
         subsystemId: subsystemIdMap[variables.subsystem],
         comments: [],
       };
 
-      queryClient.setQueryData<TaskRecord[]>(["tasks", actor.accessToken], (current = []) => [optimisticTask, ...current]);
+      queryClient.setQueryData<TaskRecord[]>(["tasks", actor?.accessToken], (current = []) => [optimisticTask, ...current]);
       return { previous };
     },
     onError: (_error, _variables, context) => {
       if (context?.previous) {
-        queryClient.setQueryData(["tasks", actor.accessToken], context.previous);
+        queryClient.setQueryData(["tasks", actor?.accessToken], context.previous);
       }
     },
     onSuccess: (task) => {
-      queryClient.setQueryData<TaskRecord[]>(["tasks", actor.accessToken], (current = []) => [
+      queryClient.setQueryData<TaskRecord[]>(["tasks", actor?.accessToken], (current = []) => [
         task,
         ...current.filter((entry) => !entry.id.startsWith("optimistic-task-")),
       ]);
-      queryClient.setQueryData<ActivityFeedRecord[]>(["task-activity", actor.accessToken], (current = []) => [
+      queryClient.setQueryData<ActivityFeedRecord[]>(["task-activity", actor?.accessToken], (current = []) => [
         {
           id: `created-${task.id}`,
           type: "task",
@@ -243,18 +247,14 @@ export function useTaskControl(initialTasks: TaskRecord[]) {
     addComment: (taskId: string, content: string) =>
       commentMutation.mutate({
         taskId,
-        authorId: actor.id,
+        authorId: actor!.id,
         content,
       }),
     emitTyping: (taskId: string) => {
-      socketRef.current?.emit("discussion.typing", {
-        taskId,
-        userName: actor.name,
-      });
+      socketRef.current?.emit("discussion.typing", { taskId });
     },
     isUpdatingStatus: statusMutation.isPending,
     isAddingComment: commentMutation.isPending,
     isCreatingTask: createTaskMutation.isPending,
   };
 }
-

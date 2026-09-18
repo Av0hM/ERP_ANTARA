@@ -1,7 +1,6 @@
 import NextAuth from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import Google from "next-auth/providers/google";
-import { skipCSRFCheck } from "../../../node_modules/next-auth/node_modules/@auth/core/index.js";
 import * as bcrypt from "bcryptjs";
 
 import demoUsers from "./lib/demo-users.json";
@@ -84,7 +83,6 @@ async function refreshAccessToken(token: {
 export const { handlers, auth, signIn, signOut } = NextAuth({
   secret: resolvedNextAuthSecret,
   trustHost: true,
-  skipCSRFCheck: process.env.AUTH_SKIP_CSRF === "true" ? skipCSRFCheck : undefined,
   session: {
     strategy: "jwt",
   },

@@ -7,8 +7,16 @@ import {
   WebSocketGateway,
   WebSocketServer,
 } from "@nestjs/websockets";
+import { UseGuards } from "@nestjs/common";
 import { Server, Socket } from "socket.io";
 
+import { WsJwtAuthGuard } from "../../auth/guards/ws-jwt-auth.guard";
+
+interface AuthenticatedSocket extends Socket {
+  user: { id: string; email: string; name: string; role: string };
+}
+
+@UseGuards(WsJwtAuthGuard)
 @WebSocketGateway({
   cors: {
     origin: [process.env.FRONTEND_URL ?? process.env.NEXTAUTH_URL ?? "http://localhost:3000"],
@@ -30,31 +38,47 @@ export class TaskCollaborationGateway implements OnGatewayConnection, OnGatewayD
     }));
   }
 
-  handleConnection(client: Socket) {
+  handleConnection(client: AuthenticatedSocket) {
+    const user = client.user;
+    if (!user?.id) {
+      client.disconnect(true);
+      return;
+    }
+
+    this.onlineUsers.set(user.id, {
+      socketId: client.id,
+      name: user.name,
+    });
+
     client.emit("presence.connected", {
       socketId: client.id,
       onlineCount: this.onlineUsers.size,
+      userId: user.id,
+      userName: user.name,
     });
+
+    this.server?.emit("presence.snapshot", this.serializePresence());
   }
 
-  handleDisconnect(client: Socket) {
-    for (const [userId, presence] of this.onlineUsers.entries()) {
-      if (presence.socketId === client.id) {
-        this.onlineUsers.delete(userId);
-      }
+  handleDisconnect(client: AuthenticatedSocket) {
+    const user = client.user;
+    if (user?.id) {
+      this.onlineUsers.delete(user.id);
     }
 
     this.server?.emit("presence.snapshot", this.serializePresence());
   }
 
   @SubscribeMessage("presence.join")
-  joinPresence(
-    @ConnectedSocket() client: Socket,
-    @MessageBody() payload: { userId: string; name: string },
-  ) {
-    this.onlineUsers.set(payload.userId, {
+  joinPresence(@ConnectedSocket() client: AuthenticatedSocket) {
+    const user = client.user;
+    if (!user?.id) {
+      return { ok: false, error: "Unauthenticated" };
+    }
+
+    this.onlineUsers.set(user.id, {
       socketId: client.id,
-      name: payload.name,
+      name: user.name,
     });
 
     this.server?.emit("presence.snapshot", this.serializePresence());
@@ -62,7 +86,19 @@ export class TaskCollaborationGateway implements OnGatewayConnection, OnGatewayD
   }
 
   @SubscribeMessage("discussion.typing")
-  handleTyping(@MessageBody() payload: { taskId: string; userName: string }) {
-    this.server?.emit("discussion.typing", payload);
+  handleTyping(
+    @ConnectedSocket() client: AuthenticatedSocket,
+    @MessageBody() payload: { taskId: string },
+  ) {
+    const user = client.user;
+    if (!user?.id) {
+      return;
+    }
+
+    this.server?.emit("discussion.typing", {
+      taskId: payload.taskId,
+      userName: user.name,
+      userId: user.id,
+    });
   }
 }

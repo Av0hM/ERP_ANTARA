@@ -12,3 +12,4 @@ coverage
 apps/api/prisma/dev.db
 apps/api/prisma/dev.db-journal
 apps/api/.local/demo-passwords.txt
+ERP.zip

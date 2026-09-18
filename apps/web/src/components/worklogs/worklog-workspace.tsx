@@ -9,6 +9,11 @@ import { useTaskCatalog, useWorklogData } from "@/hooks/use-operations";
 
 export function WorklogWorkspace() {
   const actor = useActorProfile();
+
+  if (!actor) {
+    return null;
+  }
+
   const { logs, summary, createWorklog, isCreating } = useWorklogData();
   const { data: taskData = [] } = useTaskCatalog();
   const [taskId, setTaskId] = useState("");

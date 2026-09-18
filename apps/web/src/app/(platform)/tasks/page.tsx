@@ -6,6 +6,10 @@ import { useActorProfile } from "@/hooks/use-actor-profile";
 export default function TasksPage() {
   const actor = useActorProfile();
 
+  if (!actor) {
+    return null;
+  }
+
   return (
     <main className="space-y-6">
       <section className="glass-panel rounded-[2rem] p-8">

@@ -8,6 +8,10 @@ import { RegisterDto } from "./dto/register.dto";
 import { AuthService } from "./auth.service";
 import { JwtAuthGuard } from "./guards/jwt-auth.guard";
 
+// AuthController intentionally omits @UseGuards(RolesGuard) at class level:
+// - register, login, google-callback, refresh are public endpoints (no auth required)
+// - logout requires valid refresh token (validated in service)
+// - /me endpoint uses JwtAuthGuard for authenticated user info
 @Controller("auth")
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
