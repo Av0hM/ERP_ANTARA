@@ -1,0 +1,38 @@
+{
+  "name": "antara-erp",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "npm@11.6.2",
+  "description": "AI-powered operations and collaboration ERP for satellite engineering clubs.",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "turbo run dev --parallel --filter=@antara/web --filter=@antara/api",
+    "build": "npm run build --workspace @antara/contracts && npm run build --workspace @antara/shared-utils && npm run build --workspace @antara/ui && npm run build --workspace @antara/api && npm run build --workspace @antara/web",
+    "lint": "npm run lint --workspaces",
+    "test": "npm run test --workspaces --if-present",
+    "format": "prettier --write ."
+  },
+  "engines": {
+    "node": ">=22.0.0",
+    "npm": ">=10.0.0"
+  },
+  "devDependencies": {
+    "@sinonjs/commons": "^3.0.1",
+    "@types/node": "^22.13.10",
+    "ajv": "^8.17.1",
+    "bs-logger": "^0.2.6",
+    "caniuse-lite": "^1.0.30001754",
+    "expect": "^29.7.0",
+    "jest-haste-map": "^29.7.0",
+    "jest-snapshot": "^29.7.0",
+    "postcss": "^8.5.3",
+    "postcss-selector-parser": "^7.1.0",
+    "prettier": "^3.5.3",
+    "turbo": "^2.0.0",
+    "typescript": "^5.8.2"
+  }
+}
+

@@ -1,0 +1,276 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  OWNER
+  ADMIN
+  MEMBER
+}
+
+enum TaskStatus {
+  BACKLOG
+  TODO
+  IN_PROGRESS
+  BLOCKED
+  REVIEW
+  COMPLETED
+  OVERDUE
+}
+
+enum TaskPriority {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum NotificationType {
+  TASK_ASSIGNED
+  COMMENT_ADDED
+  DEADLINE_WARNING
+  OVERDUE_RISK
+  SYSTEM
+}
+
+enum WorklogSource {
+  TIMER
+  MANUAL
+}
+
+enum InsightSeverity {
+  INFO
+  WARNING
+  CRITICAL
+}
+
+model User {
+  id                 String               @id @default(cuid())
+  email              String               @unique
+  passwordHash       String?
+  name               String
+  avatarUrl          String?
+  role               Role                 @default(MEMBER)
+  title              String?
+  timezone           String               @default("Asia/Calcutta")
+  availabilityScore  Int                  @default(75)
+  isActive           Boolean              @default(true)
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @updatedAt
+  deletedAt          DateTime?
+  subsystemId        String?
+  subsystem          Subsystem?           @relation(fields: [subsystemId], references: [id], onDelete: SetNull)
+  assignedTasks      Task[]               @relation("TaskAssignee")
+  createdTasks       Task[]               @relation("TaskCreator")
+  comments           TaskComment[]
+  worklogs           WorkLog[]
+  notifications      Notification[]
+  sessions           Session[]
+  attachments        Attachment[]         @relation("AttachmentUploader")
+  auditLogs          AuditLog[]
+  analyticsSnapshots AnalyticsSnapshot[]  @relation("SnapshotActor")
+  aiInsights         AIInsight[]          @relation("InsightActor")
+
+  @@index([role, isActive])
+  @@index([subsystemId])
+}
+
+model Subsystem {
+  id          String      @id @default(cuid())
+  name        String      @unique
+  slug        String      @unique
+  description String
+  color       String
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  users       User[]
+  tasks       Task[]
+  events      CalendarEvent[]
+  insights    AIInsight[]
+
+  @@index([slug])
+}
+
+model Task {
+  id               String          @id @default(cuid())
+  title            String
+  description      String          @db.Text
+  priority         TaskPriority
+  status           TaskStatus      @default(BACKLOG)
+  estimatedHours   Decimal         @db.Decimal(5, 2)
+  deadline         DateTime
+  recurrenceRule   String?
+  tags             String[]
+  dependencyIds    String[]
+  metadata         Json?
+  isArchived       Boolean         @default(false)
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+  deletedAt        DateTime?
+  subsystemId      String
+  assignedToId     String?
+  assignedById     String
+  subsystem        Subsystem       @relation(fields: [subsystemId], references: [id], onDelete: Restrict)
+  assignedTo       User?           @relation("TaskAssignee", fields: [assignedToId], references: [id], onDelete: SetNull)
+  assignedBy       User            @relation("TaskCreator", fields: [assignedById], references: [id], onDelete: Restrict)
+  comments         TaskComment[]
+  attachments      Attachment[]
+  worklogs         WorkLog[]
+  analytics        AnalyticsSnapshot[]
+  notifications    Notification[]
+
+  @@index([subsystemId, status, deadline])
+  @@index([assignedToId, status])
+  @@index([priority, deadline])
+}
+
+model TaskComment {
+  id        String   @id @default(cuid())
+  content   String   @db.Text
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  taskId     String
+  authorId   String
+  task       Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  author     User     @relation(fields: [authorId], references: [id], onDelete: Cascade)
+
+  @@index([taskId, createdAt])
+}
+
+model WorkLog {
+  id          String         @id @default(cuid())
+  startedAt   DateTime
+  endedAt     DateTime?
+  durationMin Int
+  notes       String?        @db.Text
+  source      WorklogSource  @default(MANUAL)
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+  taskId      String
+  userId      String
+  task        Task           @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  user        User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, startedAt])
+  @@index([taskId])
+}
+
+model Notification {
+  id          String            @id @default(cuid())
+  title       String
+  body        String
+  type        NotificationType
+  isRead      Boolean           @default(false)
+  createdAt   DateTime          @default(now())
+  userId      String
+  taskId      String?
+  user        User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  task        Task?             @relation(fields: [taskId], references: [id], onDelete: SetNull)
+
+  @@index([userId, isRead, createdAt])
+}
+
+model CalendarEvent {
+  id             String      @id @default(cuid())
+  title          String
+  description    String?     @db.Text
+  startsAt       DateTime
+  endsAt         DateTime
+  isRecurring    Boolean     @default(false)
+  recurrenceRule String?
+  externalRef    String?
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+  subsystemId    String?
+  subsystem      Subsystem?  @relation(fields: [subsystemId], references: [id], onDelete: SetNull)
+
+  @@index([startsAt, endsAt])
+  @@index([subsystemId])
+}
+
+model Attachment {
+  id             String   @id @default(cuid())
+  name           String
+  mimeType       String
+  sizeBytes      Int
+  storageUrl     String
+  driveFileId    String?
+  tags           String[]
+  createdAt      DateTime @default(now())
+  taskId         String?
+  uploadedById   String?
+  task           Task?    @relation(fields: [taskId], references: [id], onDelete: SetNull)
+  uploadedBy     User?    @relation("AttachmentUploader", fields: [uploadedById], references: [id], onDelete: SetNull)
+
+  @@index([taskId])
+}
+
+model AnalyticsSnapshot {
+  id                   String   @id @default(cuid())
+  scope                String
+  periodStart          DateTime
+  periodEnd            DateTime
+  tasksCompleted       Int
+  avgCompletionHours   Decimal  @db.Decimal(8, 2)
+  overduePercentage    Decimal  @db.Decimal(5, 2)
+  velocityScore        Decimal  @db.Decimal(5, 2)
+  payload              Json
+  createdAt            DateTime @default(now())
+  actorId              String?
+  taskId               String?
+  actor                User?    @relation("SnapshotActor", fields: [actorId], references: [id], onDelete: SetNull)
+  task                 Task?    @relation(fields: [taskId], references: [id], onDelete: SetNull)
+
+  @@index([scope, periodStart, periodEnd])
+}
+
+model AIInsight {
+  id             String          @id @default(cuid())
+  title          String
+  summary        String          @db.Text
+  severity       InsightSeverity
+  riskScore      Decimal         @db.Decimal(5, 2)
+  recommendation String          @db.Text
+  createdAt      DateTime        @default(now())
+  subsystemId    String?
+  actorId        String?
+  subsystem      Subsystem?      @relation(fields: [subsystemId], references: [id], onDelete: SetNull)
+  actor          User?           @relation("InsightActor", fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([severity, createdAt])
+  @@index([subsystemId])
+}
+
+model Session {
+  id             String   @id @default(cuid())
+  refreshToken   String   @unique
+  userAgent      String?
+  ipAddress      String?
+  expiresAt      DateTime
+  createdAt      DateTime @default(now())
+  revokedAt      DateTime?
+  userId         String
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, expiresAt])
+}
+
+model AuditLog {
+  id          String   @id @default(cuid())
+  action      String
+  entityType  String
+  entityId    String
+  payload     Json?
+  createdAt   DateTime @default(now())
+  actorId     String
+  actor       User     @relation(fields: [actorId], references: [id], onDelete: Cascade)
+
+  @@index([entityType, entityId, createdAt])
+  @@index([actorId, createdAt])
+}
+

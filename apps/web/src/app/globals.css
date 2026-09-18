@@ -1,0 +1,26 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+}
+
+body {
+  @apply bg-bg text-text antialiased;
+  background-image: radial-gradient(circle at top, rgba(106, 164, 255, 0.12), transparent 28%),
+    linear-gradient(180deg, #060816 0%, #07101f 40%, #050712 100%);
+}
+
+* {
+  scrollbar-color: #223458 #0d1325;
+}
+
+.glass-panel {
+  @apply border border-line/80 bg-panel/90 shadow-glow backdrop-blur-xl;
+}
+
+.metric-chip {
+  @apply rounded-full border border-line bg-white/5 px-3 py-1 text-xs uppercase tracking-[0.24em] text-muted;
+}
+
