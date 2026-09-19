@@ -6,6 +6,9 @@ const config: Config = {
   transform: {
     "^.+\\.(t|j)s$": "ts-jest",
   },
+  transformIgnorePatterns: [
+    "<rootDir>/node_modules/(?!(bullmq)/)"
+  ],
   moduleFileExtensions: ["ts", "js", "json"],
   testEnvironment: "node",
 };
