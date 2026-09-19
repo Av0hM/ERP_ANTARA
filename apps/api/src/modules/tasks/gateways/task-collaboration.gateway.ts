@@ -7,19 +7,15 @@ import {
   WebSocketGateway,
   WebSocketServer,
 } from "@nestjs/websockets";
-import { UseGuards } from "@nestjs/common";
 import { Server, Socket } from "socket.io";
 import { JwtService } from "@nestjs/jwt";
 import { ConfigService } from "@nestjs/config";
 import { WsException } from "@nestjs/websockets";
 
-import { WsJwtAuthGuard } from "../../auth/guards/ws-jwt-auth.guard";
-
 interface AuthenticatedSocket extends Socket {
   user: { id: string; email: string; name: string; role: string };
 }
 
-@UseGuards(WsJwtAuthGuard)
 @WebSocketGateway({
   cors: {
     origin: [process.env.FRONTEND_URL ?? process.env.NEXTAUTH_URL ?? "http://localhost:3000"],
@@ -49,6 +45,7 @@ export class TaskCollaborationGateway implements OnGatewayConnection, OnGatewayD
   async handleConnection(client: AuthenticatedSocket) {
     const token = this.extractToken(client);
     if (!token) {
+      client.emit("error", new Error("Authentication required"));
       client.disconnect(true);
       return;
     }
@@ -59,12 +56,14 @@ export class TaskCollaborationGateway implements OnGatewayConnection, OnGatewayD
       const payload = await this.jwtService.verifyAsync(token, { secret: accessSecret });
       client.user = payload;
     } catch {
+      client.emit("error", new Error("Invalid or expired token"));
       client.disconnect(true);
       return;
     }
 
     const user = client.user;
     if (!user?.id) {
+      client.emit("error", new Error("Authentication required"));
       client.disconnect(true);
       return;
     }
