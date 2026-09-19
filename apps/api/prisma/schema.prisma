@@ -58,6 +58,7 @@ model User {
   role               Role                 @default(MEMBER)
   title              String?
   timezone           String               @default("Asia/Calcutta")
+  locale             String               @default("en")
   availabilityScore  Int                  @default(75)
   isActive           Boolean              @default(true)
   createdAt          DateTime             @default(now())
