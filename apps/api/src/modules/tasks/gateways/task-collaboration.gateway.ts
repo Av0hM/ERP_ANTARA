@@ -9,6 +9,9 @@ import {
 } from "@nestjs/websockets";
 import { UseGuards } from "@nestjs/common";
 import { Server, Socket } from "socket.io";
+import { JwtService } from "@nestjs/jwt";
+import { ConfigService } from "@nestjs/config";
+import { WsException } from "@nestjs/websockets";
 
 import { WsJwtAuthGuard } from "../../auth/guards/ws-jwt-auth.guard";
 
@@ -30,6 +33,11 @@ export class TaskCollaborationGateway implements OnGatewayConnection, OnGatewayD
 
   private readonly onlineUsers = new Map<string, { socketId: string; name: string }>();
 
+  constructor(
+    private readonly jwtService: JwtService,
+    private readonly configService: ConfigService,
+  ) {}
+
   private serializePresence() {
     return Array.from(this.onlineUsers.entries()).map(([userId, presence]) => ({
       userId,
@@ -38,7 +46,23 @@ export class TaskCollaborationGateway implements OnGatewayConnection, OnGatewayD
     }));
   }
 
-  handleConnection(client: AuthenticatedSocket) {
+  async handleConnection(client: AuthenticatedSocket) {
+    const token = this.extractToken(client);
+    if (!token) {
+      client.disconnect(true);
+      return;
+    }
+
+    const accessSecret = this.configService.get<string>("auth.accessSecret") ?? "dev-access-secret";
+
+    try {
+      const payload = await this.jwtService.verifyAsync(token, { secret: accessSecret });
+      client.user = payload;
+    } catch {
+      client.disconnect(true);
+      return;
+    }
+
     const user = client.user;
     if (!user?.id) {
       client.disconnect(true);
@@ -58,6 +82,16 @@ export class TaskCollaborationGateway implements OnGatewayConnection, OnGatewayD
     });
 
     this.server?.emit("presence.snapshot", this.serializePresence());
+  }
+
+  private extractToken(client: AuthenticatedSocket): string | null {
+    if (client.handshake.auth?.token) {
+      return client.handshake.auth.token as string;
+    }
+    if (client.handshake.query?.token) {
+      return client.handshake.query.token as string;
+    }
+    return null;
   }
 
   handleDisconnect(client: AuthenticatedSocket) {

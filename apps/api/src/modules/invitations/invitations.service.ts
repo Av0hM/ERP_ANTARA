@@ -1,10 +1,11 @@
 import { Injectable } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
+import { InjectQueue } from "@nestjs/bullmq";
 import * as crypto from "crypto";
+import { Queue } from "bullmq";
 
 import { PrismaService } from "../../common/prisma/prisma.service";
 import { AuditService } from "../audit/audit.service";
-import { MailService } from "../mail/mail.service";
 
 interface InvitationToken {
   email: string;
@@ -22,7 +23,7 @@ export class InvitationsService {
     private readonly prisma: PrismaService,
     private readonly configService: ConfigService,
     private readonly auditService: AuditService,
-    private readonly mailService: MailService,
+    @InjectQueue("invitation-email") private readonly emailQueue: Queue,
   ) {}
 
   async createInvitation(
@@ -54,7 +55,7 @@ export class InvitationsService {
       },
     });
 
-    await this.sendInvitationEmail(invitation);
+    await this.queueInvitationEmail(invitation);
 
     await this.auditService.log({
       action: "INVITATION_CREATED",
@@ -67,50 +68,27 @@ export class InvitationsService {
     return { token, expiresAt };
   }
 
-  private async sendInvitationEmail(invitation: {
+  private async queueInvitationEmail(invitation: {
     email: string;
     token: string;
     role: string;
     subsystemId?: string | null;
     expiresAt: Date;
   }) {
-    const baseUrl = this.configService.get<string>("FRONTEND_URL") ?? "http://localhost:3000";
-    const inviteUrl = `${baseUrl}/invite/${invitation.token}`;
+    const emailEnabled = this.configService.get<string>("NOTIFICATIONS_EMAIL_ENABLED") === "true";
+    if (!emailEnabled) {
+      return;
+    }
 
-    await this.mailService.send({
-      to: invitation.email,
-      subject: "You're invited to join ANTARA ERP",
-      html: `
-        <!DOCTYPE html>
-        <html>
-          <head>
-            <meta charset="utf-8">
-            <meta name="viewport" content="width=device-width, initial-scale=1.0">
-          </head>
-          <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #1f2937; max-width: 600px; margin: 0 auto; padding: 20px;">
-            <div style="background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); border-radius: 12px; padding: 32px;">
-              <div style="text-align: center; margin-bottom: 24px;">
-                <div style="display: inline-flex; align-items: center; justify-content: center; width: 48px; height: 48px; background: rgba(59, 130, 246, 0.2); border-radius: 12px;">
-                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
-                    <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
-                  </svg>
-                </div>
-              </div>
-              <h1 style="color: #f8fafc; font-size: 24px; font-weight: 600; margin: 0 0 16px; text-align: center;">You're invited to ANTARA ERP</h1>
-              <p style="color: #e2e8f0; margin: 0 0 16px; text-align: center;">You've been invited to join the ANTARA CubeSat team's mission control platform.</p>
-              <div style="background: rgba(255, 255, 255, 0.05); border-radius: 8px; padding: 20px; color: #e2e8f0; white-space: pre-wrap;">Role: ${invitation.role}${invitation.subsystemId ? `\nSubsystem: ${invitation.subsystemId}` : ""}</div>
-              <div style="text-align: center; margin-top: 24px;">
-                <a href="${inviteUrl}" style="display: inline-block; background: #3b82f6; color: white; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: 600;">Accept Invitation</a>
-              </div>
-              <p style="color: #64748b; font-size: 12px; text-align: center; margin-top: 24px;">
-                This invitation expires on ${invitation.expiresAt.toLocaleString()}.<br>
-                If you didn't expect this invitation, please ignore this email.
-              </p>
-            </div>
-          </body>
-        </html>
-      `,
+    await this.emailQueue.add("send-email", {
+      email: invitation.email,
+      role: invitation.role,
+      subsystemId: invitation.subsystemId ?? undefined,
+      token: invitation.token,
+      expiresAt: invitation.expiresAt,
+    }, {
+      attempts: 3,
+      backoff: { type: "exponential", delay: 1000 },
     });
   }
 
