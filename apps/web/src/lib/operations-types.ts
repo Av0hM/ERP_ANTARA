@@ -1,4 +1,6 @@
-import { DashboardMetric, InsightCard, TrendPoint } from "@antara/contracts";
+import { DashboardMetric, InsightCard, TrendPoint, DecisionRecord, DecisionStatus, DecisionListResponse } from "@antara/contracts";
+
+export type { DecisionRecord, DecisionStatus, DecisionListResponse } from "@antara/contracts";
 
 export type NotificationRecord = {
   id: string;
@@ -143,5 +145,152 @@ export type AiInsightRecord = {
   recommendation?: string;
   riskScore?: number;
   subsystem?: string;
+};
+
+export type SubsystemHealthMetrics = {
+  velocity: number;
+  riskScore: number;
+  completionRate: number;
+  activeTaskCount: number;
+  overdueCount: number;
+  blockedCount: number;
+  upcomingDeadlines: Array<{
+    id: string;
+    title: string;
+    deadline: string;
+    priority: string;
+  }>;
+};
+
+export type BlockingRelation = {
+  taskId: string;
+  title: string;
+  fromSubsystem: string;
+  blockingTask: string;
+  toSubsystem: string;
+  dependentTask: string;
+};
+
+export type WorkloadEntry = {
+  memberId: string;
+  name: string;
+  activeTasks: number;
+  availabilityScore: number;
+};
+
+export type RecentActivityEntry = {
+  type: "task" | "comment" | "worklog";
+  timestamp: string;
+  summary: string;
+};
+
+export type SubsystemHealthResponse = {
+  subsystem: {
+    id: string;
+    name: string;
+    slug: string;
+    color: string;
+    memberCount: number;
+  };
+  metrics: SubsystemHealthMetrics;
+  incomingBlockers: BlockingRelation[];
+  outgoingBlockers: BlockingRelation[];
+  workload: WorkloadEntry[];
+  recentActivity: RecentActivityEntry[];
+};
+
+export type ScheduleRiskTask = {
+  taskId: string;
+  title: string;
+  subsystem: string;
+  priority: string;
+  deadline: string;
+  p50Completion: string | null;
+  p90Completion: string | null;
+  overdueProbability: number;
+  riskLevel: string;
+};
+
+export type ScheduleRiskSummary = {
+  totalTasks: number;
+  tasksAtRisk: number;
+  highRiskTasks: number;
+  projectP50Completion: string | null;
+  projectP90Completion: string | null;
+  horizon: string;
+};
+
+export type ScheduleRiskResponse = {
+  taskRisks: ScheduleRiskTask[];
+  summary: ScheduleRiskSummary;
+};
+
+export type ResourceAllocationUser = {
+  userId: string;
+  userName: string;
+  userEmail: string;
+  avatarUrl: string | null;
+  subsystemId: string;
+  subsystemName: string;
+  subsystemColor: string;
+  role: string;
+  skills: string[];
+  weeklyCapacityHours: number;
+  currentWeeklyLoadHours: number;
+  availabilityScore: number;
+  activeTasks: Array<{
+    id: string;
+    title: string;
+    priority: string;
+    estimatedHours: number;
+    deadline: string;
+    subsystemId: string;
+  }>;
+};
+
+export type WeeklyAllocation = {
+  weekStart: string;
+  weekEnd: string;
+  allocations: Array<{
+    userId: string;
+    subsystemId: string;
+    hours: number;
+    tasks: string[];
+  }>;
+};
+
+export type ResourceAllocationConflict = {
+  type: "overallocation" | "skill_mismatch" | "dependency_conflict";
+  severity: "HIGH" | "MEDIUM" | "LOW";
+  description: string;
+  affectedUsers: string[];
+};
+
+export type ResourceAllocationAiSuggestion = {
+  fromUserId: string;
+  fromUserName: string;
+  toUserId: string;
+  toUserName: string;
+  taskId: string;
+  taskTitle: string;
+  reason: string;
+  estimatedHoursSaved: number;
+};
+
+export type ResourceAllocationBoard = {
+  users: ResourceAllocationUser[];
+  weeks: WeeklyAllocation[];
+  conflicts: ResourceAllocationConflict[];
+  aiSuggestions: ResourceAllocationAiSuggestion[];
+};
+
+export type ResourceAllocationSuggestedMove = {
+  taskId: string;
+  taskTitle: string;
+  fromUserId: string;
+  fromUserName: string;
+  toUserId: string;
+  toUserName: string;
+  reason: string;
 };
 

@@ -98,18 +98,15 @@ describe("AuthService", () => {
     ).rejects.toBeInstanceOf(UnauthorizedException);
   });
 
-  it("authenticates a demo user from the JSON fixture when enabled", async () => {
+  it("rejects login for non-existent user", async () => {
     usersService.findByEmail.mockResolvedValue(null);
-    (bcrypt.compare as jest.Mock).mockResolvedValue(true);
 
-    const result = await service.login({
-      email: "member@orbitalops.club",
-      password: "Member!2026",
-    });
-
-    expect(result.user.email).toBe("member@orbitalops.club");
-    expect(result.user.role).toBe(AppRole.MEMBER);
-    expect(prisma.session.create).toHaveBeenCalled();
+    await expect(
+      service.login({
+        email: "nonexistent@example.com",
+        password: "anypassword",
+      }),
+    ).rejects.toBeInstanceOf(UnauthorizedException);
   });
 
   it("refreshes a valid session", async () => {

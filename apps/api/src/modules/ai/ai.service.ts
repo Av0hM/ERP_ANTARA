@@ -53,6 +53,16 @@ type GeneratedInsight = {
   subsystem?: string;
 };
 
+type OpenAiInsight = {
+  id: string;
+  title: string;
+  summary: string;
+  severity: "INFO" | "WARNING" | "CRITICAL";
+  recommendation: string;
+  riskScore: number;
+  subsystem?: string;
+};
+
 @Injectable()
 export class AiService {
   constructor(
@@ -139,11 +149,22 @@ export class AiService {
         }),
       ]);
 
-      const derivedInsights = this.buildInsights(
-        tasks as TaskSnapshot[],
-        recentWorklogs as WorklogSnapshot[],
-        now,
-      );
+      // Try OpenAI function calling first
+      let derivedInsights: GeneratedInsight[] = [];
+      try {
+        derivedInsights = await this.generateInsightsWithOpenAI(
+          tasks as TaskSnapshot[],
+          recentWorklogs as WorklogSnapshot[],
+          now,
+        );
+      } catch {
+        // Fallback to deterministic heuristics
+        derivedInsights = this.buildInsights(
+          tasks as TaskSnapshot[],
+          recentWorklogs as WorklogSnapshot[],
+          now,
+        );
+      }
 
       await this.persistInsights(derivedInsights, storedInsights as PersistedInsight[], subsystems, dayStart);
 
@@ -169,6 +190,132 @@ export class AiService {
       await this.cache.setJson(cacheKey, payload, 120);
       return payload;
     }
+  }
+
+  private async generateInsightsWithOpenAI(
+    tasks: TaskSnapshot[],
+    recentWorklogs: WorklogSnapshot[],
+    now: Date,
+  ): Promise<GeneratedInsight[]> {
+    const activeTasks = tasks.filter((t) => t.status !== TaskStatus.COMPLETED);
+    const overdueTasks = activeTasks.filter((t) => t.deadline.getTime() < now.getTime());
+    const blockedTasks = activeTasks.filter((t) => t.status === TaskStatus.BLOCKED);
+    const highPriorityTasks = activeTasks.filter((t) => t.priority === TaskPriority.CRITICAL || t.priority === TaskPriority.HIGH);
+
+    const workloadByUser = recentWorklogs.reduce<Record<string, { name: string; minutes: number }>>((acc, log) => {
+      const current = acc[log.userId] ?? { name: log.user.name, minutes: 0 };
+      current.minutes += log.durationMin;
+      acc[log.userId] = current;
+      return acc;
+    }, {});
+
+    const topWorklogUsers = Object.entries(workloadByUser)
+      .map(([userId, entry]) => ({
+        id: userId,
+        ...entry,
+        activeTasks: tasks.filter((task) => task.assignedTo?.id === userId).length,
+      }))
+      .sort((left, right) => right.minutes - left.minutes)
+      .slice(0, 5);
+
+    const subsystemWorkload = activeTasks.reduce<Record<string, { taskCount: number; totalHours: number }>>((acc, task) => {
+      const current = acc[task.subsystem.name] ?? { taskCount: 0, totalHours: 0 };
+      current.taskCount += 1;
+      current.totalHours += Number(task.estimatedHours ?? 0);
+      acc[task.subsystem.name] = current;
+      return acc;
+    }, {});
+
+    const systemPrompt = `You are an AI operations analyst for a student CubeSat engineering team (20+ members across Software, Avionics, Structures, Payload, Communications, Thermal, Ground Station subsystems). 
+Analyze the provided task/worklog data and generate 3-5 actionable insights with risk scores (0-99).
+
+Each insight must have:
+- id: unique identifier
+- title: concise headline (max 60 chars)
+- summary: 1-2 sentences describing the risk
+- severity: "INFO" | "WARNING" | "CRITICAL"
+- recommendation: specific, actionable mitigation
+- riskScore: 0-99 (higher = more urgent)
+- subsystem: optional subsystem name
+
+Focus on: deadline slips, dependency chain blockages, workload imbalances, burnout indicators, cross-subsystem coordination risks.`;
+
+    const userPrompt = `Current time: ${now.toISOString()}
+
+Active tasks: ${activeTasks.length}
+Overdue tasks: ${overdueTasks.length}
+Blocked tasks: ${blockedTasks.length}
+High priority (CRITICAL/HIGH): ${highPriorityTasks.length}
+
+Task details:
+${activeTasks
+  .slice(0, 20)
+  .map((t) => `- ${t.title} [${t.subsystem.name}] ${t.status} ${t.priority} deadline:${t.deadline.toISOString().split("T")[0]} est:${t.estimatedHours}h deps:${t.dependencyIds.length} assignee:${t.assignedTo?.name ?? "unassigned"}`)
+  .join("\n")}
+
+Recent worklogs (7 days):
+${topWorklogUsers.map((u) => `- ${u.name}: ${Math.round(u.minutes / 60)}h across ${u.activeTasks} tasks`).join("\n")}
+
+Subsystem workload:
+${Object.entries(subsystemWorkload).map(([name, s]) => `- ${name}: ${s.taskCount} tasks, ${Math.round(s.totalHours)}h`).join("\n")}
+
+Generate insights as a function call to "generate_insights".`;
+
+    const functions = [
+      {
+        name: "generate_insights",
+        description: "Generate operational insights for engineering team",
+        parameters: {
+          type: "object",
+          properties: {
+            insights: {
+              type: "array",
+              items: {
+                type: "object",
+                properties: {
+                  id: { type: "string" },
+                  title: { type: "string" },
+                  summary: { type: "string" },
+                  severity: { type: "string", enum: ["INFO", "WARNING", "CRITICAL"] },
+                  recommendation: { type: "string" },
+                  riskScore: { type: "number", minimum: 0, maximum: 99 },
+                  subsystem: { type: "string" },
+                },
+                required: ["id", "title", "summary", "severity", "recommendation", "riskScore"],
+              },
+            },
+          },
+        },
+        required: ["insights"],
+      },
+    ];
+
+    try {
+      const result = await this.openAiIntegration.callWithFunctions({
+        systemPrompt,
+        userPrompt,
+        functions,
+        functionCall: { name: "generate_insights" },
+      });
+
+      if (result.functionCall) {
+        const parsed = JSON.parse(result.functionCall.arguments) as { insights: OpenAiInsight[] };
+        return parsed.insights.map((insight) => ({
+          id: insight.id,
+          title: insight.title,
+          summary: insight.summary,
+          severity: insight.severity as InsightSeverity,
+          recommendation: insight.recommendation,
+          riskScore: insight.riskScore,
+          subsystem: insight.subsystem,
+        }));
+      }
+    } catch {
+      // Fall through to heuristics
+    }
+
+    // Fallback to deterministic heuristics
+    return this.buildInsights(tasks, recentWorklogs, now);
   }
 
   async getSmartReminders() {
@@ -516,6 +663,228 @@ export class AiService {
         reason: `${heaviest.name} is carrying ${heaviest.taskCount} active tasks across ${Math.round(heaviest.totalHours)}h of estimated effort, while ${lightest.name} is lighter at ${Math.round(lightest.totalHours)}h.`,
       },
     ];
+  }
+
+  async getScheduleRisk(horizonDays = 14, simulations = 1000) {
+    const cacheKey = `ai:schedule-risk:${horizonDays}:${simulations}`;
+    const cached = await this.cache.getJson<any>(cacheKey);
+    if (cached) {
+      return cached;
+    }
+
+    try {
+      const now = new Date();
+      const horizon = new Date(now.getTime() + horizonDays * 24 * 60 * 60 * 1000);
+
+      const [tasks, worklogs] = await Promise.all([
+        this.prisma.task.findMany({
+          where: {
+            deletedAt: null,
+            isArchived: false,
+            status: { not: TaskStatus.COMPLETED },
+            deadline: { gte: now, lte: horizon },
+          },
+          include: {
+            subsystem: { select: { name: true } },
+            assignedTo: { select: { id: true, name: true, availabilityScore: true } },
+          },
+          orderBy: [{ priority: "desc" }, { deadline: "asc" }],
+        }),
+        this.prisma.workLog.findMany({
+          where: {
+            startedAt: {
+              gte: new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000),
+            },
+          },
+          include: {
+            user: { select: { id: true } },
+            task: { select: { estimatedHours: true } },
+          },
+        }),
+      ]);
+
+      const riskResult = this.runMonteCarloScheduleRisk(
+        tasks as TaskSnapshot[],
+        worklogs as Array<{
+          durationMin: number;
+          userId: string;
+          task: { estimatedHours: number | string } | null;
+        }>,
+        now,
+        horizon,
+        simulations,
+      );
+
+      const payload = riskResult;
+      await this.cache.setJson(cacheKey, payload, 300);
+      return payload;
+    } catch {
+      return this.getSeedScheduleRisk();
+    }
+  }
+
+  private runMonteCarloScheduleRisk(
+    tasks: TaskSnapshot[],
+    historicalWorklogs: Array<{
+      durationMin: number;
+      userId: string;
+      task: { estimatedHours: number | string } | null;
+    }>,
+    now: Date,
+    horizon: Date,
+    simulations: number,
+  ) {
+    // Calculate historical velocity variance per user
+    const userVelocity = historicalWorklogs.reduce<Record<string, { durations: number[]; estimatedHours: number[] }>>(
+      (acc, log) => {
+        if (!log.task?.estimatedHours) return acc;
+        const estimated = Number(log.task.estimatedHours);
+        const actual = log.durationMin / 60;
+        const current = acc[log.userId] ?? { durations: [], estimatedHours: [] };
+        current.durations.push(actual);
+        current.estimatedHours.push(estimated);
+        acc[log.userId] = current;
+        return acc;
+      },
+      {},
+    );
+
+    const userVariance: Record<string, number> = {};
+    for (const [userId, data] of Object.entries(userVelocity)) {
+      if (data.durations.length >= 2) {
+        const ratios = data.durations.map((d, i) => d / (data.estimatedHours[i] || 1));
+        const mean = ratios.reduce((a, b) => a + b, 0) / ratios.length;
+        const variance = ratios.reduce((sum, r) => sum + Math.pow(r - mean, 2), 0) / ratios.length;
+        userVariance[userId] = Math.max(0.1, Math.min(2.0, variance));
+      } else {
+        userVariance[userId] = 0.3; // Default variance
+      }
+    }
+
+    const taskCompletionTimes: Record<string, number[]> = {};
+
+    for (let sim = 0; sim < simulations; sim++) {
+      let currentTime = now.getTime();
+      const taskEndTimes: Record<string, number> = {};
+
+      // Sort tasks by priority and deadline for scheduling order
+      const sortedTasks = [...tasks].sort((a, b) => {
+        const priorityDiff = this.priorityWeight(b.priority) - this.priorityWeight(a.priority);
+        if (priorityDiff !== 0) return priorityDiff;
+        return a.deadline.getTime() - b.deadline.getTime();
+      });
+
+      for (const task of sortedTasks) {
+        const estimatedHours = Number(task.estimatedHours ?? 1);
+        const assignee = task.assignedTo?.id;
+        const variance = assignee && userVariance[assignee] ? userVariance[assignee] : 0.3;
+        
+        // Sample from log-normal distribution for task duration
+        const meanLog = Math.log(estimatedHours) - 0.5 * variance * variance;
+        const sampledHours = Math.exp(meanLog + Math.sqrt(variance) * this.boxMuller());
+        const taskDurationMs = Math.max(0.5, sampledHours) * 60 * 60 * 1000;
+
+        // Account for dependencies
+        let earliestStart = currentTime;
+        for (const depId of task.dependencyIds ?? []) {
+          if (taskEndTimes[depId]) {
+            earliestStart = Math.max(earliestStart, taskEndTimes[depId]);
+          }
+        }
+
+        const endTime = earliestStart + taskDurationMs;
+        taskEndTimes[task.id] = endTime;
+        currentTime = Math.max(currentTime, endTime);
+
+        // Track completion time for this task
+        if (!taskCompletionTimes[task.id]) {
+          taskCompletionTimes[task.id] = [];
+        }
+        taskCompletionTimes[task.id]!.push(endTime);
+      }
+
+      // Record horizon exceedance
+      for (const [taskId, endTime] of Object.entries(taskEndTimes)) {
+        if (endTime > horizon.getTime()) {
+          if (!taskCompletionTimes[taskId]) taskCompletionTimes[taskId] = [];
+          taskCompletionTimes[taskId].push(endTime);
+        }
+      }
+    }
+
+    // Calculate percentiles
+    const results = Object.entries(taskCompletionTimes).map(([taskId, times]) => {
+      const sorted = times.sort((a, b) => a - b);
+      const p50 = sorted[Math.floor(sorted.length * 0.5)];
+      const p90 = sorted[Math.floor(sorted.length * 0.9)];
+      const overdueProb = times.filter((t) => t > horizon.getTime()).length / times.length;
+      
+      const task = tasks.find((t) => t.id === taskId);
+      return {
+        taskId,
+        title: task?.title ?? "Unknown",
+        subsystem: task?.subsystem.name ?? "Unknown",
+        priority: task?.priority ?? TaskPriority.MEDIUM,
+        deadline: task?.deadline.toISOString(),
+        p50Completion: p50 ? new Date(p50).toISOString() : null,
+        p90Completion: p90 ? new Date(p90).toISOString() : null,
+        overdueProbability: Math.round(overdueProb * 100),
+        riskLevel: overdueProb > 0.5 ? "CRITICAL" : overdueProb > 0.2 ? "HIGH" : overdueProb > 0.05 ? "MEDIUM" : "LOW",
+      };
+    });
+
+    // Overall project risk
+    const totalOverdue = results.filter((r) => r.overdueProbability > 50).length;
+    const highRiskCount = results.filter((r) => r.riskLevel === "CRITICAL" || r.riskLevel === "HIGH").length;
+
+    return {
+      taskRisks: results.sort((a, b) => b.overdueProbability - a.overdueProbability),
+      summary: {
+        totalTasks: results.length,
+        tasksAtRisk: totalOverdue,
+        highRiskTasks: highRiskCount,
+        projectP50Completion: this.getOverallP50(taskCompletionTimes),
+        projectP90Completion: this.getOverallP90(taskCompletionTimes),
+        horizon: horizon.toISOString(),
+      },
+    };
+  }
+
+  private getOverallP50(taskCompletionTimes: Record<string, number[]>): string | null {
+    const allEndTimes = Object.values(taskCompletionTimes).flat();
+    if (allEndTimes.length === 0) return null;
+    const sorted = allEndTimes.sort((a, b) => a - b);
+    const median = sorted[Math.floor(sorted.length * 0.5)];
+    return median ? new Date(median).toISOString() : null;
+  }
+
+  private getOverallP90(taskCompletionTimes: Record<string, number[]>): string | null {
+    const allEndTimes = Object.values(taskCompletionTimes).flat();
+    if (allEndTimes.length === 0) return null;
+    const sorted = allEndTimes.sort((a, b) => a - b);
+    const p90 = sorted[Math.floor(sorted.length * 0.9)];
+    return p90 ? new Date(p90).toISOString() : null;
+  }
+
+  private boxMuller(): number {
+    // Box-Muller transform for normal distribution
+    const u1 = Math.random();
+    const u2 = Math.random();
+    return Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2);
+  }
+
+  private getSeedScheduleRisk() {
+    return {
+      taskRisks: [],
+      summary: {
+        totalTasks: 0,
+        tasksAtRisk: 0,
+        highRiskTasks: 0,
+        projectP50Completion: null,
+        projectP90Completion: null,
+        horizon: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString(),
+      },
+    };
   }
 
   private aggregateAssigneeLoad(tasks: TaskSnapshot[]) {

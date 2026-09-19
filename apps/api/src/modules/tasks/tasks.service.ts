@@ -1,5 +1,5 @@
 import { Injectable } from "@nestjs/common";
-import { TaskStatus } from "@antara/contracts";
+import { TaskPriority, TaskStatus } from "@antara/contracts";
 
 import { PrismaService } from "../../common/prisma/prisma.service";
 import { CreateTaskCommentDto } from "./dto/create-task-comment.dto";
@@ -7,6 +7,28 @@ import { CreateTaskDto } from "./dto/create-task.dto";
 import { UpdateTaskStatusDto } from "./dto/update-task-status.dto";
 import { TaskEventsService } from "./events/task-events.service";
 import { AuditService } from "../audit/audit.service";
+
+interface DependencyGraphNode {
+  id: string;
+  title: string;
+  status: TaskStatus;
+  priority: TaskPriority;
+  subsystem: string;
+  assignee: { id: string; name: string } | null;
+  isCriticalPath: boolean;
+}
+
+interface DependencyGraphEdge {
+  from: string;
+  to: string;
+  type: "blocks" | "relates";
+}
+
+interface DependencyGraphResponse {
+  nodes: DependencyGraphNode[];
+  edges: DependencyGraphEdge[];
+  criticalPath: string[];
+}
 
 @Injectable()
 export class TasksService {
@@ -210,6 +232,140 @@ export class TasksService {
     });
 
     return { deleted: true };
+  }
+
+  async getDependencyGraph(subsystemId?: string): Promise<DependencyGraphResponse> {
+    const tasks = await this.prisma.task.findMany({
+      where: {
+        deletedAt: null,
+        isArchived: false,
+        ...(subsystemId && { subsystemId }),
+      },
+      include: {
+        subsystem: { select: { name: true } },
+        assignedTo: { select: { id: true, name: true } },
+      },
+      orderBy: [{ deadline: "asc" }, { priority: "desc" }],
+    });
+
+    const taskMap = new Map(tasks.map((t: { id: string }) => [t.id, t]));
+    const adj = new Map<string, string[]>();
+    const reverseAdj = new Map<string, string[]>();
+
+    tasks.forEach((task: { id: string; dependencyIds: string[] }) => {
+      adj.set(task.id, task.dependencyIds ?? []);
+      task.dependencyIds?.forEach((depId: string) => {
+        const rev = reverseAdj.get(depId) ?? [];
+        rev.push(task.id);
+        reverseAdj.set(depId, rev);
+      });
+    });
+
+    const hasCycle = (): boolean => {
+      const visited = new Set<string>();
+      const recStack = new Set<string>();
+
+      const dfs = (node: string): boolean => {
+        visited.add(node);
+        recStack.add(node);
+        const neighbors = adj.get(node) ?? [];
+        for (const neighbor of neighbors) {
+          if (!visited.has(neighbor)) {
+            if (dfs(neighbor)) return true;
+          } else if (recStack.has(neighbor)) {
+            return true;
+          }
+        }
+        recStack.delete(node);
+        return false;
+      };
+
+      for (const task of tasks) {
+        if (!visited.has(task.id)) {
+          if (dfs(task.id)) return true;
+        }
+      }
+      return false;
+    };
+
+    if (hasCycle()) {
+      console.warn("Dependency cycle detected in task graph");
+    }
+
+    const criticalPath = this.computeCriticalPath(tasks, adj);
+
+    const criticalPathSet = new Set(criticalPath);
+
+    const nodes: DependencyGraphNode[] = tasks.map((task: { id: string; title: string; status: TaskStatus; priority: TaskPriority; subsystem: { name: string } | null; assignedTo: { id: string; name: string } | null }) => ({
+      id: task.id,
+      title: task.title,
+      status: task.status,
+      priority: task.priority,
+      subsystem: task.subsystem?.name ?? "Unknown",
+      assignee: task.assignedTo ?? null,
+      isCriticalPath: criticalPathSet.has(task.id),
+    }));
+
+    const edges: DependencyGraphEdge[] = [];
+    tasks.forEach((task: { id: string; dependencyIds: string[] }) => {
+      (task.dependencyIds ?? []).forEach((depId: string) => {
+        if (taskMap.has(depId)) {
+          edges.push({ from: depId, to: task.id, type: "blocks" });
+        }
+      });
+    });
+
+    return { nodes, edges, criticalPath };
+  }
+
+  private computeCriticalPath(
+    tasks: Array<{
+      id: string;
+      estimatedHours: number | string;
+      dependencyIds: string[];
+    }>,
+    adj: Map<string, string[]>,
+  ): string[] {
+    const taskMap = new Map(tasks.map((t) => [t.id, t]));
+    const memo = new Map<string, { length: number; path: string[] }>();
+
+    const dfs = (nodeId: string): { length: number; path: string[] } => {
+      if (memo.has(nodeId)) return memo.get(nodeId)!;
+
+      const task = taskMap.get(nodeId);
+      if (!task) return { length: 0, path: [] };
+
+      const deps = adj.get(nodeId) ?? [];
+      if (deps.length === 0) {
+        const hours = Number(task.estimatedHours ?? 0);
+        const result = { length: hours, path: [nodeId] };
+        memo.set(nodeId, result);
+        return result;
+      }
+
+      let maxDep = { length: 0, path: [] as string[] };
+      for (const depId of deps) {
+        const depResult = dfs(depId);
+        if (depResult.length > maxDep.length) {
+          maxDep = depResult;
+        }
+      }
+
+      const hours = Number(task.estimatedHours ?? 0);
+      const result = { length: maxDep.length + hours, path: [...maxDep.path, nodeId] };
+      memo.set(nodeId, result);
+      return result;
+    };
+
+    let longest = { length: 0, path: [] as string[] };
+    for (const task of tasks) {
+      const result = dfs(task.id);
+      if (result.length > longest.length) {
+        longest = result;
+      }
+    }
+
+    return longest.path;
   }
 }
 

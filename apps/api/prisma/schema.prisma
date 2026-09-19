@@ -75,6 +75,8 @@ model User {
   auditLogs          AuditLog[]
   analyticsSnapshots AnalyticsSnapshot[]  @relation("SnapshotActor")
   aiInsights         AIInsight[]          @relation("InsightActor")
+  skills             String[]             @default([])
+  weeklyCapacityHours Int                 @default(20)
 
   @@index([role, isActive])
   @@index([subsystemId])
@@ -272,5 +274,65 @@ model AuditLog {
 
   @@index([entityType, entityId, createdAt])
   @@index([actorId, createdAt])
+}
+
+model DecisionRecord {
+  id              String   @id @default(cuid())
+  title           String
+  status          DecisionStatus @default(PROPOSED)
+  context         String   @db.Text
+  decision        String   @db.Text
+  rationale       String   @db.Text
+  alternatives    String[] @default([])
+  consequences    String?  @db.Text
+  authorId        String
+  author          User     @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  subsystemId     String?
+  subsystem       Subsystem? @relation(fields: [subsystemId], references: [id], onDelete: SetNull)
+  relatedTaskIds  String[] @default([])
+  supersededById  String?   @unique
+  supersedes      DecisionRecord? @relation("DecisionSupersession", fields: [supersededById], references: [id], onDelete: SetNull)
+  supersededBy    DecisionRecord? @relation("DecisionSupersession", fields: [supersededById], references: [id], onDelete: SetNull)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  decidedAt       DateTime?
+
+  @@index([status, createdAt])
+  @@index([subsystemId])
+  @@index([authorId])
+}
+
+enum DecisionStatus {
+  PROPOSED
+  ACCEPTED
+  REJECTED
+  SUPERSEDED
+  DEFERRED
+}
+
+enum InvitationStatus {
+  PENDING
+  ACCEPTED
+  EXPIRED
+  REVOKED
+}
+
+model Invitation {
+  id              String   @id @default(cuid())
+  email           String
+  role            Role
+  subsystemId     String?
+  subsystem       Subsystem? @relation(fields: [subsystemId], references: [id], onDelete: SetNull)
+  invitedById     String
+  invitedBy       User       @relation(fields: [invitedById], references: [id], onDelete: Cascade)
+  token           String     @unique
+  status          InvitationStatus @default(PENDING)
+  expiresAt       DateTime
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+
+  @@index([email, status])
+  @@index([token])
+  @@index([invitedById])
 }
 

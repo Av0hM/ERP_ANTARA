@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, Req, UseGuards } from "@nestjs/common";
+import { Body, Controller, Delete, Get, Param, Patch, Post, Query, Req, UseGuards } from "@nestjs/common";
 
 import { Roles } from "../../common/decorators/roles.decorator";
 import { RolesGuard } from "../../common/guards/roles.guard";
@@ -27,6 +27,12 @@ export class TasksController {
   @Roles("OWNER", "ADMIN", "MEMBER")
   getActivityFeed() {
     return this.tasksService.getActivityFeed();
+  }
+
+  @Get("dependency-graph")
+  @Roles("OWNER", "ADMIN", "MEMBER")
+  getDependencyGraph(@Query("subsystemId") subsystemId?: string) {
+    return this.tasksService.getDependencyGraph(subsystemId);
   }
 
   @Post()

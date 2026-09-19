@@ -6,25 +6,47 @@ import { InsightCard } from "@antara/contracts";
 import { useToast } from "@/components/ui/toast";
 import { useActorProfile } from "@/hooks/use-actor-profile";
 import {
+  applyResourceMove,
   createAttachment,
   createCalendarEvent,
+  createDecision,
   createWorklog,
+  deleteNotification,
   fetchAiBundle,
   fetchAttachments,
   fetchAnalyticsBundle,
   fetchCalendarEvents,
   fetchDashboardBundle,
+  fetchDecisions,
+  fetchDecision,
   fetchMembers,
   fetchNotifications,
+  fetchResourceAllocationBoard,
+  fetchScheduleRisk,
+  fetchSubsystemHealth,
   fetchSubsystems,
+  fetchSuggestedMoves,
   fetchWorklogSummary,
   fetchWorklogs,
   summarizeTechnicalText,
   updateTaskAssignee,
-  deleteNotification,
   updateNotification,
+  updateDecision,
+  deleteDecision,
 } from "@/lib/operations-api";
-import { AttachmentRecord, CalendarEventRecord, NotificationRecord, SubsystemRecord, WorklogRecord } from "@/lib/operations-types";
+import {
+  AttachmentRecord,
+  CalendarEventRecord,
+  DecisionListResponse,
+  DecisionRecord,
+  NotificationRecord,
+  ResourceAllocationBoard,
+  ResourceAllocationSuggestedMove,
+  SubsystemRecord,
+  SubsystemHealthResponse,
+  ScheduleRiskResponse,
+  WorklogRecord,
+} from "@/lib/operations-types";
 import { fetchTasks } from "@/lib/task-api";
 
 export function useDashboardData() {
@@ -302,6 +324,152 @@ export function useReassignTask() {
       updateTaskAssignee(input.taskId, input.assignedToId, actor!.accessToken),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["tasks", actor?.accessToken] });
+      addToast("Task reassigned", "success");
+    },
+    onError: () => {
+      addToast("Failed to reassign task", "error");
+    },
+  });
+}
+
+export function useSubsystemHealth(slug: string) {
+  const actor = useActorProfile();
+  return useQuery<SubsystemHealthResponse>({
+    queryKey: ["subsystem-health", slug, actor?.accessToken],
+    queryFn: () => fetchSubsystemHealth(slug, actor!.accessToken),
+    enabled: !!actor && !!slug,
+  });
+}
+
+export function useScheduleRisk(horizonDays?: number, simulations?: number) {
+  const actor = useActorProfile();
+  return useQuery<ScheduleRiskResponse>({
+    queryKey: ["schedule-risk", horizonDays, simulations, actor?.accessToken],
+    queryFn: () => fetchScheduleRisk(horizonDays, simulations, actor!.accessToken),
+    enabled: !!actor,
+  });
+}
+
+export function useDecisions(params?: { status?: string; subsystemId?: string; authorId?: string }) {
+  const actor = useActorProfile();
+  return useQuery<DecisionListResponse>({
+    queryKey: ["decisions", params, actor?.accessToken],
+    queryFn: () => fetchDecisions(params, actor!.accessToken),
+    enabled: !!actor,
+  });
+}
+
+export function useDecision(id: string) {
+  const actor = useActorProfile();
+  return useQuery<DecisionRecord>({
+    queryKey: ["decision", id, actor?.accessToken],
+    queryFn: () => fetchDecision(id, actor!.accessToken),
+    enabled: !!actor && !!id,
+  });
+}
+
+export function useCreateDecision() {
+  const actor = useActorProfile();
+  const queryClient = useQueryClient();
+  const { addToast } = useToast();
+  return useMutation({
+    mutationFn: (input: {
+      title: string;
+      context: string;
+      decision: string;
+      rationale: string;
+      alternatives?: string[];
+      consequences?: string;
+      subsystemId?: string;
+      relatedTaskIds?: string[];
+    }) => createDecision(input, actor!.accessToken),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["decisions"] });
+      addToast("Decision created", "success");
+    },
+    onError: () => {
+      addToast("Failed to create decision", "error");
+    },
+  });
+}
+
+export function useUpdateDecision() {
+  const actor = useActorProfile();
+  const queryClient = useQueryClient();
+  const { addToast } = useToast();
+  return useMutation({
+    mutationFn: ({
+      id,
+      input,
+    }: {
+      id: string;
+      input: {
+        title?: string;
+        context?: string;
+        decision?: string;
+        rationale?: string;
+        alternatives?: string[];
+        consequences?: string;
+        status?: string;
+        supersededById?: string;
+      };
+    }) => updateDecision(id, input, actor!.accessToken),
+    onSuccess: async (_, variables) => {
+      await queryClient.invalidateQueries({ queryKey: ["decisions"] });
+      await queryClient.invalidateQueries({ queryKey: ["decision", variables.id] });
+      addToast("Decision updated", "success");
+    },
+    onError: () => {
+      addToast("Failed to update decision", "error");
+    },
+  });
+}
+
+export function useDeleteDecision() {
+  const actor = useActorProfile();
+  const queryClient = useQueryClient();
+  const { addToast } = useToast();
+  return useMutation({
+    mutationFn: (id: string) => deleteDecision(id, actor!.accessToken),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["decisions"] });
+      addToast("Decision deleted", "success");
+    },
+    onError: () => {
+      addToast("Failed to delete decision", "error");
+    },
+  });
+}
+
+export function useResourceAllocationBoard(horizonWeeks?: number) {
+  const actor = useActorProfile();
+  return useQuery<ResourceAllocationBoard>({
+    queryKey: ["resource-allocation-board", horizonWeeks, actor?.accessToken],
+    queryFn: () => fetchResourceAllocationBoard(horizonWeeks, actor!.accessToken),
+    enabled: !!actor,
+  });
+}
+
+export function useSuggestedMoves() {
+  const actor = useActorProfile();
+  return useQuery<ResourceAllocationSuggestedMove[]>({
+    queryKey: ["suggested-moves", actor?.accessToken],
+    queryFn: () => fetchSuggestedMoves(actor!.accessToken),
+    enabled: !!actor,
+  });
+}
+
+export function useApplyResourceMove() {
+  const actor = useActorProfile();
+  const queryClient = useQueryClient();
+  const { addToast } = useToast();
+  return useMutation({
+    mutationFn: ({ taskId, assigneeId }: { taskId: string; assigneeId: string }) =>
+      applyResourceMove(taskId, assigneeId, actor!.accessToken),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["resource-allocation-board"] });
+      await queryClient.invalidateQueries({ queryKey: ["suggested-moves"] });
+      await queryClient.invalidateQueries({ queryKey: ["tasks"] });
       addToast("Task reassigned", "success");
     },
     onError: () => {

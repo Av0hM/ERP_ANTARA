@@ -1,4 +1,4 @@
-import { Controller, Get, UseGuards } from "@nestjs/common";
+import { Controller, Get, Param, UseGuards } from "@nestjs/common";
 
 import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard";
 import { Roles } from "../../common/decorators/roles.decorator";
@@ -14,5 +14,11 @@ export class SubsystemsController {
   @Roles("OWNER", "ADMIN", "MEMBER")
   list() {
     return this.subsystemsService.list();
+  }
+
+  @Get(":slug/health")
+  @Roles("OWNER", "ADMIN", "MEMBER")
+  getHealth(@Param("slug") slug: string) {
+    return this.subsystemsService.getHealth(slug);
   }
 }

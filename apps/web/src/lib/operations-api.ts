@@ -10,10 +10,16 @@ import {
   AnalyticsBundle,
   CalendarEventRecord,
   DashboardBundle,
+  DecisionListResponse,
+  DecisionRecord,
   HeatmapCell,
   NotificationRecord,
+  ResourceAllocationBoard,
+  ResourceAllocationSuggestedMove,
+  ScheduleRiskResponse,
   SubsystemBreakdownRecord,
   SubsystemRecord,
+  SubsystemHealthResponse,
   WorklogRecord,
   WorklogSummary,
 } from "./operations-types";
@@ -354,4 +360,170 @@ export async function fetchDashboardBundle(accessToken?: string): Promise<Dashbo
         notifications: [],
         velocity: [],
       };
+}
+
+export async function fetchSubsystemHealth(
+  slug: string,
+  accessToken?: string,
+): Promise<SubsystemHealthResponse> {
+  try {
+    return await request<SubsystemHealthResponse>(`/subsystems/${slug}/health`, undefined, accessToken);
+  } catch (error) {
+    throw error;
+  }
+}
+
+export async function fetchScheduleRisk(
+  horizonDays?: number,
+  simulations?: number,
+  accessToken?: string,
+): Promise<ScheduleRiskResponse> {
+  try {
+    const params = new URLSearchParams();
+    if (horizonDays) params.set("horizonDays", String(horizonDays));
+    if (simulations) params.set("simulations", String(simulations));
+    return await request<ScheduleRiskResponse>(`/ai/schedule-risk?${params.toString()}`, undefined, accessToken);
+  } catch (error) {
+    throw error;
+  }
+}
+
+export async function fetchDecisions(
+  params?: { status?: string; subsystemId?: string; authorId?: string },
+  accessToken?: string,
+): Promise<DecisionListResponse> {
+  try {
+    const searchParams = new URLSearchParams();
+    if (params?.status) searchParams.set("status", params.status);
+    if (params?.subsystemId) searchParams.set("subsystemId", params.subsystemId);
+    if (params?.authorId) searchParams.set("authorId", params.authorId);
+    return await request<DecisionListResponse>(`/decisions?${searchParams.toString()}`, undefined, accessToken);
+  } catch (error) {
+    throw error;
+  }
+}
+
+export async function fetchDecision(
+  id: string,
+  accessToken?: string,
+): Promise<DecisionRecord> {
+  try {
+    return await request<DecisionRecord>(`/decisions/${id}`, undefined, accessToken);
+  } catch (error) {
+    throw error;
+  }
+}
+
+export async function createDecision(
+  input: {
+    title: string;
+    context: string;
+    decision: string;
+    rationale: string;
+    alternatives?: string[];
+    consequences?: string;
+    subsystemId?: string;
+    relatedTaskIds?: string[];
+  },
+  accessToken?: string,
+): Promise<DecisionRecord> {
+  try {
+    return await request<DecisionRecord>(
+      "/decisions",
+      {
+        method: "POST",
+        body: JSON.stringify(input),
+      },
+      accessToken,
+    );
+  } catch (error) {
+    throw error;
+  }
+}
+
+export async function updateDecision(
+  id: string,
+  input: {
+    title?: string;
+    context?: string;
+    decision?: string;
+    rationale?: string;
+    alternatives?: string[];
+    consequences?: string;
+    status?: string;
+    supersededById?: string;
+  },
+  accessToken?: string,
+): Promise<DecisionRecord> {
+  try {
+    return await request<DecisionRecord>(
+      `/decisions/${id}`,
+      {
+        method: "PATCH",
+        body: JSON.stringify(input),
+      },
+      accessToken,
+    );
+  } catch (error) {
+    throw error;
+  }
+}
+
+export async function deleteDecision(
+  id: string,
+  accessToken?: string,
+): Promise<{ deleted: boolean }> {
+  try {
+    return await request<{ deleted: boolean }>(
+      `/decisions/${id}`,
+      {
+        method: "DELETE",
+      },
+      accessToken,
+    );
+  } catch (error) {
+    throw error;
+  }
+}
+
+export async function fetchResourceAllocationBoard(
+  horizonWeeks?: number,
+  accessToken?: string,
+): Promise<ResourceAllocationBoard> {
+  try {
+    const params = new URLSearchParams();
+    if (horizonWeeks) params.set("horizonWeeks", String(horizonWeeks));
+    return await request<ResourceAllocationBoard>(`/resources/allocation-board?${params.toString()}`, undefined, accessToken);
+  } catch (error) {
+    throw error;
+  }
+}
+
+export async function fetchSuggestedMoves(
+  accessToken?: string,
+): Promise<ResourceAllocationSuggestedMove[]> {
+  try {
+    return await request<ResourceAllocationSuggestedMove[]>(`/resources/suggested-moves`, undefined, accessToken);
+  } catch (error) {
+    throw error;
+  }
+}
+
+export async function applyResourceMove(
+  taskId: string,
+  assigneeId: string,
+  accessToken?: string,
+): Promise<any> {
+  try {
+    return await request<any>(
+      `/resources/tasks/${taskId}/assign`,
+      {
+        method: "PATCH",
+        body: JSON.stringify({ assigneeId }),
+      },
+      accessToken,
+    );
+  } catch (error) {
+    throw error;
+  }
 }

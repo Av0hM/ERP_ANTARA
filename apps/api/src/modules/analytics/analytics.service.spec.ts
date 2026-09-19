@@ -32,16 +32,10 @@ describe("AnalyticsService", () => {
     service = new AnalyticsService(prisma as never, cache as never);
   });
 
-  it("falls back to seeded velocity data when no snapshots exist", async () => {
+  it("returns empty velocity when no snapshots exist", async () => {
     prisma.analyticsSnapshot.findMany.mockResolvedValue([]);
 
-    await expect(service.getVelocityTrend()).resolves.toEqual([
-      { label: "W1", value: 54 },
-      { label: "W2", value: 63 },
-      { label: "W3", value: 61 },
-      { label: "W4", value: 72 },
-      { label: "W5", value: 84 },
-    ]);
+    await expect(service.getVelocityTrend()).resolves.toEqual([]);
   });
 
   it("returns a cached bundle from the computed overview", async () => {

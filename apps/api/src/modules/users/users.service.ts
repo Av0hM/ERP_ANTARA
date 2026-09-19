@@ -60,6 +60,33 @@ export class UsersService {
     return user;
   }
 
+  async updateProfile(userId: string, data: { skills?: string[]; weeklyCapacityHours?: number }, actorId: string) {
+    const oldUser = await this.prisma.user.findUnique({ where: { id: userId } });
+
+    const user = await this.prisma.user.update({
+      where: { id: userId },
+      data: {
+        skills: data.skills,
+        weeklyCapacityHours: data.weeklyCapacityHours,
+      },
+    });
+
+    await this.auditService.log({
+      action: "PROFILE_UPDATE",
+      entityType: "User",
+      entityId: userId,
+      actorId,
+      payload: {
+        oldSkills: oldUser?.skills,
+        newSkills: data.skills,
+        oldWeeklyCapacityHours: oldUser?.weeklyCapacityHours,
+        newWeeklyCapacityHours: data.weeklyCapacityHours,
+      },
+    });
+
+    return user;
+  }
+
   listMembers() {
     return this.prisma.user.findMany({
       where: { isActive: true },
@@ -68,6 +95,8 @@ export class UsersService {
         name: true,
         email: true,
         role: true,
+        skills: true,
+        weeklyCapacityHours: true,
         subsystem: {
           select: {
             name: true,
