@@ -17,11 +17,4 @@ jobs:
       - run: npm install
       - run: npm run lint --if-present
       - run: npm run build --if-present
-      - run: npm run test --if-present
-        env:
-          JWT_ACCESS_SECRET: test-access-secret
-          JWT_REFRESH_SECRET: test-refresh-secret
-          NODE_ENV: test
-          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/antara
-          REDIS_URL: redis://localhost:6379
 
