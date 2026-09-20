@@ -9,12 +9,16 @@ interface AuthenticatedRequest extends Request {
   user: { id: string; email: string; name: string; role: string };
 }
 
+// InvitationsController intentionally does NOT use a class-level guard:
+// - create, list, revoke require an authenticated OWNER/ADMIN (guarded per-method below)
+// - accept and validate/:token are public — a brand-new invitee has no JWT yet,
+//   and is authenticated by possession of the invitation token itself
 @Controller("invitations")
-@UseGuards(JwtAuthGuard, RolesGuard)
 export class InvitationsController {
   constructor(private readonly invitationsService: InvitationsService) {}
 
   @Post()
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles("OWNER", "ADMIN")
   async create(
     @Body() body: { email: string; role: "OWNER" | "ADMIN" | "MEMBER"; subsystemId?: string },
@@ -29,12 +33,14 @@ export class InvitationsController {
   }
 
   @Get()
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles("OWNER", "ADMIN")
   async listPending() {
     return this.invitationsService.listPendingInvitations();
   }
 
   @Post(":id/revoke")
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles("OWNER", "ADMIN")
   async revoke(@Param("id") id: string, @Req() req: AuthenticatedRequest) {
     return this.invitationsService.revokeInvitation(id, req.user.id);

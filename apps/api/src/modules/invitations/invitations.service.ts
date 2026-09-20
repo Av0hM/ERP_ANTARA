@@ -3,6 +3,7 @@ import { ConfigService } from "@nestjs/config";
 import { InjectQueue } from "@nestjs/bullmq";
 import * as crypto from "crypto";
 import { Queue } from "bullmq";
+import { BadRequestException, NotFoundException } from "@nestjs/common";
 
 import { PrismaService } from "../../common/prisma/prisma.service";
 import { AuditService } from "../audit/audit.service";
@@ -122,7 +123,7 @@ export class InvitationsService {
     });
 
     if (!invitation || invitation.status !== "PENDING") {
-      throw new Error("Invalid or expired invitation");
+      throw new BadRequestException("Invalid or expired invitation");
     }
 
     if (invitation.expiresAt < new Date()) {
@@ -130,7 +131,7 @@ export class InvitationsService {
         where: { id: invitation.id },
         data: { status: "EXPIRED" },
       });
-      throw new Error("Invitation has expired");
+      throw new BadRequestException("Invitation has expired");
     }
 
     const bcrypt = require("bcryptjs");
@@ -179,7 +180,7 @@ export class InvitationsService {
     });
 
     if (!invitation) {
-      throw new Error("Invitation not found");
+      throw new NotFoundException("Invitation not found");
     }
 
     await this.prisma.invitation.update({

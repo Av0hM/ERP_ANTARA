@@ -10,8 +10,7 @@
     "types": [
       "node",
       "jest"
-    ],
-    "ignoreDeprecations": "6.0"
+    ]
   },
   "include": [
     "src/**/*.ts"
