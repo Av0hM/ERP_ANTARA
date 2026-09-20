@@ -1,4 +1,4 @@
-import { InsightSeverity } from "./enums.js";
+import { InsightSeverity } from "./enums";
 
 export interface DashboardMetric {
   label: string;

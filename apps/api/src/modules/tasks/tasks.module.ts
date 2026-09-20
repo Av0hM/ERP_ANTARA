@@ -1,4 +1,5 @@
 import { Module } from "@nestjs/common";
+import { JwtModule } from "@nestjs/jwt";
 
 import { PrismaModule } from "../../common/prisma/prisma.module";
 import { AuditModule } from "../audit/audit.module";
@@ -8,7 +9,7 @@ import { TasksController } from "./tasks.controller";
 import { TasksService } from "./tasks.service";
 
 @Module({
-  imports: [PrismaModule, AuditModule],
+  imports: [PrismaModule, AuditModule, JwtModule.register({})],
   providers: [TasksService, TaskCollaborationGateway, TaskEventsService],
   controllers: [TasksController],
   exports: [TasksService],

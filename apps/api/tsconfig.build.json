@@ -3,6 +3,10 @@
   "compilerOptions": {
     "strict": false,
     "noUncheckedIndexedAccess": false,
-    "skipLibCheck": true
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": false,
+    "resolveJsonModule": true,
+    "allowSyntheticDefaultImports": true,
+    "esModuleInterop": true
   }
 }

@@ -8,7 +8,7 @@ import { MetricsService } from "./metrics.service";
   imports: [
     PrometheusModule.register({
       defaultMetrics: {
-        enabled: true,
+        enabled: false,
       },
       defaultLabels: {
         app: "antara-erp-api",

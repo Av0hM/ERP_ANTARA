@@ -5,8 +5,10 @@
     "rootDir": "src",
     "declaration": true,
     "types": [],
-    "module": "NodeNext",
-    "moduleResolution": "NodeNext"
+    "strict": false,
+    "skipLibCheck": true,
+    "module": "CommonJS",
+    "moduleResolution": "Node"
   },
   "include": [
     "src/**/*.ts"
