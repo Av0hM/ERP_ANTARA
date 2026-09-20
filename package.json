@@ -35,6 +35,8 @@
     "typescript": "^5.8.2"
   },
   "dependencies": {
+    "@nestjs/platform-socket.io": "^11.2.5",
+    "@nestjs/websockets": "^11.2.5",
     "next-intl": "^4.14.5"
   }
 }

@@ -1,6 +1,7 @@
 import { ValidationPipe } from "@nestjs/common";
 import { NestFactory } from "@nestjs/core";
 import { ConfigService } from "@nestjs/config";
+import { IoAdapter } from "@nestjs/platform-socket.io";
 import cookieParser from "cookie-parser";
 
 import { AppModule } from "./app.module";
@@ -29,6 +30,10 @@ async function bootstrap() {
   if (process.env.NODE_ENV === "production" && requiredSecrets.some((value) => !value || value.startsWith("dev-"))) {
     throw new Error("Production JWT secrets must be configured before booting the API");
   }
+
+  // WebSocket adapter for Socket.IO
+  // @ts-ignore - IoAdapter type mismatch with WebSocketAdapter interface in v11
+  app.useWebSocketAdapter(new IoAdapter(app));
 
   // Global prefix with versioning handled by middleware
   app.setGlobalPrefix("api");
