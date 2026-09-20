@@ -38,12 +38,10 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm install
-      - run: npx prisma generate
-        working-directory: apps/api
+      - run: cd apps/api && npx prisma generate
         env:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/antara
-      - run: npx prisma migrate deploy
-        working-directory: apps/api
+      - run: cd apps/api && npx prisma migrate deploy
         env:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/antara
       - run: npm run lint --if-present
