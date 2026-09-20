@@ -1,5 +1,5 @@
-import { AppRole, TaskPriority, TaskStatus } from "./enums";
-import { SubsystemName } from "./subsystems";
+import { AppRole, TaskPriority, TaskStatus } from "./enums.js";
+import { SubsystemName } from "./subsystems.js";
 
 export interface TaskCard {
   id: string;

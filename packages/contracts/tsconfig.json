@@ -4,7 +4,9 @@
     "outDir": "dist",
     "rootDir": "src",
     "declaration": true,
-    "types": []
+    "types": [],
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext"
   },
   "include": [
     "src/**/*.ts"

@@ -1,7 +1,7 @@
-export * from "./lib/enums";
-export * from "./lib/subsystems";
-export * from "./lib/dashboard";
-export * from "./lib/tasks";
-export * from "./lib/analytics";
-export * from "./lib/decisions";
+export * from "./lib/enums.js";
+export * from "./lib/subsystems.js";
+export * from "./lib/dashboard.js";
+export * from "./lib/tasks.js";
+export * from "./lib/analytics.js";
+export * from "./lib/decisions.js";
 

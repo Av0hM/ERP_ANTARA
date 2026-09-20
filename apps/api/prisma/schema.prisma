@@ -78,6 +78,8 @@ model User {
   aiInsights         AIInsight[]          @relation("InsightActor")
   skills             String[]             @default([])
   weeklyCapacityHours Int                 @default(20)
+  invitedInvitations Invitation[]         @relation("InvitedBy")
+  decisionRecords    DecisionRecord[]     @relation("Author")
 
   @@index([role, isActive])
   @@index([subsystemId])
@@ -95,6 +97,8 @@ model Subsystem {
   tasks       Task[]
   events      CalendarEvent[]
   insights    AIInsight[]
+  invitations Invitation[]
+  decisions   DecisionRecord[]
 
   @@index([slug])
 }
@@ -287,13 +291,13 @@ model DecisionRecord {
   alternatives    String[] @default([])
   consequences    String?  @db.Text
   authorId        String
-  author          User     @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  author          User     @relation("Author", fields: [authorId], references: [id], onDelete: Cascade)
   subsystemId     String?
   subsystem       Subsystem? @relation(fields: [subsystemId], references: [id], onDelete: SetNull)
   relatedTaskIds  String[] @default([])
   supersededById  String?   @unique
   supersedes      DecisionRecord? @relation("DecisionSupersession", fields: [supersededById], references: [id], onDelete: SetNull)
-  supersededBy    DecisionRecord? @relation("DecisionSupersession", fields: [supersededById], references: [id], onDelete: SetNull)
+  supersededBy    DecisionRecord? @relation("DecisionSupersession")
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
   decidedAt       DateTime?
@@ -325,7 +329,7 @@ model Invitation {
   subsystemId     String?
   subsystem       Subsystem? @relation(fields: [subsystemId], references: [id], onDelete: SetNull)
   invitedById     String
-  invitedBy       User       @relation(fields: [invitedById], references: [id], onDelete: Cascade)
+  invitedBy       User       @relation("InvitedBy", fields: [invitedById], references: [id], onDelete: Cascade)
   token           String     @unique
   status          InvitationStatus @default(PENDING)
   expiresAt       DateTime

@@ -8,10 +8,12 @@
     "postbuild": "node scripts/copy-auth-fixture.mjs",
     "rotate:demo-passwords": "node scripts/rotate-demo-passwords.mjs",
     "start:dev": "nest start --watch",
+    "start": "node dist/apps/api/src/main.js",
     "lint": "tsc -p tsconfig.json --noEmit",
     "test": "jest --runInBand --config jest.config.js",
     "prisma:generate": "prisma generate",
-    "prisma:migrate": "prisma migrate dev"
+    "prisma:migrate": "prisma migrate dev",
+    "prisma:migrate:deploy": "prisma migrate deploy"
   },
   "dependencies": {
     "@nestjs/bullmq": "^12.0.0",
