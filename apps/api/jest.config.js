@@ -3,7 +3,7 @@ module.exports = {
   moduleFileExtensions: ["js", "json", "ts"],
   rootDir: ".",
   testEnvironment: "node",
-  testRegex: ".*\\.spec\\.ts$",
+  testRegex: ".*\\.(spec|e2e-spec)\\.ts$",
   moduleNameMapper: {
     "^@antara/contracts$": "<rootDir>/../../packages/contracts/src/index.ts",
     "^@antara/ui$": "<rootDir>/../../packages/ui/src/index.ts",
