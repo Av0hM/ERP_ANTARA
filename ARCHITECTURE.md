@@ -445,4 +445,4 @@ npm run build
 
 ---
 
-*Last Updated: September 2025 | Version: Phase 1-3 Complete*
+*Last Updated: September 2026 | Version: Phase 1-3 Complete | TypeScript strict mode: Prisma enums/decimals used at DB layer, contract enums at DTO boundaries*

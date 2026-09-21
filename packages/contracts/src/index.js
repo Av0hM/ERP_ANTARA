@@ -19,3 +19,4 @@ __exportStar(require("./lib/subsystems"), exports);
 __exportStar(require("./lib/dashboard"), exports);
 __exportStar(require("./lib/tasks"), exports);
 __exportStar(require("./lib/analytics"), exports);
+__exportStar(require("./lib/decisions"), exports);

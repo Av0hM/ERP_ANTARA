@@ -1,12 +1,18 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.InsightSeverity = exports.NotificationType = exports.WorklogSource = exports.TaskPriority = exports.TaskStatus = exports.AppRole = void 0;
+exports.InvitationStatus = exports.InsightSeverity = exports.NotificationType = exports.WorklogSource = exports.TaskPriority = exports.TaskStatus = exports.Role = exports.AppRole = void 0;
 var AppRole;
 (function (AppRole) {
     AppRole["OWNER"] = "OWNER";
     AppRole["ADMIN"] = "ADMIN";
     AppRole["MEMBER"] = "MEMBER";
 })(AppRole || (exports.AppRole = AppRole = {}));
+var Role;
+(function (Role) {
+    Role["OWNER"] = "OWNER";
+    Role["ADMIN"] = "ADMIN";
+    Role["MEMBER"] = "MEMBER";
+})(Role || (exports.Role = Role = {}));
 var TaskStatus;
 (function (TaskStatus) {
     TaskStatus["BACKLOG"] = "BACKLOG";
@@ -43,3 +49,10 @@ var InsightSeverity;
     InsightSeverity["WARNING"] = "WARNING";
     InsightSeverity["CRITICAL"] = "CRITICAL";
 })(InsightSeverity || (exports.InsightSeverity = InsightSeverity = {}));
+var InvitationStatus;
+(function (InvitationStatus) {
+    InvitationStatus["PENDING"] = "PENDING";
+    InvitationStatus["ACCEPTED"] = "ACCEPTED";
+    InvitationStatus["EXPIRED"] = "EXPIRED";
+    InvitationStatus["REVOKED"] = "REVOKED";
+})(InvitationStatus || (exports.InvitationStatus = InvitationStatus = {}));
