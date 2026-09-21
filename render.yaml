@@ -13,32 +13,14 @@ services:
 
     # --------------------------------------------------------
     # HEALTH CHECK
-    # Render will periodically hit this endpoint
     # --------------------------------------------------------
     healthCheckPath: /health
 
-    # --------------------------------------------------------
-    # START COMMAND
-    #
-    # Free-tier Render does NOT support preDeployCommand.
-    # So Prisma migrations are applied when the container starts.
-    #
-    # Flow:
-    # 1. Apply pending Prisma migrations
-    # 2. Start NestJS production server
-    # --------------------------------------------------------
-    dockerCommand: /bin/sh -c 'npx prisma migrate deploy --schema apps/api/prisma/schema.prisma && node apps/api/dist/apps/api/src/main.js'
-    
     envVars:
 
       # ------------------------------------------------------
       # DATABASE
-      #
-      # Use Neon PostgreSQL pooled connection string.
-      # Enter manually in Render Blueprint setup.
-      #
-      # Example:
-      # postgresql://USER:PASSWORD@HOST/neondb?sslmode=require
+      # Neon PostgreSQL pooled connection string
       # ------------------------------------------------------
       - key: DATABASE_URL
         sync: false
@@ -46,11 +28,7 @@ services:
 
       # ------------------------------------------------------
       # REDIS
-      #
-      # Use Upstash Redis TCP/TLS connection string.
-      #
-      # Must look like:
-      # rediss://default:PASSWORD@HOST:6379
+      # Upstash Redis TLS URL
       # ------------------------------------------------------
       - key: REDIS_URL
         sync: false
@@ -58,8 +36,6 @@ services:
 
       # ------------------------------------------------------
       # JWT AUTH
-      #
-      # Render generates secure random secrets automatically.
       # ------------------------------------------------------
       - key: JWT_ACCESS_SECRET
         generateValue: true
@@ -71,9 +47,8 @@ services:
       # ------------------------------------------------------
       # FRONTEND / CORS
       #
-      # For the FIRST deployment use Render's frontend domain.
-      #
-      # Later replace with:
+      # Initial Render frontend URL
+      # Later:
       # https://erp.project-antara.space
       # ------------------------------------------------------
       - key: FRONTEND_URL
@@ -89,9 +64,7 @@ services:
 
       # ------------------------------------------------------
       # OPENAI
-      #
-      # Optional.
-      # Leave empty if AI features are not required yet.
+      # Optional
       # ------------------------------------------------------
       - key: OPENAI_API_KEY
         sync: false
@@ -102,9 +75,7 @@ services:
 
       # ------------------------------------------------------
       # GOOGLE SERVICE ACCOUNT
-      #
-      # Optional.
-      # Used for Google Calendar / Drive integrations.
+      # Optional Calendar / Drive integrations
       # ------------------------------------------------------
       - key: GOOGLE_PROJECT_ID
         sync: false
@@ -124,9 +95,6 @@ services:
 
       # ------------------------------------------------------
       # EMAIL / NOTIFICATIONS
-      #
-      # Optional.
-      # Can remain disabled initially.
       # ------------------------------------------------------
       - key: RESEND_API_KEY
         sync: false
@@ -162,10 +130,8 @@ services:
       # ------------------------------------------------------
       # API URL
       #
-      # FIRST DEPLOYMENT:
-      # use Render backend domain.
-      #
-      # Later replace with:
+      # Initial Render backend URL
+      # Later:
       # https://api.erp.project-antara.space/api
       # ------------------------------------------------------
       - key: NEXT_PUBLIC_API_URL
@@ -178,10 +144,8 @@ services:
       # ------------------------------------------------------
       # NEXTAUTH / AUTH.JS
       #
-      # FIRST DEPLOYMENT:
-      # use Render frontend URL.
-      #
-      # Later replace with:
+      # Initial Render frontend URL
+      # Later:
       # https://erp.project-antara.space
       # ------------------------------------------------------
       - key: NEXTAUTH_URL
@@ -194,14 +158,10 @@ services:
       # ------------------------------------------------------
       # GOOGLE OAUTH
       #
-      # Enter manually in Render Blueprint setup.
-      #
-      # Google OAuth redirect URI for first deployment should be:
-      #
+      # Initial callback:
       # https://antara-web.onrender.com/api/auth/callback/google
       #
-      # Later custom-domain redirect:
-      #
+      # Later:
       # https://erp.project-antara.space/api/auth/callback/google
       # ------------------------------------------------------
       - key: GOOGLE_CLIENT_ID
@@ -212,7 +172,7 @@ services:
 
 
       # ------------------------------------------------------
-      # ALLOWED GOOGLE LOGIN EMAILS
+      # ALLOWED GOOGLE EMAILS
       #
       # Example:
       # user1@goa.bits-pilani.ac.in,user2@goa.bits-pilani.ac.in
