@@ -13,7 +13,7 @@ type TaskSnapshot = {
   status: TaskStatus;
   deadline: Date;
   dependencyIds: string[];
-  estimatedHours: number | string;
+  estimatedHours: number;
   subsystem: { name: string };
   assignedTo: { id: string; name: string; availabilityScore: number } | null;
 };
@@ -38,7 +38,7 @@ type PersistedInsight = {
   summary: string;
   severity: InsightSeverity;
   recommendation: string;
-  riskScore: number | string;
+  riskScore: number;
   subsystem: { name: string } | null;
   createdAt: Date;
 };
@@ -62,6 +62,40 @@ type OpenAiInsight = {
   riskScore: number;
   subsystem?: string;
 };
+
+function toTaskSnapshot(task: any): TaskSnapshot {
+  return {
+    id: task.id,
+    title: task.title,
+    priority: task.priority as any,
+    status: task.status as any,
+    deadline: task.deadline,
+    dependencyIds: task.dependencyIds,
+    estimatedHours: Number(task.estimatedHours ?? 0),
+    subsystem: { name: task.subsystem?.name },
+    assignedTo: task.assignedTo
+      ? { id: task.assignedTo.id, name: task.assignedTo.name, availabilityScore: task.assignedTo.availabilityScore }
+      : null,
+  };
+}
+
+function toWorklogSnapshot(log: any): WorklogSnapshot {
+  return {
+    durationMin: log.durationMin,
+    userId: log.userId,
+    user: { name: log.user?.name },
+  };
+}
+
+function toEventSnapshot(event: any): EventSnapshot {
+  return {
+    id: event.id,
+    title: event.title,
+    startsAt: event.startsAt,
+    endsAt: event.endsAt,
+    subsystem: event.subsystem ? { name: event.subsystem.name } : null,
+  };
+}
 
 @Injectable()
 export class AiService {
@@ -153,15 +187,15 @@ export class AiService {
       let derivedInsights: GeneratedInsight[] = [];
       try {
         derivedInsights = await this.generateInsightsWithOpenAI(
-          tasks as TaskSnapshot[],
-          recentWorklogs as WorklogSnapshot[],
+          tasks.map(toTaskSnapshot),
+          recentWorklogs.map(toWorklogSnapshot),
           now,
         );
       } catch {
         // Fallback to deterministic heuristics
         derivedInsights = this.buildInsights(
-          tasks as TaskSnapshot[],
-          recentWorklogs as WorklogSnapshot[],
+          tasks.map(toTaskSnapshot),
+          recentWorklogs.map(toWorklogSnapshot),
           now,
         );
       }
@@ -345,7 +379,7 @@ Generate insights as a function call to "generate_insights".`;
         take: 6,
       });
 
-      const reminders = (tasks as TaskSnapshot[]).map((task) => {
+      const reminders = tasks.map(toTaskSnapshot).map((task: TaskSnapshot) => {
         const overdue = task.deadline.getTime() < now.getTime();
         const dueHours = Math.max(1, Math.round((task.deadline.getTime() - now.getTime()) / (60 * 60 * 1000)));
         const dependencyNote = task.dependencyIds.length
@@ -413,8 +447,8 @@ Generate insights as a function call to "generate_insights".`;
       ]);
 
       const recommendations = this.buildScheduleRecommendations(
-        events as EventSnapshot[],
-        dueTasks as TaskSnapshot[],
+        events.map(toEventSnapshot),
+        dueTasks.map(toTaskSnapshot),
       );
 
       const payload = recommendations.length ? recommendations : this.getSeedSchedule();
@@ -449,7 +483,7 @@ Generate insights as a function call to "generate_insights".`;
         },
       });
 
-      const suggestions = this.buildWorkloadSuggestions(tasks as TaskSnapshot[]);
+      const suggestions = this.buildWorkloadSuggestions(tasks.map(toTaskSnapshot));
       const payload = suggestions.length ? suggestions : this.getSeedWorkload();
       await this.cache.setJson(cacheKey, payload, 300);
       return payload;
@@ -704,7 +738,7 @@ Generate insights as a function call to "generate_insights".`;
       ]);
 
       const riskResult = this.runMonteCarloScheduleRisk(
-        tasks as TaskSnapshot[],
+        tasks.map(toTaskSnapshot),
         worklogs as Array<{
           durationMin: number;
           userId: string;

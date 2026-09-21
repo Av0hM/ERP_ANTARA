@@ -4,6 +4,12 @@ export enum AppRole {
   MEMBER = "MEMBER",
 }
 
+export enum Role {
+  OWNER = "OWNER",
+  ADMIN = "ADMIN",
+  MEMBER = "MEMBER",
+}
+
 export enum TaskStatus {
   BACKLOG = "BACKLOG",
   TODO = "TODO",
@@ -38,5 +44,12 @@ export enum InsightSeverity {
   INFO = "INFO",
   WARNING = "WARNING",
   CRITICAL = "CRITICAL",
+}
+
+export enum InvitationStatus {
+  PENDING = "PENDING",
+  ACCEPTED = "ACCEPTED",
+  EXPIRED = "EXPIRED",
+  REVOKED = "REVOKED",
 }
 
