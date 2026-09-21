@@ -1,12 +1,19 @@
-# ---- deps + build ----
+# ============================================================
+# BUILD STAGE
+# ============================================================
 FROM node:22-alpine AS builder
+
 WORKDIR /app
 
-# IMPORTANT:
-# The repository lockfile is generated using npm 11.6.2.
-# Keep Render/Docker on the exact same npm version.
+# Keep Docker npm aligned with the repo packageManager.
 RUN npm install -g npm@11.6.2
 
+
+# ------------------------------------------------------------
+# COPY WORKSPACE MANIFESTS FIRST
+#
+# This keeps dependency installation cacheable.
+# ------------------------------------------------------------
 COPY package.json package-lock.json turbo.json tsconfig.base.json ./
 
 COPY apps/api/package.json apps/api/package.json
@@ -16,39 +23,115 @@ COPY packages/contracts/package.json packages/contracts/package.json
 COPY packages/ui/package.json packages/ui/package.json
 COPY packages/shared-utils/package.json packages/shared-utils/package.json
 
-# Reproducible dependency installation
+
+# ------------------------------------------------------------
+# INSTALL DEPENDENCIES
+# ------------------------------------------------------------
 RUN npm ci
 
-# Prisma
+
+# ------------------------------------------------------------
+# PRISMA
+# ------------------------------------------------------------
 COPY apps/api/prisma ./apps/api/prisma
+
 RUN npx prisma generate --schema apps/api/prisma/schema.prisma
 
-# Source required for API compilation
-COPY packages/contracts packages/contracts
-COPY apps/api apps/api
 
-# Contracts must be built first because the compiled API runtime
-# resolves @antara/contracts through the npm workspace package.
+# ------------------------------------------------------------
+# COPY SOURCE
+# ------------------------------------------------------------
+COPY packages/contracts ./packages/contracts
+COPY packages/shared-utils ./packages/shared-utils
+COPY apps/api ./apps/api
+
+
+# ------------------------------------------------------------
+# BUILD INTERNAL WORKSPACE PACKAGES
+#
+# @antara/contracts must be compiled because the API's emitted
+# JavaScript still contains:
+#
+# require("@antara/contracts")
+#
+# Node resolves this through npm's workspace symlink.
+# ------------------------------------------------------------
 RUN npm run build --workspace @antara/contracts
 
-# Build NestJS API
+RUN npm run build --workspace @antara/shared-utils
+
 RUN npm run build --workspace @antara/api
 
 
+
 # ============================================================
-# Production runtime
+# PRODUCTION RUNTIME
 # ============================================================
 FROM node:22-alpine AS runner
+
 WORKDIR /app
 
 ENV NODE_ENV=production
 
+
+# ------------------------------------------------------------
+# NODE MODULES
+#
+# npm workspaces create symlinks such as:
+#
+# node_modules/@antara/contracts
+#     -> ../../packages/contracts
+#
+# Therefore the corresponding workspace package directories
+# MUST exist in the runtime image.
+# ------------------------------------------------------------
 COPY --from=builder /app/node_modules ./node_modules
+
+
+# ------------------------------------------------------------
+# INTERNAL WORKSPACE PACKAGE: @antara/contracts
+#
+# IMPORTANT:
+# Copy BOTH package.json and dist.
+#
+# package.json contains:
+#   "main": "dist/index.js"
+#
+# Without package.json Node cannot resolve:
+#   require("@antara/contracts")
+# ------------------------------------------------------------
+COPY --from=builder /app/packages/contracts/package.json ./packages/contracts/package.json
 COPY --from=builder /app/packages/contracts/dist ./packages/contracts/dist
+
+
+# ------------------------------------------------------------
+# INTERNAL WORKSPACE PACKAGE: @antara/shared-utils
+#
+# Copy this too so we don't hit the exact same runtime problem
+# if the API imports it now or later.
+# ------------------------------------------------------------
+COPY --from=builder /app/packages/shared-utils/package.json ./packages/shared-utils/package.json
+COPY --from=builder /app/packages/shared-utils/dist ./packages/shared-utils/dist
+
+
+# ------------------------------------------------------------
+# API BUILD
+# ------------------------------------------------------------
 COPY --from=builder /app/apps/api/dist ./apps/api/dist
 COPY --from=builder /app/apps/api/prisma ./apps/api/prisma
 COPY --from=builder /app/apps/api/package.json ./apps/api/package.json
 
+
+# ------------------------------------------------------------
+# SERVER
+# ------------------------------------------------------------
 EXPOSE 4000
 
+
+# ------------------------------------------------------------
+# START
+#
+# Prisma migrations run first.
+# If successful, NestJS starts.
+# ------------------------------------------------------------
 CMD ["/bin/sh", "-c", "npx prisma migrate deploy --schema apps/api/prisma/schema.prisma && exec node apps/api/dist/apps/api/src/main.js"]
