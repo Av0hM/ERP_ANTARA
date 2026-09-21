@@ -1,51 +1,152 @@
 services:
+  # ==========================================================
+  # NESTJS API
+  # ==========================================================
   - type: web
     name: antara-api
     runtime: docker
+    plan: free
+
     dockerfilePath: ./infra/docker/api.Dockerfile
     dockerContext: .
-    plan: starter
+
+    healthCheckPath: /health
+
     envVars:
+      # ------------------------------------------------------
+      # DATABASE
+      # Use Neon PostgreSQL
+      # Set this manually in Render
+      # ------------------------------------------------------
       - key: DATABASE_URL
-        fromDatabase:
-          name: antara-postgres
-          property: connectionString
+        sync: false
+
+      # ------------------------------------------------------
+      # REDIS
+      # Use Upstash Redis
+      # Set this manually in Render
+      # ------------------------------------------------------
       - key: REDIS_URL
-        fromService:
-          type: redis
-          name: antara-redis
-          property: connectionString
+        sync: false
+
+      # ------------------------------------------------------
+      # JWT AUTH
+      # Render generates these automatically
+      # ------------------------------------------------------
       - key: JWT_ACCESS_SECRET
         generateValue: true
+
       - key: JWT_REFRESH_SECRET
         generateValue: true
+
+      # ------------------------------------------------------
+      # FRONTEND / CORS
+      # Change this if your final frontend domain is different
+      # ------------------------------------------------------
       - key: FRONTEND_URL
-        value: https://antara-web.onrender.com
+        value: https://erp.project-antara.space
+
+      # ------------------------------------------------------
+      # NODE
+      # ------------------------------------------------------
+      - key: NODE_ENV
+        value: production
+
+      # ------------------------------------------------------
+      # OPENAI
+      # Optional
+      # ------------------------------------------------------
+      - key: OPENAI_API_KEY
+        sync: false
+
+      - key: OPENAI_MODEL
+        value: gpt-5-mini
+
+      # ------------------------------------------------------
+      # GOOGLE SERVICE ACCOUNT
+      # Optional - Calendar / Drive integrations
+      # ------------------------------------------------------
+      - key: GOOGLE_PROJECT_ID
+        sync: false
+
+      - key: GOOGLE_SERVICE_ACCOUNT_EMAIL
+        sync: false
+
+      - key: GOOGLE_PRIVATE_KEY
+        sync: false
+
+      - key: GOOGLE_CALENDAR_ID
+        sync: false
+
+      - key: GOOGLE_DRIVE_ROOT_FOLDER_ID
+        sync: false
+
+      # ------------------------------------------------------
+      # EMAIL / NOTIFICATIONS
+      # ------------------------------------------------------
+      - key: RESEND_API_KEY
+        sync: false
+
       - key: NOTIFICATIONS_EMAIL_ENABLED
         value: "false"
+
+      - key: NOTIFICATIONS_FROM_EMAIL
+        sync: false
+
     preDeployCommand: npx prisma migrate deploy --schema apps/api/prisma/schema.prisma
 
+
+  # ==========================================================
+  # NEXT.JS FRONTEND
+  # ==========================================================
   - type: web
     name: antara-web
     runtime: docker
+    plan: free
+
     dockerfilePath: ./infra/docker/web.Dockerfile
     dockerContext: .
-    plan: starter
+
     envVars:
+      # ------------------------------------------------------
+      # NODE
+      # ------------------------------------------------------
+      - key: NODE_ENV
+        value: production
+
+      # ------------------------------------------------------
+      # API
+      #
+      # Initially you can replace these with:
+      # https://antara-api.onrender.com/api
+      #
+      # Later use the custom domain:
+      # https://api.erp.project-antara.space/api
+      # ------------------------------------------------------
       - key: NEXT_PUBLIC_API_URL
-        value: https://antara-api.onrender.com/api
+        value: https://api.erp.project-antara.space/api
+
       - key: API_URL
-        value: https://antara-api.onrender.com/api
+        value: https://api.erp.project-antara.space/api
+
+      # ------------------------------------------------------
+      # NEXTAUTH / AUTH.JS
+      # ------------------------------------------------------
       - key: NEXTAUTH_URL
-        value: https://antara-web.onrender.com
+        value: https://erp.project-antara.space
+
       - key: NEXTAUTH_SECRET
         generateValue: true
 
-  - type: redis
-    name: antara-redis
-    plan: starter
-    ipAllowList: []
+      # ------------------------------------------------------
+      # GOOGLE OAUTH
+      # Set manually in Render
+      # ------------------------------------------------------
+      - key: GOOGLE_CLIENT_ID
+        sync: false
 
-databases:
-  - name: antara-postgres
-    plan: starter
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+
+      - key: GOOGLE_ALLOWED_EMAILS
+        sync: false
