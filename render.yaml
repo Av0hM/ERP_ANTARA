@@ -28,10 +28,8 @@ services:
     # 2. Start NestJS production server
     # --------------------------------------------------------
     dockerCommand: >
-      /bin/sh -c "
-      npx prisma migrate deploy --schema apps/api/prisma/schema.prisma &&
-      npm run start:prod --workspace=apps/api
-      "
+    npx prisma migrate deploy --schema apps/api/prisma/schema.prisma &&
+    npm run start:prod --workspace=apps/api
 
     envVars:
 
