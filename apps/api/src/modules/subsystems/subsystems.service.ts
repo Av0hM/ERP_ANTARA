@@ -1,5 +1,5 @@
 import { Injectable } from "@nestjs/common";
-import { TaskPriority, TaskStatus } from "@antara/contracts";
+import { TaskPriority, TaskStatus } from "@prisma/client";
 
 import { PrismaService } from "../../common/prisma/prisma.service";
 
@@ -156,13 +156,28 @@ export class SubsystemsService {
       }),
     ]);
 
-    const activeTasks = tasks.filter((t: { status: TaskStatus; deadline: Date; assignedToId: string | null }) => t.status !== TaskStatus.COMPLETED);
-    const completedTasks = tasks.filter((t: { status: TaskStatus }) => t.status === TaskStatus.COMPLETED);
-    const overdueTasks = activeTasks.filter((t: { deadline: Date }) => t.deadline < now);
-    const blockedTasks = activeTasks.filter((t: { status: TaskStatus }) => t.status === TaskStatus.BLOCKED);
+    const activeTasks = tasks.filter(
+      (task) => task.status !== TaskStatus.COMPLETED,
+    );
+    const completedTasks = tasks.filter(
+      (task) => task.status === TaskStatus.COMPLETED,
+    );
+    const overdueTasks = activeTasks.filter(
+      (task) => task.deadline < now,
+    );
+    const blockedTasks = activeTasks.filter(
+      (task) => task.status === TaskStatus.BLOCKED,
+    );
     const upcomingTasks = activeTasks
-      .filter((t: { deadline: Date }) => t.deadline >= now && t.deadline <= soon)
-      .sort((a: { deadline: Date }, b: { deadline: Date }) => a.deadline.getTime() - b.deadline.getTime())
+      .filter(
+        (task) =>
+          task.deadline >= now &&
+          task.deadline <= soon,
+      )
+      .sort(
+        (a, b) =>
+          a.deadline.getTime() - b.deadline.getTime(),
+      )
       .slice(0, 10);
 
     const completionRate = tasks.length > 0 ? Math.round((completedTasks.length / tasks.length) * 100) : 0;
@@ -171,7 +186,10 @@ export class SubsystemsService {
     const activeTaskCount = activeTasks.length;
 
     const velocity = Math.min(99, Math.round(55 + completedTasks.length * 6 + activeTaskCount * 2));
-    const totalHours = tasks.reduce((sum: number, t: { estimatedHours: number | string }) => sum + Number(t.estimatedHours ?? 0), 0);
+    const totalHours = tasks.reduce(
+      (sum, task) => sum + Number(task.estimatedHours ?? 0),
+      0,
+    );
     const riskScore = Math.min(99, Math.round(20 + overdueCount * 12 + blockedCount * 10 + activeTaskCount * 3 + totalHours / 2));
 
     const incomingBlockers: BlockingRelation[] = [];
@@ -179,7 +197,7 @@ export class SubsystemsService {
 
     for (const task of tasks) {
       for (const depId of task.dependencyIds ?? []) {
-        const depTask = allTasks.find((t: { id: string; subsystemId: string; subsystem: { name: string } | null; title: string }) => t.id === depId);
+        const depTask = allTasks.find((t) => t.id === depId);
         if (depTask && depTask.subsystemId !== subsystem.id) {
           incomingBlockers.push({
             taskId: task.id,
@@ -197,7 +215,7 @@ export class SubsystemsService {
       if (task.subsystemId !== subsystem.id) {
         for (const depId of task.dependencyIds ?? []) {
           if (depId === task.id) continue;
-          const depTask = allTasks.find((t: { id: string; subsystemId: string; subsystem: { name: string } | null; title: string }) => t.id === depId);
+          const depTask = allTasks.find((t) => t.id === depId);
           if (depTask && depTask.subsystemId === subsystem.id) {
             outgoingBlockers.push({
               taskId: task.id,
@@ -212,8 +230,8 @@ export class SubsystemsService {
       }
     }
 
-    const workload: WorkloadEntry[] = subsystem.users.map((user: { id: string; name: string; availabilityScore: number }) => {
-      const userActiveTasks = activeTasks.filter((t: { assignedToId: string | null }) => t.assignedToId === user.id).length;
+    const workload: WorkloadEntry[] = subsystem.users.map((user) => {
+      const userActiveTasks = activeTasks.filter((t) => t.assignedToId === user.id).length;
       return {
         memberId: user.id,
         name: user.name,
@@ -223,12 +241,12 @@ export class SubsystemsService {
     });
 
     const recentActivity: RecentActivityEntry[] = [
-      ...worklogs.map((w: { user: { name: string } | null; durationMin: number; task: { title: string } | null; startedAt: Date }) => ({
+      ...worklogs.map((w) => ({
         type: "worklog" as const,
         timestamp: w.startedAt.toISOString(),
         summary: `${w.user?.name ?? "Member"} logged ${Math.round(w.durationMin / 60)}h on "${w.task?.title ?? "task"}"`,
       })),
-      ...comments.map((c: { author: { name: string } | null; task: { title: string } | null; createdAt: Date }) => ({
+      ...comments.map((c) => ({
         type: "comment" as const,
         timestamp: c.createdAt.toISOString(),
         summary: `${c.author?.name ?? "Member"} commented on "${c.task?.title ?? "task"}"`,
@@ -250,11 +268,11 @@ export class SubsystemsService {
         activeTaskCount,
         overdueCount,
         blockedCount,
-        upcomingDeadlines: upcomingTasks.map((t: { id: string; title: string; deadline: Date; priority: TaskPriority }) => ({
-          id: t.id,
-          title: t.title,
-          deadline: t.deadline.toISOString(),
-          priority: t.priority,
+        upcomingDeadlines: upcomingTasks.map((task) => ({
+          id: task.id,
+          title: task.title,
+          deadline: task.deadline.toISOString(),
+          priority: task.priority,
         })),
       },
       incomingBlockers,

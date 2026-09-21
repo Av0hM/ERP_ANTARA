@@ -14,24 +14,6 @@ type AnalyticsOverview = {
 type HeatmapCell = { day: string; intensity: number };
 type VelocityPoint = { label: string; value: number };
 type SubsystemBreakdown = { name: string; velocity: number; risk: number; completion: number };
-type SnapshotRow = { velocityScore: number | string };
-type WorklogRow = { startedAt: Date; durationMin: number };
-type TaskRow = {
-  status: TaskStatus;
-  deadline: Date;
-  estimatedHours: number | string;
-  subsystem: { name: string };
-};
-type OverviewTaskRow = {
-  status: TaskStatus;
-  deadline: Date;
-};
-type OverviewWorklogRow = {
-  durationMin: number;
-};
-type OverviewUserRow = {
-  availabilityScore: number;
-};
 
 @Injectable()
 export class AnalyticsService implements OnModuleInit, OnModuleDestroy {
@@ -76,10 +58,10 @@ export class AnalyticsService implements OnModuleInit, OnModuleDestroy {
       return cached;
     }
 
-    const snapshots = (await this.prisma.analyticsSnapshot.findMany({
+    const snapshots = await this.prisma.analyticsSnapshot.findMany({
       take: 8,
       orderBy: { periodStart: "asc" },
-    })) as SnapshotRow[];
+    });
 
     const series =
       snapshots.length > 0
@@ -100,7 +82,7 @@ export class AnalyticsService implements OnModuleInit, OnModuleDestroy {
       return cached;
     }
 
-    const worklogs = (await this.prisma.workLog.findMany({
+    const worklogs = await this.prisma.workLog.findMany({
       where: {
         startedAt: {
           gte: new Date(Date.now() - 14 * 24 * 60 * 60 * 1000),
@@ -110,7 +92,7 @@ export class AnalyticsService implements OnModuleInit, OnModuleDestroy {
         startedAt: true,
         durationMin: true,
       },
-    })) as WorklogRow[];
+    });
 
     const weekdays = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
     const tally = weekdays.map((day) => ({ day, intensity: 0 }));
@@ -137,7 +119,7 @@ export class AnalyticsService implements OnModuleInit, OnModuleDestroy {
       return cached;
     }
 
-    const tasks = (await this.prisma.task.findMany({
+    const tasks = await this.prisma.task.findMany({
       where: {
         deletedAt: null,
         isArchived: false,
@@ -145,14 +127,14 @@ export class AnalyticsService implements OnModuleInit, OnModuleDestroy {
       include: {
         subsystem: { select: { name: true } },
       },
-    })) as TaskRow[];
+    });
 
     const subsystems = subsystemCatalog.map((name) => {
       const relevant = tasks.filter((task) => task.subsystem.name === name);
       const completed = relevant.filter((task) => task.status === TaskStatus.COMPLETED).length;
       const overdue = relevant.filter((task) => task.status === TaskStatus.OVERDUE || task.deadline < new Date()).length;
       const active = relevant.filter((task) => task.status !== TaskStatus.COMPLETED).length;
-      const totalHours = relevant.reduce((sum: number, task: TaskRow) => sum + Number(task.estimatedHours ?? 0), 0);
+      const totalHours = relevant.reduce((sum, task) => sum + Number(task.estimatedHours ?? 0), 0);
       return {
         name,
         velocity: Math.min(99, Math.round(55 + completed * 6 + active * 2)),
@@ -245,17 +227,17 @@ export class AnalyticsService implements OnModuleInit, OnModuleDestroy {
           availabilityScore: true,
         },
       }),
-    ]) as [OverviewTaskRow[], OverviewWorklogRow[], OverviewUserRow[]];
+    ]);
 
     const total = tasks.length || 1;
     const completed = tasks.filter((task) => task.status === TaskStatus.COMPLETED).length;
     const overdue = tasks.filter((task) => task.status === TaskStatus.OVERDUE || task.deadline < new Date()).length;
     const active = tasks.filter((task) => task.status !== TaskStatus.COMPLETED).length;
     const velocity = Math.min(99, Math.round((completed / total) * 100 + active * 1.5));
-    const productivity = Math.min(99, Math.round(60 + worklogs.reduce((sum: number, item: OverviewWorklogRow) => sum + item.durationMin, 0) / 60 + completed * 3));
+    const productivity = Math.min(99, Math.round(60 + worklogs.reduce((sum, item) => sum + item.durationMin, 0) / 60 + completed * 3));
     const overdueRate = Number(((overdue / total) * 100).toFixed(1));
     const workloadHealth = users.length
-      ? Math.round(users.reduce((sum: number, user: OverviewUserRow) => sum + user.availabilityScore, 0) / users.length)
+      ? Math.round(users.reduce((sum, user) => sum + user.availabilityScore, 0) / users.length)
       : 75;
 
     return {

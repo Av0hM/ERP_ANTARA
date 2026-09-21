@@ -70,7 +70,7 @@ export class TasksService {
       },
     });
 
-    return comments.map((comment: { id: string; content: string; createdAt: Date; author: { name: string }; task: { title: string } }) => ({
+    return comments.map((comment) => ({
       id: comment.id,
       type: "comment",
       title: `${comment.author.name} commented on ${comment.task.title}`,
@@ -248,13 +248,13 @@ export class TasksService {
       orderBy: [{ deadline: "asc" }, { priority: "desc" }],
     });
 
-    const taskMap = new Map(tasks.map((t: { id: string }) => [t.id, t]));
+    const taskMap = new Map(tasks.map((t) => [t.id, t]));
     const adj = new Map<string, string[]>();
     const reverseAdj = new Map<string, string[]>();
 
-    tasks.forEach((task: { id: string; dependencyIds: string[] }) => {
+    tasks.forEach((task) => {
       adj.set(task.id, task.dependencyIds ?? []);
-      task.dependencyIds?.forEach((depId: string) => {
+      task.dependencyIds?.forEach((depId) => {
         const rev = reverseAdj.get(depId) ?? [];
         rev.push(task.id);
         reverseAdj.set(depId, rev);
@@ -292,22 +292,38 @@ export class TasksService {
       console.warn("Dependency cycle detected in task graph");
     }
 
-    const criticalPath = this.computeCriticalPath(tasks, adj);
+    const normalizedCriticalPathTasks = tasks.map(
+      (task) => ({
+        id: task.id,
+        dependencyIds: task.dependencyIds,
+        estimatedHours: Number(task.estimatedHours ?? 0),
+      }),
+    );
+
+    const criticalPath = this.computeCriticalPath(
+      normalizedCriticalPathTasks,
+      adj,
+    );
 
     const criticalPathSet = new Set(criticalPath);
 
-    const nodes: DependencyGraphNode[] = tasks.map((task: { id: string; title: string; status: TaskStatus; priority: TaskPriority; subsystem: { name: string } | null; assignedTo: { id: string; name: string } | null }) => ({
+    const nodes: DependencyGraphNode[] = tasks.map((task) => ({
       id: task.id,
       title: task.title,
-      status: task.status,
-      priority: task.priority,
-      subsystem: task.subsystem?.name ?? "Unknown",
-      assignee: task.assignedTo ?? null,
+      status: task.status as TaskStatus,
+      priority: task.priority as TaskPriority,
+      subsystem: task.subsystem?.name ?? null,
+      assignee: task.assignedTo
+        ? {
+            id: task.assignedTo.id,
+            name: task.assignedTo.name,
+          }
+        : null,
       isCriticalPath: criticalPathSet.has(task.id),
     }));
 
     const edges: DependencyGraphEdge[] = [];
-    tasks.forEach((task: { id: string; dependencyIds: string[] }) => {
+    tasks.forEach((task) => {
       (task.dependencyIds ?? []).forEach((depId: string) => {
         if (taskMap.has(depId)) {
           edges.push({ from: depId, to: task.id, type: "blocks" });
@@ -321,7 +337,7 @@ export class TasksService {
   private computeCriticalPath(
     tasks: Array<{
       id: string;
-      estimatedHours: number | string;
+      estimatedHours: number;
       dependencyIds: string[];
     }>,
     adj: Map<string, string[]>,

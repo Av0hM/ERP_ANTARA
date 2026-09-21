@@ -3,6 +3,7 @@ import { ConfigService } from "@nestjs/config";
 import { JwtService } from "@nestjs/jwt";
 import * as bcrypt from "bcryptjs";
 import { AppRole } from "@antara/contracts";
+import { Role as PrismaRole } from "@prisma/client";
 
 import { PrismaService } from "../../common/prisma/prisma.service";
 import { UsersService } from "../users/users.service";
@@ -11,6 +12,19 @@ import { LogoutDto } from "./dto/logout.dto";
 import { RefreshSessionDto } from "./dto/refresh-session.dto";
 import { RegisterDto } from "./dto/register.dto";
 import { AuditService } from "../audit/audit.service";
+
+function toAppRole(role: PrismaRole): AppRole {
+  switch (role) {
+    case PrismaRole.OWNER:
+      return AppRole.OWNER;
+
+    case PrismaRole.ADMIN:
+      return AppRole.ADMIN;
+
+    case PrismaRole.MEMBER:
+      return AppRole.MEMBER;
+  }
+}
 
 type AuthUser = {
   id: string;
@@ -54,7 +68,7 @@ export class AuthService {
       id: user.id,
       email: user.email,
       name: user.name,
-      role: user.role,
+      role: toAppRole(user.role),
     });
   }
 
@@ -73,7 +87,7 @@ export class AuthService {
       id: user.id,
       email: user.email,
       name: user.name,
-      role: user.role,
+      role: toAppRole(user.role),
     });
 
     await this.auditService.log({
@@ -88,15 +102,16 @@ export class AuthService {
   }
 
   async googleCallback(payload: { email: string; name: string; avatarUrl?: string }) {
-    let user = await this.usersService.findByEmail(payload.email);
+    const existingUser =
+      await this.usersService.findByEmail(payload.email);
 
-    if (!user) {
-      user = await this.usersService.create({
+    const user =
+      existingUser ??
+      (await this.usersService.create({
         email: payload.email,
         name: payload.name,
         role: AppRole.MEMBER,
-      });
-    }
+      }));
 
     if (payload.avatarUrl && !user.avatarUrl) {
       await this.prisma.user.update({
@@ -109,7 +124,7 @@ export class AuthService {
       id: user.id,
       email: user.email,
       name: user.name,
-      role: user.role,
+      role: toAppRole(user.role),
     });
 
     await this.auditService.log({
@@ -147,7 +162,7 @@ export class AuthService {
       id: user.id,
       email: user.email,
       name: user.name,
-      role: user.role,
+      role: toAppRole(user.role),
     });
 
     await this.prisma.session.update({
@@ -163,7 +178,7 @@ export class AuthService {
         id: user.id,
         email: user.email,
         name: user.name,
-        role: user.role,
+        role: toAppRole(user.role),
       },
       ...tokens,
     };

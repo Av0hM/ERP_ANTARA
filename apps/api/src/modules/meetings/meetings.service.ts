@@ -1,5 +1,5 @@
 import { Injectable, OnModuleInit } from "@nestjs/common";
-import { TaskStatus } from "@antara/contracts";
+import { TaskStatus } from "@prisma/client";
 
 import { PrismaService } from "../../common/prisma/prisma.service";
 import { CalendarService } from "../calendar/calendar.service";
@@ -39,7 +39,7 @@ export class MeetingAutomationService implements OnModuleInit {
     private readonly prisma: PrismaService,
     private readonly calendarService: CalendarService,
     private readonly tasksService: TasksService,
-  ) {}
+  ) { }
 
   async onModuleInit() {
     // Could schedule automatic sync here
@@ -86,7 +86,7 @@ export class MeetingAutomationService implements OnModuleInit {
   ) {
     const events = [];
     let currentDate = new Date(now);
-    
+
     // Find next occurrence of preferred day
     while (currentDate.getDay() !== config.preferredDay) {
       currentDate.setDate(currentDate.getDate() + 1);
@@ -98,7 +98,7 @@ export class MeetingAutomationService implements OnModuleInit {
       const minutes = Number(timeParts[1] ?? "0");
       const startsAt = new Date(currentDate);
       startsAt.setHours(hours, minutes, 0, 0);
-      
+
       const endsAt = new Date(startsAt);
       endsAt.setMinutes(endsAt.getMinutes() + (config.durationMinutes ?? 60));
 
@@ -121,7 +121,7 @@ export class MeetingAutomationService implements OnModuleInit {
     return events;
   }
 
-async generateMeetingAgenda(subsystemId: string, meetingDate: Date): Promise<MeetingAgenda> {
+  async generateMeetingAgenda(subsystemId: string, meetingDate: Date): Promise<MeetingAgenda> {
     const now = new Date();
     const weekAhead = new Date(meetingDate.getTime() + 7 * 24 * 60 * 60 * 1000);
 
@@ -153,18 +153,18 @@ async generateMeetingAgenda(subsystemId: string, meetingDate: Date): Promise<Mee
 
     // Blockers: tasks in this subsystem that are BLOCKED
     const blockers = tasks
-      .filter((t: { status: TaskStatus; id: string; title: string; subsystem: { name: string } | null }) => t.status === TaskStatus.BLOCKED)
-      .map((t: { id: string; title: string; subsystem: { name: string } | null }) => ({
-        taskId: t.id,
-        title: t.title,
-        subsystem: t.subsystem?.name ?? "Unknown",
+      .filter((task) => task.status === TaskStatus.BLOCKED)
+      .map((task) => ({
+        taskId: task.id,
+        title: task.title,
+        subsystem: task.subsystem?.name ?? "Unknown",
       }));
 
     // Decisions needed: tasks with high priority that need decisions
     const highPriorityTasks = tasks.filter(
-      (t: { priority: string }) => t.priority === "CRITICAL" || t.priority === "HIGH",
+      (t) => t.priority === "CRITICAL" || t.priority === "HIGH",
     );
-    const decisionsNeeded = highPriorityTasks.slice(0, 3).map((t: { id: string; title: string; priority: string; deadline: Date }) => ({
+    const decisionsNeeded = highPriorityTasks.slice(0, 3).map((t) => ({
       taskId: t.id,
       title: t.title,
       question: `Approve direction for ${t.title}? Priority: ${t.priority}, Deadline: ${t.deadline.toLocaleDateString()}`,
@@ -173,10 +173,10 @@ async generateMeetingAgenda(subsystemId: string, meetingDate: Date): Promise<Mee
     // Upcoming deadlines in next 2 weeks
     const twoWeeks = new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000);
     const upcomingDeadlines = tasks
-      .filter((t: { deadline: Date }) => t.deadline >= now && t.deadline <= twoWeeks)
-      .sort((a: { deadline: Date }, b: { deadline: Date }) => a.deadline.getTime() - b.deadline.getTime())
+      .filter((t) => t.deadline >= now && t.deadline <= twoWeeks)
+      .sort((a, b) => a.deadline.getTime() - b.deadline.getTime())
       .slice(0, 5)
-      .map((t: { id: string; title: string; deadline: Date; subsystem: { name: string } | null }) => ({
+      .map((t) => ({
         taskId: t.id,
         title: t.title,
         deadline: t.deadline,
@@ -185,18 +185,25 @@ async generateMeetingAgenda(subsystemId: string, meetingDate: Date): Promise<Mee
 
     // Action items from recent decisions/comments
     const actionItems = tasks
-      .filter((t: { status: TaskStatus }) => t.status === TaskStatus.IN_PROGRESS || t.status === TaskStatus.REVIEW)
+      .filter(
+        (task) =>
+          task.status === TaskStatus.IN_PROGRESS ||
+          task.status === TaskStatus.REVIEW,
+      )
       .slice(0, 5)
-      .map((t: { id: string; title: string; assignedTo: { name: string } | null; status: TaskStatus }) => ({
-        taskId: t.id,
-        title: t.title,
-        assignee: t.assignedTo?.name ?? "Unassigned",
-        action: t.status === TaskStatus.IN_PROGRESS ? "Continue progress" : "Review and approve",
+      .map((task) => ({
+        taskId: task.id,
+        title: task.title,
+        assignee: task.assignedTo?.name ?? "Unassigned",
+        action:
+          task.status === TaskStatus.IN_PROGRESS
+            ? "Continue progress"
+            : "Review and approve",
       }));
 
     return {
       title: `${tasks.length > 0 ? "Active" : "Empty"} Subsystem Sync`,
-      description: `Weekly sync for subsystem with ${tasks.length} active tasks. ${tasks.filter((t: { status: TaskStatus }) => t.status === TaskStatus.BLOCKED).length} blockers, ${highPriorityTasks.length} high-priority items.`,
+      description: `Weekly sync for subsystem with ${tasks.length} active tasks. ${tasks.filter((t) => t.status === TaskStatus.BLOCKED).length} blockers, ${highPriorityTasks.length} high-priority items.`,
       blockers,
       decisionsNeeded,
       upcomingDeadlines,
@@ -207,7 +214,7 @@ async generateMeetingAgenda(subsystemId: string, meetingDate: Date): Promise<Mee
   async createSyncCalendarEvents(subsystemId: string, horizonWeeks = 4, actorId: string) {
     const results = await this.generateSubsystemSyncEvents(4);
     const subsystemResult = results.find((r) => r.subsystemId === subsystemId);
-    
+
     if (!subsystemResult || subsystemResult.events.length === 0) {
       return { created: 0, events: [] };
     }

@@ -1,5 +1,5 @@
 import { Injectable } from "@nestjs/common";
-import { TaskStatus } from "@antara/contracts";
+import { TaskPriority, TaskStatus } from "@prisma/client";
 
 import { PrismaService } from "../../common/prisma/prisma.service";
 import { AiService } from "../ai/ai.service";
@@ -20,7 +20,7 @@ interface ResourceAllocationEntry {
   activeTasks: Array<{
     id: string;
     title: string;
-    priority: TaskStatus;
+    priority: TaskPriority;
     estimatedHours: number;
     deadline: Date;
     subsystemId: string;
@@ -64,7 +64,7 @@ export class ResourcesService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly aiService: AiService,
-  ) {}
+  ) { }
 
   async getResourceAllocationBoard(horizonWeeks = 4): Promise<ResourceAllocationBoard> {
     const now = new Date();
@@ -107,8 +107,8 @@ export class ResourcesService {
     const userMap = new Map(users.map((u: { id: string }) => [u.id, u]));
 
     // Build user allocation entries
-    const userEntries: ResourceAllocationEntry[] = users.map((user: { id: string; name: string; email: string; avatarUrl: string | null; subsystemId: string | null; subsystem: { name: string; color: string } | null; role: string; skills: string[]; weeklyCapacityHours: number; availabilityScore: number; assignedTasks: Array<{ id: string; title: string; priority: TaskStatus; estimatedHours: number | string; deadline: Date; subsystemId: string; subsystem: { name: string } | null }> }) => {
-      const activeTasks = user.assignedTasks.map((task: { id: string; title: string; priority: TaskStatus; estimatedHours: number | string; deadline: Date; subsystemId: string; subsystem: { name: string } | null }) => ({
+    const userEntries: ResourceAllocationEntry[] = users.map((user) => {
+      const activeTasks = user.assignedTasks.map((task) => ({
         id: task.id,
         title: task.title,
         priority: task.priority,

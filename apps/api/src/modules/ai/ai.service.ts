@@ -200,9 +200,21 @@ export class AiService {
         );
       }
 
-      await this.persistInsights(derivedInsights, storedInsights as PersistedInsight[], subsystems, dayStart);
+      const normalizedStoredInsights: PersistedInsight[] =
+        storedInsights.map((insight) => ({
+          id: insight.id,
+          title: insight.title,
+          summary: insight.summary,
+          severity: insight.severity as InsightSeverity,
+          recommendation: insight.recommendation,
+          riskScore: Number(insight.riskScore),
+          subsystem: insight.subsystem,
+          createdAt: insight.createdAt,
+        }));
 
-      const persisted = (storedInsights as PersistedInsight[]).map((insight) => ({
+      await this.persistInsights(derivedInsights, normalizedStoredInsights, subsystems, dayStart);
+
+      const persisted = normalizedStoredInsights.map((insight) => ({
         id: insight.id,
         title: insight.title,
         summary: insight.summary,
@@ -737,13 +749,19 @@ Generate insights as a function call to "generate_insights".`;
         }),
       ]);
 
+      const normalizedWorklogs = worklogs.map((log) => ({
+        durationMin: log.durationMin,
+        userId: log.userId,
+        task: log.task
+          ? {
+              estimatedHours: Number(log.task.estimatedHours),
+            }
+          : null,
+      }));
+
       const riskResult = this.runMonteCarloScheduleRisk(
         tasks.map(toTaskSnapshot),
-        worklogs as Array<{
-          durationMin: number;
-          userId: string;
-          task: { estimatedHours: number | string } | null;
-        }>,
+        normalizedWorklogs,
         now,
         horizon,
         simulations,
@@ -762,7 +780,7 @@ Generate insights as a function call to "generate_insights".`;
     historicalWorklogs: Array<{
       durationMin: number;
       userId: string;
-      task: { estimatedHours: number | string } | null;
+      task: { estimatedHours: number } | null;
     }>,
     now: Date,
     horizon: Date,

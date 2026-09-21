@@ -1,4 +1,5 @@
 import { Injectable } from "@nestjs/common";
+import { Prisma } from "@prisma/client";
 
 import { PrismaService } from "../../common/prisma/prisma.service";
 
@@ -7,12 +8,12 @@ export interface AuditLogInput {
   entityType: string;
   entityId: string;
   actorId: string;
-  payload?: Record<string, unknown>;
+  payload?: Prisma.InputJsonValue;
 }
 
 @Injectable()
 export class AuditService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService) { }
 
   async log(input: AuditLogInput) {
     try {
