@@ -11,72 +11,41 @@ services:
     dockerfilePath: ./infra/docker/api.Dockerfile
     dockerContext: .
 
-    # --------------------------------------------------------
-    # HEALTH CHECK
-    # --------------------------------------------------------
     healthCheckPath: /health
 
-    envVars:
+    # --------------------------------------------------------
+    # IMPORTANT:
+    # Force Render to overwrite the stale old Docker Command.
+    # Do NOT put prisma migrate here.
+    # Database is already migrated.
+    # --------------------------------------------------------
+    dockerCommand: node apps/api/dist/apps/api/src/main.js
 
-      # ------------------------------------------------------
-      # DATABASE
-      # Neon PostgreSQL pooled connection string
-      # ------------------------------------------------------
+    envVars:
       - key: DATABASE_URL
         sync: false
 
-
-      # ------------------------------------------------------
-      # REDIS
-      # Upstash Redis TLS URL
-      # ------------------------------------------------------
       - key: REDIS_URL
         sync: false
 
-
-      # ------------------------------------------------------
-      # JWT AUTH
-      # ------------------------------------------------------
       - key: JWT_ACCESS_SECRET
         generateValue: true
 
       - key: JWT_REFRESH_SECRET
         generateValue: true
 
-
-      # ------------------------------------------------------
-      # FRONTEND / CORS
-      #
-      # Initial Render frontend URL
-      # Later:
-      # https://erp.project-antara.space
-      # ------------------------------------------------------
       - key: FRONTEND_URL
         value: https://antara-web.onrender.com
 
-
-      # ------------------------------------------------------
-      # NODE ENVIRONMENT
-      # ------------------------------------------------------
       - key: NODE_ENV
         value: production
 
-
-      # ------------------------------------------------------
-      # OPENAI
-      # Optional
-      # ------------------------------------------------------
       - key: OPENAI_API_KEY
         sync: false
 
       - key: OPENAI_MODEL
         value: gpt-5-mini
 
-
-      # ------------------------------------------------------
-      # GOOGLE SERVICE ACCOUNT
-      # Optional Calendar / Drive integrations
-      # ------------------------------------------------------
       - key: GOOGLE_PROJECT_ID
         sync: false
 
@@ -92,10 +61,6 @@ services:
       - key: GOOGLE_DRIVE_ROOT_FOLDER_ID
         sync: false
 
-
-      # ------------------------------------------------------
-      # EMAIL / NOTIFICATIONS
-      # ------------------------------------------------------
       - key: RESEND_API_KEY
         sync: false
 
@@ -104,7 +69,6 @@ services:
 
       - key: NOTIFICATIONS_FROM_EMAIL
         sync: false
-
 
 
   # ==========================================================
@@ -119,63 +83,26 @@ services:
     dockerContext: .
 
     envVars:
-
-      # ------------------------------------------------------
-      # NODE ENVIRONMENT
-      # ------------------------------------------------------
       - key: NODE_ENV
         value: production
 
-
-      # ------------------------------------------------------
-      # API URL
-      #
-      # Initial Render backend URL
-      # Later:
-      # https://api.erp.project-antara.space/api
-      # ------------------------------------------------------
       - key: NEXT_PUBLIC_API_URL
         value: https://antara-api.onrender.com/api
 
       - key: API_URL
         value: https://antara-api.onrender.com/api
 
-
-      # ------------------------------------------------------
-      # NEXTAUTH / AUTH.JS
-      #
-      # Initial Render frontend URL
-      # Later:
-      # https://erp.project-antara.space
-      # ------------------------------------------------------
       - key: NEXTAUTH_URL
         value: https://antara-web.onrender.com
 
       - key: NEXTAUTH_SECRET
         generateValue: true
 
-
-      # ------------------------------------------------------
-      # GOOGLE OAUTH
-      #
-      # Initial callback:
-      # https://antara-web.onrender.com/api/auth/callback/google
-      #
-      # Later:
-      # https://erp.project-antara.space/api/auth/callback/google
-      # ------------------------------------------------------
       - key: GOOGLE_CLIENT_ID
         sync: false
 
       - key: GOOGLE_CLIENT_SECRET
         sync: false
 
-
-      # ------------------------------------------------------
-      # ALLOWED GOOGLE EMAILS
-      #
-      # Example:
-      # user1@goa.bits-pilani.ac.in,user2@goa.bits-pilani.ac.in
-      # ------------------------------------------------------
       - key: GOOGLE_ALLOWED_EMAILS
         sync: false
