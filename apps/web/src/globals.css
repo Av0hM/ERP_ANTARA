@@ -118,6 +118,20 @@ body {
   .label-field {
     @apply mb-2 block text-xs uppercase tracking-[0.2em] text-muted;
   }
+
+  .input-field-light {
+    @apply w-full rounded-[0.45rem] border border-steel/40 bg-light-form-field px-4 py-3 text-sm outline-none transition;
+    @apply placeholder:text-secondary-ink focus:border-saffron/50 focus:ring-1 focus:ring-saffron/30 text-admin-ink;
+  }
+
+  .select-field-light {
+    @apply w-full rounded-[0.45rem] border border-steel/40 bg-light-form-field px-4 py-3 text-sm outline-none transition;
+    @apply focus:border-saffron/50 focus:ring-1 focus:ring-saffron/30 text-admin-ink;
+  }
+
+  .label-field-light {
+    @apply mb-2 block text-xs uppercase tracking-[0.2em] text-secondary-ink;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

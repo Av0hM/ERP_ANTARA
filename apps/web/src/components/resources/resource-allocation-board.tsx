@@ -222,26 +222,30 @@ export function ResourceAllocationBoardView({
             </div>
           </div>
 
-          <div className="mt-6 flex flex-wrap gap-2">
-            <label className="relative">
-              <Filter className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted" />
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search team members..."
-                className="input-field w-full sm:w-64 pl-10"
-              />
-            </label>
-            <select
-              value={sortBy}
-              onChange={(e) => setSortBy(e.target.value as "name" | "load" | "availability")}
-              className="input-field"
-            >
-              <option value="load">Sort by Load</option>
-              <option value="name">Sort by Name</option>
-              <option value="availability">Sort by Availability</option>
-            </select>
+          {/* Search/Sort form section - light/paper treatment */}
+          <div className="mt-6 section-light grid-texture-light rounded-[1.25rem] p-4">
+            <p className="text-xs uppercase tracking-[0.18em] text-saffron mb-3">Filters & Sort</p>
+            <div className="flex flex-wrap gap-2">
+              <label className="relative">
+                <Filter className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-secondary-ink" />
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Search team members..."
+                  className="input-field-light w-full sm:w-64 pl-10"
+                />
+              </label>
+              <select
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value as "name" | "load" | "availability")}
+                className="select-field-light"
+              >
+                <option value="load" className="bg-paper-highlight text-admin-ink">Sort by Load</option>
+                <option value="name" className="bg-paper-highlight text-admin-ink">Sort by Name</option>
+                <option value="availability" className="bg-paper-highlight text-admin-ink">Sort by Availability</option>
+              </select>
+            </div>
           </div>
         </section>
 
@@ -423,9 +427,9 @@ export function ResourceAllocationBoardView({
         </section>
 
         {showAiSuggestions && aiSuggestions.length > 0 && (
-          <section className="section-dark grid-texture-dark rounded-[2rem] p-6">
+          <section className="section-light grid-texture-light rounded-[2rem] p-6">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-semibold flex items-center gap-2">
+              <h2 className="text-lg font-semibold flex items-center gap-2 text-admin-ink">
                 <BrainIcon className="size-5 text-purple-400" />
                 AI Rebalancing Suggestions ({aiSuggestions.length})
               </h2>
@@ -441,7 +445,7 @@ export function ResourceAllocationBoardView({
               {aiSuggestions.map((suggestion, index) => (
                 <div
                   key={index}
-                  className="rounded-xl p-4 border border-purple-500/30 bg-purple-500/5"
+                  className="card-light rounded-xl p-4 border border-purple-500/30 bg-purple-500/5"
                 >
                   <div className="flex items-center justify-between gap-4">
                     <div className="flex-1">
@@ -449,12 +453,12 @@ export function ResourceAllocationBoardView({
                         <Brain className="size-4 text-purple-400" />
                         <span className="text-sm font-medium text-purple-300">AI Suggestion</span>
                       </div>
-                      <p className="text-sm text-text">
+                      <p className="text-sm text-admin-ink">
                         Move <strong>{suggestion.taskTitle}</strong> from{' '}
                         <strong>{suggestion.fromUserName}</strong> to{' '}
                         <strong>{suggestion.toUserName}</strong>
                       </p>
-                      <p className="mt-1 text-xs text-muted">{suggestion.reason}</p>
+                      <p className="mt-1 text-xs text-secondary-ink">{suggestion.reason}</p>
                     </div>
                     <Button
                       size="sm"
