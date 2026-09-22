@@ -1,6 +1,31 @@
-import { redirect } from "next/navigation";
-import { routing } from "@/i18n/routing";
+import type { Metadata } from "next";
+import { Space_Grotesk } from "next/font/google";
 
-export default function RootLayout() {
-  redirect(`/${routing.defaultLocale}`);
+import "@/globals.css";
+
+import { AppProviders } from "@/components/providers/app-providers";
+
+const font = Space_Grotesk({
+  subsets: ["latin"],
+  variable: "--font-space-grotesk",
+});
+
+export const metadata: Metadata = {
+  title: "AntaraERP",
+  description:
+    "AI-powered operations and collaboration platform for the ANTARA CubeSat mission.",
+};
+
+export default function RootLayout({
+  children,
+}: Readonly<{
+  children: React.ReactNode;
+}>) {
+  return (
+    <html lang="en" className={font.variable}>
+      <body>
+        <AppProviders>{children}</AppProviders>
+      </body>
+    </html>
+  );
 }
