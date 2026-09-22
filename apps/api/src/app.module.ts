@@ -33,10 +33,13 @@ function buildRedisConnection(configService: ConfigService) {
     if (process.env.NODE_ENV === "production") {
       throw new Error("REDIS_URL is not configured");
     }
+    // Development fallback - explicit localhost only in non-production
     return {
-      host: "localhost",
-      port: 6379,
-      maxRetriesPerRequest: null,
+      connection: {
+        host: "localhost",
+        port: 6379,
+        maxRetriesPerRequest: null,
+      },
     };
   }
 
@@ -44,12 +47,14 @@ function buildRedisConnection(configService: ConfigService) {
   const isTls = url.protocol === "rediss:";
 
   return {
-    host: url.hostname,
-    port: Number(url.port || 6379),
-    username: url.username || "default",
-    password: url.password || undefined,
-    tls: isTls ? {} : undefined,
-    maxRetriesPerRequest: null,
+    connection: {
+      host: url.hostname,
+      port: Number(url.port || 6379),
+      username: url.username || "default",
+      password: url.password || undefined,
+      tls: isTls ? {} : undefined,
+      maxRetriesPerRequest: null,
+    },
   };
 }
 
