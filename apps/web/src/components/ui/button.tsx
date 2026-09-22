@@ -7,12 +7,17 @@ import { cn } from "@/lib/utils";
 type ButtonProps = React.ButtonHTMLAttributes<HTMLButtonElement> & {
   variant?: "primary" | "secondary" | "ghost" | "outline" | "danger";
   size?: "sm" | "md" | "lg";
+  /** Which background this button sits on. "light" = inside a
+   *  section-light/card-light container (paper background). Only affects
+   *  secondary/ghost/outline — primary and danger are surface-independent. */
+  surface?: "dark" | "light";
 };
 
 export function Button({
   className,
   variant = "primary",
   size = "md",
+  surface = "dark",
   ...props
 }: ButtonProps) {
   return (
@@ -26,12 +31,25 @@ export function Button({
         variant === "primary" &&
           "bg-saffron text-white border border-saffron/50 hover:bg-saffron/90 shadow-[0_0_0_1px_rgba(201,120,43,0.3)]",
         variant === "secondary" &&
+          surface === "dark" &&
           "border border-steel/40 bg-white/5 text-text hover:bg-white/10",
-        variant === "ghost" && "text-muted hover:bg-white/5 hover:text-text",
+        variant === "secondary" &&
+          surface === "light" &&
+          "border border-steel/40 bg-black/5 text-admin-ink hover:bg-black/10",
+        variant === "ghost" &&
+          surface === "dark" &&
+          "text-muted hover:bg-white/5 hover:text-text",
+        variant === "ghost" &&
+          surface === "light" &&
+          "text-secondary-ink hover:bg-black/5 hover:text-admin-ink",
         variant === "outline" &&
-          "border border-steel/40 bg-transparent hover:bg-white/5",
+          surface === "dark" &&
+          "border border-steel/40 bg-transparent text-text hover:bg-white/5",
+        variant === "outline" &&
+          surface === "light" &&
+          "border border-steel/40 bg-transparent text-admin-ink hover:bg-black/5",
         variant === "danger" &&
-          "bg-danger-bg text-danger border border-danger/40 hover:bg-danger/10",
+          "bg-danger/15 text-[#ff6b6b] border border-danger/50 hover:bg-danger/25",
         className,
       )}
       {...props}

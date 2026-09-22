@@ -158,7 +158,7 @@ export default function DecisionsPage() {
             <div className="section-light grid-texture-light rounded-[1.6rem] p-6 space-y-6">
               <div className="flex items-center justify-between">
                 <h2 className="text-xl font-semibold text-admin-ink">New Decision Record</h2>
-                <Button variant="ghost" size="sm" onClick={() => setShowCreateDialog(false)}>
+                <Button variant="ghost" size="sm" surface="light" onClick={() => setShowCreateDialog(false)}>
                   <X className="size-4" />
                 </Button>
               </div>
@@ -275,7 +275,7 @@ export default function DecisionsPage() {
                 </div>
 
                 <div className="flex justify-end gap-3 pt-4 border-t border-steel/20">
-                  <Button variant="outline" onClick={() => setShowCreateDialog(false)}>
+                  <Button variant="outline" surface="light" onClick={() => setShowCreateDialog(false)}>
                     Cancel
                   </Button>
                   <Button onClick={handleCreateSubmit} disabled={createMutation.isPending}>
@@ -294,7 +294,7 @@ export default function DecisionsPage() {
             <div className="section-light grid-texture-light rounded-[1.6rem] p-6 space-y-6">
               <div className="flex items-center justify-between">
                 <h2 className="text-xl font-semibold text-admin-ink">{selectedDecision.title}</h2>
-                <Button variant="ghost" size="sm" onClick={() => setSelectedDecision(null)}>
+                <Button variant="ghost" size="sm" surface="light" onClick={() => setSelectedDecision(null)}>
                   <X className="size-4" />
                 </Button>
               </div>
@@ -361,7 +361,7 @@ export default function DecisionsPage() {
                 </div>
               </div>
               <div className="pt-4 border-t border-steel/20 flex justify-end">
-                <Button variant="outline" onClick={() => setSelectedDecision(null)}>
+                <Button variant="outline" surface="light" onClick={() => setSelectedDecision(null)}>
                   Close
                 </Button>
               </div>

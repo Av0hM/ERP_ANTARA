@@ -80,7 +80,7 @@ export function CreateTaskDialog({ onCreate, isCreating }: CreateTaskDialogProps
                   <p className="text-xs uppercase tracking-[0.28em] text-saffron">New Mission Task</p>
                   <h2 className="mt-2 text-2xl font-semibold text-admin-ink">Create a subsystem work item</h2>
                 </div>
-                <Button variant="ghost" size="sm" onClick={() => setOpen(false)}>
+                <Button variant="ghost" size="sm" surface="light" onClick={() => setOpen(false)}>
                   <X className="size-4" />
                 </Button>
               </div>
@@ -180,7 +180,7 @@ export function CreateTaskDialog({ onCreate, isCreating }: CreateTaskDialogProps
               </div>
 
               <div className="mt-6 flex justify-end gap-3">
-                <Button variant="secondary" onClick={() => setOpen(false)}>
+                <Button variant="secondary" surface="light" onClick={() => setOpen(false)}>
                   Cancel
                 </Button>
                 <Button onClick={submit} disabled={isCreating}>
