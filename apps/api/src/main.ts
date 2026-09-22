@@ -71,7 +71,8 @@ async function bootstrap() {
   // Setup Swagger documentation
   setupSwagger(app);
 
-  await app.listen(config.get<number>("app.port", 4000));
+  const port = config.get<number>("app.port", 4000);
+  await app.listen(port, "0.0.0.0");
 }
 
 bootstrap();
