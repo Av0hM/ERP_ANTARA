@@ -11,7 +11,7 @@ services:
     dockerfilePath: ./infra/docker/api.Dockerfile
     dockerContext: .
 
-    healthCheckPath: /health
+    healthCheckPath: /api/health
 
     # --------------------------------------------------------
     # IMPORTANT:

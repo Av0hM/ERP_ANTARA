@@ -45,7 +45,7 @@ export function TaskBoard({ tasks, selectedTaskId, onSelectTask }: TaskBoardProp
       {columns.map((column) => (
         <div
           key={column}
-          className="glass-panel rounded-3xl p-4"
+          className="card-dark rounded-[1.25rem] p-4"
           onDragOver={handleDragOver}
           onDrop={() => handleDrop(column)}
         >
@@ -64,10 +64,10 @@ export function TaskBoard({ tasks, selectedTaskId, onSelectTask }: TaskBoardProp
                   onDragStart={() => handleDragStart(task)}
                   onClick={() => onSelectTask(task)}
                   className={cn(
-                    "w-full rounded-2xl border p-4 text-left transition cursor-pointer touch-manipulation",
-                    selectedTaskId === task.id && "border-accent bg-accent/10 ring-2 ring-accent/20",
-                    draggedTask?.id === task.id && "opacity-50 ring-2 ring-accent",
-                    "border-line bg-white/5 hover:border-cobalt/50 hover:bg-white/10 active:bg-accent/5",
+                    "w-full rounded-xl border p-4 text-left transition cursor-pointer touch-manipulation",
+                    selectedTaskId === task.id && "border-saffron bg-saffron/10 ring-2 ring-saffron/20",
+                    draggedTask?.id === task.id && "opacity-50 ring-2 ring-saffron",
+                    "border-steel/30 bg-white/5 hover:border-ice/50 hover:bg-white/10 active:bg-saffron/5",
                   )}
                   style={{
                     minHeight: "60px",
@@ -77,11 +77,11 @@ export function TaskBoard({ tasks, selectedTaskId, onSelectTask }: TaskBoardProp
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-2">
-                        <span className="rounded-full border border-line px-2 py-1 text-[10px] uppercase tracking-[0.2em] text-accent flex-shrink-0">
+                        <span className="rounded-full border border-steel/30 px-2 py-1 text-[10px] uppercase tracking-[0.2em] text-saffron flex-shrink-0">
                           {task.priority}
                         </span>
                         {draggedTask?.id === task.id && (
-                          <GripVertical className="text-accent/50 cursor-grabbing" size={16} />
+                          <GripVertical className="text-saffron/50 cursor-grabbing" size={16} />
                         )}
                       </div>
                       <p className="font-medium truncate">{task.title}</p>
@@ -108,5 +108,3 @@ export function TaskBoard({ tasks, selectedTaskId, onSelectTask }: TaskBoardProp
     </div>
   );
 }
-
-

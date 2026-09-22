@@ -36,9 +36,9 @@ export function CalendarWorkspace() {
 
   return (
     <div className="space-y-6">
-      <section className="glass-panel rounded-[2rem] p-6">
+      <section className="section-dark grid-texture-dark rounded-[2rem] p-6">
         <div className="grid gap-4 xl:grid-cols-[1.6fr_0.9fr]">
-          <div className="overflow-hidden rounded-3xl border border-line bg-white/5 p-4">
+          <div className="overflow-hidden card-dark rounded-[1.25rem] border border-steel/30 p-4">
             <FullCalendar
               plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin]}
               initialView="dayGridMonth"
@@ -53,31 +53,31 @@ export function CalendarWorkspace() {
           </div>
 
           <div className="space-y-4">
-            <div className="rounded-3xl border border-line bg-white/5 p-5">
-              <p className="text-xs uppercase tracking-[0.2em] text-accent">Create Event</p>
+            <div className="card-dark rounded-[1.25rem] p-5">
+              <p className="text-xs uppercase tracking-[0.2em] text-saffron">Create Event</p>
               <div className="mt-4 space-y-3">
                 <input
                   value={title}
                   onChange={(event) => setTitle(event.target.value)}
                   placeholder="Integration review"
-                  className="w-full rounded-2xl border border-line bg-panel px-4 py-3 text-sm outline-none"
+                  className="input-field"
                 />
                 <input
                   type="datetime-local"
                   value={startsAt}
                   onChange={(event) => setStartsAt(event.target.value)}
-                  className="w-full rounded-2xl border border-line bg-panel px-4 py-3 text-sm outline-none"
+                  className="input-field"
                 />
                 <input
                   type="datetime-local"
                   value={endsAt}
                   onChange={(event) => setEndsAt(event.target.value)}
-                  className="w-full rounded-2xl border border-line bg-panel px-4 py-3 text-sm outline-none"
+                  className="input-field"
                 />
                 <select
                   value={subsystemId}
                   onChange={(event) => setSubsystemId(event.target.value)}
-                  className="w-full rounded-2xl border border-line bg-panel px-4 py-3 text-sm outline-none"
+                  className="input-field"
                 >
                   {subsystemData.map((subsystem) => (
                     <option key={subsystem.id} value={subsystem.id}>
@@ -102,11 +102,11 @@ export function CalendarWorkspace() {
               </div>
             </div>
 
-            <div className="rounded-3xl border border-line bg-white/5 p-5">
-              <p className="text-xs uppercase tracking-[0.2em] text-accent">Upcoming Milestones</p>
+            <div className="card-dark rounded-[1.25rem] p-5">
+              <p className="text-xs uppercase tracking-[0.2em] text-saffron">Upcoming Milestones</p>
               <div className="mt-4 space-y-3">
                 {events.slice(0, 4).map((event) => (
-                  <div key={event.id} className="rounded-2xl border border-line bg-panel p-4">
+                  <div key={event.id} className="rounded-xl border border-steel/30 bg-white/5 p-4">
                     <p className="font-medium">{event.title}</p>
                     <p className="mt-1 text-sm text-muted">{event.description}</p>
                     <p className="mt-2 text-xs text-muted">

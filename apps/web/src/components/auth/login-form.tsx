@@ -64,13 +64,13 @@ export function LoginForm({
   };
 
   return (
-    <section className="glass-panel w-full max-w-lg rounded-[2rem] border border-line/80 p-8 shadow-2xl shadow-black/20">
+    <section className="glass-modal w-full max-w-lg rounded-[2rem] p-8">
       <div className="flex items-center gap-3">
-        <div className="flex size-11 items-center justify-center rounded-2xl bg-accent/10 text-accent">
+        <div className="flex size-11 items-center justify-center rounded-2xl bg-saffron/10 text-saffron">
           <Sparkles className="size-5" />
         </div>
         <div>
-          <p className="text-xs uppercase tracking-[0.32em] text-accent">Secure Access</p>
+          <p className="text-xs uppercase tracking-[0.32em] text-saffron">Secure Access</p>
           <h1 className="mt-1 text-3xl font-semibold text-text">Sign in to AntaraERP</h1>
         </div>
       </div>
@@ -89,7 +89,7 @@ export function LoginForm({
           <span className="mb-2 block text-sm text-muted">Email</span>
           <input
             name="email"
-            className="w-full rounded-2xl border border-line bg-white/5 px-4 py-3 text-text outline-none ring-0 transition placeholder:text-muted/60 focus:border-accent/60"
+            className="input-field"
             placeholder="owner@antara.club"
             autoComplete="email"
             value={email}
@@ -100,7 +100,7 @@ export function LoginForm({
           <span className="mb-2 block text-sm text-muted">Password</span>
           <input
             name="password"
-            className="w-full rounded-2xl border border-line bg-white/5 px-4 py-3 text-text outline-none ring-0 transition placeholder:text-muted/60 focus:border-accent/60"
+            className="input-field"
             type="password"
             placeholder="Enter password"
             autoComplete="current-password"
@@ -110,13 +110,13 @@ export function LoginForm({
         </label>
 
         <div className="flex items-center justify-between">
-          <button type="button" className="text-sm text-accent transition hover:text-text" onClick={() => setShowForgotPassword((current) => !current)}>
+          <button type="button" className="text-sm text-saffron transition hover:text-text" onClick={() => setShowForgotPassword((current) => !current)}>
             Forgot password?
           </button>
         </div>
 
         {showForgotPassword ? (
-          <div className="flex items-start justify-between gap-3 rounded-2xl border border-line bg-white/5 px-4 py-3 text-sm text-muted">
+          <div className="rounded-xl border border-steel/30 bg-white/5 px-4 py-3 text-sm text-muted flex items-start justify-between gap-3">
             <p>Password resets are managed by your team administrator. Contact your admin to reset your credentials.</p>
             <button type="button" className="text-muted transition hover:text-text" onClick={() => setShowForgotPassword(false)}>
               x
@@ -125,7 +125,7 @@ export function LoginForm({
         ) : null}
 
         {error ? (
-          <div className="flex items-start gap-3 rounded-2xl border border-danger/30 bg-danger/10 px-4 py-3 text-sm text-danger">
+          <div className="flex items-start gap-3 rounded-xl border border-danger/30 bg-danger/10 px-4 py-3 text-sm text-danger">
             <AlertTriangle className="mt-0.5 size-4 shrink-0" />
             <p>{error}</p>
           </div>
@@ -148,4 +148,3 @@ export function LoginForm({
     </section>
   );
 }
-

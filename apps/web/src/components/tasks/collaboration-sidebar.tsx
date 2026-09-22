@@ -10,9 +10,9 @@ type CollaborationSidebarProps = {
 export function CollaborationSidebar({ presence, activity }: CollaborationSidebarProps) {
   return (
     <aside className="space-y-6">
-      <section className="glass-panel rounded-[2rem] p-6">
+      <section className="card-dark rounded-[1.25rem] p-6">
         <div className="flex items-center gap-3">
-          <Users className="size-5 text-accent" />
+          <Users className="size-5 text-saffron" />
           <div>
             <p className="text-xs uppercase tracking-[0.2em] text-muted">Presence</p>
             <h3 className="text-lg font-semibold">Online collaborators</h3>
@@ -23,21 +23,21 @@ export function CollaborationSidebar({ presence, activity }: CollaborationSideba
             <p className="text-sm text-muted">Waiting for live presence. The API gateway will populate this when clients connect.</p>
           ) : (
             presence.map((person) => (
-              <div key={person.socketId} className="flex items-center justify-between rounded-2xl border border-line bg-white/5 p-3">
+              <div key={person.socketId} className="rounded-xl border border-steel/30 bg-white/5 p-3">
                 <div>
                   <p className="font-medium">{person.name}</p>
                   <p className="text-xs text-muted">{person.userId}</p>
                 </div>
-                <span className="size-2 rounded-full bg-accent" />
+                <span className="size-2 rounded-full bg-saffron" />
               </div>
             ))
           )}
         </div>
       </section>
 
-      <section className="glass-panel rounded-[2rem] p-6">
+      <section className="card-dark rounded-[1.25rem] p-6">
         <div className="flex items-center gap-3">
-          <Radar className="size-5 text-accent" />
+          <Radar className="size-5 text-saffron" />
           <div>
             <p className="text-xs uppercase tracking-[0.2em] text-muted">Activity Feed</p>
             <h3 className="text-lg font-semibold">Recent engineering signals</h3>
@@ -45,13 +45,13 @@ export function CollaborationSidebar({ presence, activity }: CollaborationSideba
         </div>
         <div className="mt-4 space-y-3">
           {activity.length === 0 ? (
-            <p className="rounded-2xl border border-dashed border-line/70 p-4 text-sm text-muted">
+            <p className="rounded-xl border border-dashed border-steel/30 p-4 text-sm text-muted">
               No recent activity yet. Task changes, comments, and AI signals will appear here in realtime.
             </p>
           ) : (
             activity.map((item) => (
-              <article key={item.id} className="rounded-2xl border border-line bg-white/5 p-4">
-                <div className="flex items-center gap-2 text-accent">
+              <article key={item.id} className="rounded-xl border border-steel/30 bg-white/5 p-4">
+                <div className="flex items-center gap-2 text-saffron">
                   <BellRing className="size-4" />
                   <span className="text-xs uppercase tracking-[0.2em]">{item.type}</span>
                 </div>

@@ -7,20 +7,135 @@
 }
 
 body {
-  @apply bg-bg text-text antialiased;
-  background-image: radial-gradient(circle at top, rgba(106, 164, 255, 0.12), transparent 28%),
-    linear-gradient(180deg, #060816 0%, #07101f 40%, #050712 100%);
+  @apply bg-graphite text-text antialiased;
+  background-image: linear-gradient(180deg, #151921 0%, #0f1115 100%);
 }
 
 * {
-  scrollbar-color: #223458 #0d1325;
+  scrollbar-color: #7d868c33 #0f1115;
 }
 
-.glass-panel {
-  @apply border border-line/80 bg-panel/90 shadow-glow backdrop-blur-xl;
+@layer utilities {
+  .glass-panel {
+    @apply border border-white/10 bg-white/5 backdrop-blur-xl shadow-glass;
+  }
+
+  .glass-modal {
+    @apply border border-white/10 bg-white/5 backdrop-blur-xl shadow-modal-overlay;
+  }
+
+  .grid-texture-dark::before {
+    content: "";
+    @apply pointer-events-none absolute inset-0 -z-10;
+    background-image: linear-gradient(rgba(125, 134, 140, 0.11) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(125, 134, 140, 0.11) 1px, transparent 1px);
+    background-size: 44px 44px;
+    mask-image: linear-gradient(180deg, transparent, #000 16%, #000 84%, transparent);
+  }
+
+  .grid-texture-light::before {
+    content: "";
+    @apply pointer-events-none absolute inset-0 -z-10;
+    background-image: linear-gradient(rgba(23, 35, 52, 0.08) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(23, 35, 52, 0.08) 1px, transparent 1px);
+    background-size: 44px 44px;
+    mask-image: linear-gradient(180deg, transparent, #000 16%, #000 84%, transparent);
+  }
+
+  .section-dark {
+    @apply relative isolate bg-gradient-to-b from-space-panel to-graphite text-text;
+  }
+
+  .section-light {
+    @apply relative isolate bg-gradient-to-b from-paper-highlight to-paper text-admin-ink;
+  }
+
+  .saffron-border {
+    @apply border border-saffron/50;
+  }
+
+  .saffron-focus:focus-visible {
+    @apply outline-3 outline-offset-3 outline-saffron;
+  }
+
+  .dark .saffron-focus:focus-visible {
+    @apply outline-dark-focus;
+  }
+
+  .eyebrow {
+    @apply text-xs font-medium uppercase tracking-[0.14em] text-saffron;
+  }
+
+  .card-dark {
+    @apply rounded-[0.2rem] border border-steel/40 bg-gradient-to-b from-space-panel to-graphite text-text shadow-glass transition-transform duration-180 transition-shadow duration-220 ease-premium;
+  }
+
+  .card-light {
+    @apply rounded-[0.2rem] border border-steel/40 bg-gradient-to-b from-paper-highlight to-paper text-admin-ink shadow-glass transition-transform duration-180 transition-shadow duration-220 ease-premium;
+  }
+
+  .card-dark:hover,
+  .card-light:hover {
+    @apply -translate-y-0.5 border-ice/60 shadow-glass-hover;
+  }
+
+  .metric-chip {
+    @apply rounded-full border border-steel/40 bg-white/5 px-3 py-1 text-xs uppercase tracking-[0.24em] text-muted;
+  }
+
+  .btn-primary {
+    @apply inline-flex items-center justify-center min-h-11 rounded-full px-4 py-2 text-sm font-medium transition;
+    @apply bg-gradient-to-r from-saffron to-amber text-white hover:from-saffron/90 hover:to-amber/90;
+    @apply border border-saffron/50 shadow-[0_0_0_1px_rgba(201,120,43,0.3)];
+  }
+
+  .btn-secondary {
+    @apply inline-flex items-center justify-center min-h-11 rounded-full px-4 py-2 text-sm font-medium transition;
+    @apply border border-steel/40 bg-white/5 text-text hover:bg-white/10;
+  }
+
+  .btn-ghost {
+    @apply inline-flex items-center justify-center min-h-11 rounded-full px-4 py-2 text-sm font-medium transition;
+    @apply text-muted hover:bg-white/5 hover:text-text;
+  }
+
+  .btn-outline {
+    @apply inline-flex items-center justify-center min-h-11 rounded-full px-4 py-2 text-sm font-medium transition;
+    @apply border border-steel/40 bg-transparent hover:bg-white/5;
+  }
+
+  .btn-danger {
+    @apply inline-flex items-center justify-center min-h-11 rounded-full px-4 py-2 text-sm font-medium transition;
+    @apply bg-danger-bg text-danger border border-danger/40 hover:bg-danger/10;
+  }
+
+  .input-field {
+    @apply w-full rounded-[0.45rem] border border-steel/40 bg-white/5 px-4 py-3 text-sm outline-none transition;
+    @apply placeholder:text-muted focus:border-saffron/50 focus:ring-1 focus:ring-saffron/30;
+  }
+
+  .select-field {
+    @apply w-full rounded-[0.45rem] border border-steel/40 bg-white/5 px-4 py-3 text-sm outline-none transition;
+    @apply focus:border-saffron/50 focus:ring-1 focus:ring-saffron/30;
+  }
+
+  .label-field {
+    @apply mb-2 block text-xs uppercase tracking-[0.2em] text-muted;
+  }
 }
 
-.metric-chip {
-  @apply rounded-full border border-line bg-white/5 px-3 py-1 text-xs uppercase tracking-[0.24em] text-muted;
-}
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 
+  .card-dark:hover,
+  .card-light:hover {
+    transform: none;
+  }
+}

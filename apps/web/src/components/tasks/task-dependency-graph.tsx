@@ -63,12 +63,12 @@ function TaskNode({ data }: { data: DependencyGraphNodeData }) {
   return (
     <div
       className={cn(
-        "relative min-w-[220px] max-w-[280px] rounded-2xl border bg-panel/80 backdrop-blur-sm p-4 shadow-xl transition-all",
-        isCriticalPath && "border-accent/50 ring-2 ring-accent/30 animate-pulse",
+        "relative min-w-[220px] max-w-[280px] rounded-2xl border bg-white/5 backdrop-blur-sm p-4 shadow-xl transition-all",
+        isCriticalPath && "border-saffron/50 ring-2 ring-saffron/30 animate-pulse",
       )}
     >
-      <Handle type="target" position={Position.Top} className="w-3 h-3 bg-accent/50" />
-      <Handle type="source" position={Position.Bottom} className="w-3 h-3 bg-accent/50" />
+      <Handle type="target" position={Position.Top} className="w-3 h-3 bg-saffron/50" />
+      <Handle type="source" position={Position.Bottom} className="w-3 h-3 bg-saffron/50" />
 
       <div className="flex items-start justify-between gap-2">
         <div className="flex-1 min-w-0">
@@ -83,13 +83,13 @@ function TaskNode({ data }: { data: DependencyGraphNodeData }) {
           <h3 className="font-semibold text-text truncate">{title}</h3>
           <p className="mt-1 text-xs text-muted">{subsystem}</p>
           {assignee && (
-            <p className="mt-1 text-xs text-accent/80 flex items-center gap-1">
+            <p className="mt-1 text-xs text-saffron/80 flex items-center gap-1">
               <GitBranch className="size-3" />
               {assignee.name}
             </p>
           )}
           {isCriticalPath && (
-            <div className="mt-2 flex items-center gap-1 text-xs text-accent">
+            <div className="mt-2 flex items-center gap-1 text-xs text-saffron">
               <AlertTriangle className="size-3" />
               <span>Critical Path</span>
             </div>
@@ -106,7 +106,7 @@ function TaskEdge({ data }: { data: DependencyGraphEdgeData }) {
   return (
     <>
       <path
-        stroke={isBlocks ? "#ef4444" : "#64748b"}
+        stroke={isBlocks ? "#ef4444" : "#7d868c"}
         strokeWidth={isBlocks ? 2 : 1.5}
         strokeDasharray={isBlocks ? "8,4" : "4,4"}
         fill="none"
@@ -123,7 +123,7 @@ function TaskEdge({ data }: { data: DependencyGraphEdgeData }) {
         >
           <path
             d="M0,0 L0,7 L9,3.5 Z"
-            fill={isBlocks ? "#ef4444" : "#64748b"}
+            fill={isBlocks ? "#ef4444" : "#7d868c"}
           />
         </marker>
       </defs>
@@ -189,7 +189,7 @@ export function DependencyGraph({
         style: { strokeWidth: 2 },
         markerEnd: {
           type: "arrowclosed",
-          color: e.type === "blocks" ? "#ef4444" : "#64748b",
+          color: e.type === "blocks" ? "#ef4444" : "#7d868c",
           width: 20,
           height: 20,
         },
@@ -227,12 +227,12 @@ export function DependencyGraph({
           minZoom={0.3}
           maxZoom={2}
         >
-          <Background gap={20} size={1} color="#1e293b" />
+          <Background gap={20} size={1} color="#7d868c33" />
           <Controls position="top-left" />
           <MiniMap
             position="bottom-right"
-            nodeColor={(node) => (node.data.isCriticalPath ? "#f97316" : "#3b82f6")}
-            maskColor="rgba(15, 23, 42, 0.8)"
+            nodeColor={(node) => (node.data.isCriticalPath ? "#c9782b" : "#3b82f6")}
+            maskColor="rgba(15, 17, 21, 0.8)"
           />
         </ReactFlow>
       </div>
@@ -246,7 +246,7 @@ interface LegendProps {
 
 export function DependencyGraphLegend({ criticalPathCount }: LegendProps) {
   return (
-    <div className={cn("glass-panel rounded-2xl p-4 border border-line/40")}>
+    <div className="card-dark rounded-xl p-4 border border-steel/30">
       <h4 className="text-sm font-semibold text-text mb-3">Legend</h4>
       <div className="grid gap-3 sm:grid-cols-2">
         <div className="flex items-center gap-3">
@@ -278,8 +278,8 @@ export function DependencyGraphLegend({ criticalPathCount }: LegendProps) {
           <span className="text-sm text-muted">Overdue</span>
         </div>
         <div className="flex items-center gap-3">
-          <div className="w-6 h-6 rounded-xl border-2 border-accent/50 bg-accent/10 flex items-center justify-center">
-            <AlertTriangle className="size-3 text-accent" />
+          <div className="w-6 h-6 rounded-xl border-2 border-saffron/50 bg-saffron/10 flex items-center justify-center">
+            <AlertTriangle className="size-3 text-saffron" />
           </div>
           <span className="text-sm text-text">Critical Path ({criticalPathCount})</span>
         </div>

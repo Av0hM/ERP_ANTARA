@@ -1,0 +1,77 @@
+/* Antara portable theme — scoped to .antara-theme, independent of React/Tailwind.
+   Load Sora (500–700), IBM Plex Sans (400–600), and Inter (400–700) separately. */
+.antara-theme {
+  --at-graphite: #0f1115;
+  --at-space: #151921;
+  --at-paper: #e7dfd1;
+  --at-paper-top: #ece4d7;
+  --at-panel-top: #eee6d8;
+  --at-panel-bottom: #e5dccd;
+  --at-accent-top: #e8d9c2;
+  --at-accent-bottom: #e2d1b8;
+  --at-ink: #172334;
+  --at-ink-secondary: #3f444b;
+  --at-light: #f2eee5;
+  --at-light-secondary: #d8d3ca;
+  --at-saffron: #c9782b;
+  --at-steel: #7d868c;
+  --at-ice: #8fa9b5;
+  --at-focus: #286da0;
+  --at-danger: #9c2020;
+  --at-font-heading: "Sora", "Inter", "Segoe UI", sans-serif;
+  --at-font-body: "IBM Plex Sans", "Inter", "Segoe UI", sans-serif;
+  --at-hero: clamp(3.2rem, 8.8vw, 7.6rem);
+  --at-display: clamp(2.1rem, 5vw, 4.4rem);
+  --at-h2: clamp(1.55rem, 3.2vw, 2.8rem);
+  --at-h3: clamp(1.2rem, 2.2vw, 1.8rem);
+  --at-body: 1rem;
+  --at-caption: .78rem;
+  --at-space-1: .4rem;
+  --at-space-2: .7rem;
+  --at-space-3: 1rem;
+  --at-space-4: 1.3rem;
+  --at-space-5: 1.7rem;
+  --at-space-6: 2.2rem;
+  --at-space-7: 3rem;
+  --at-space-8: 4rem;
+  --at-card-radius: .2rem;
+  --at-control-radius: .45rem;
+  --at-pill-radius: 999px;
+  --at-shadow: 0 10px 24px rgb(10 12 16 / .18);
+  --at-shadow-hover: 0 14px 28px rgb(10 12 16 / .24);
+  --at-ease: cubic-bezier(.22, .8, .3, 1);
+  font: 400 var(--at-body)/1.7 var(--at-font-body);
+  background: var(--at-graphite);
+  color: var(--at-light);
+}
+.antara-theme *, .antara-theme *::before, .antara-theme *::after { box-sizing: border-box; }
+.antara-theme :is(h1,h2,h3,h4) { margin: 0; font-family: var(--at-font-heading); font-weight: 700; line-height: 1.02; letter-spacing: -.02em; }
+.antara-theme h1 { font-size: var(--at-display); }
+.antara-theme h2 { font-size: var(--at-h2); }
+.antara-theme h3 { font-size: var(--at-h3); }
+.antara-theme :is(button,input,textarea,select) { font: inherit; }
+.antara-theme .at-container { width: min(1140px, calc(100% - 2rem)); margin-inline: auto; }
+.antara-theme .at-section { position: relative; isolation: isolate; padding-block: clamp(3.5rem, 8vw, 6rem); }
+.antara-theme .at-dark { background: linear-gradient(180deg,var(--at-space),var(--at-graphite)); color: var(--at-light); color-scheme: dark; }
+.antara-theme .at-paper { background: linear-gradient(180deg,var(--at-paper-top),var(--at-paper)); color: var(--at-ink); color-scheme: light; }
+.antara-theme .at-grid-texture::before { content: ""; position: absolute; inset: 0; z-index: -1; pointer-events: none; background-image: linear-gradient(rgb(125 134 140 / .12) 1px,transparent 1px),linear-gradient(90deg,rgb(125 134 140 / .1) 1px,transparent 1px); background-size:44px 44px; mask-image:linear-gradient(180deg,transparent,#000 16%,#000 84%,transparent); }
+.antara-theme .at-eyebrow { margin: 0 0 .75rem; font-size: var(--at-caption); font-weight: 500; text-transform: uppercase; letter-spacing: .14em; color: var(--at-saffron); }
+.antara-theme .at-grid { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: clamp(1.1rem,2vw,2rem); }
+.antara-theme .at-card { padding: 1.25rem; border-radius: var(--at-card-radius); border: 1px solid rgb(125 134 140 / .4); background: linear-gradient(180deg,var(--at-panel-top),var(--at-panel-bottom)); color: var(--at-ink); box-shadow: var(--at-shadow); }
+.antara-theme .at-card--accent { background:linear-gradient(180deg,var(--at-accent-top),var(--at-accent-bottom)); }
+.antara-theme .at-card--dark { background:linear-gradient(180deg,rgb(22 27 35 / .96),rgb(16 20 27 / .94)); color:var(--at-light); }
+.antara-theme .at-card--interactive { transition: transform 180ms ease,border-color 180ms ease,box-shadow 220ms ease; }
+.antara-theme .at-card--interactive:hover { transform:translateY(-2px); border-color:rgb(143 169 181 / .6); box-shadow:var(--at-shadow-hover); }
+.antara-theme .at-button { display:inline-flex; align-items:center; justify-content:center; min-height:44px; padding:.7rem 1.2rem; border-radius:var(--at-pill-radius); border:1px solid rgb(201 120 43 / .56); background:linear-gradient(130deg,#24344c,#152133); color:#f0f4ff; text-decoration:none; cursor:pointer; }
+.antara-theme .at-button--danger { background:#fff4f3; color:var(--at-danger); border-color:#b95e5e; }
+.antara-theme :is(button,input,textarea,select,a):focus-visible { outline:3px solid var(--at-focus); outline-offset:3px; }
+.antara-theme .at-dark :is(button,input,textarea,select,a):focus-visible { outline-color:#7cc5ff; }
+.antara-theme :disabled { opacity:.5; cursor:not-allowed; }
+.antara-theme .at-field { display:grid; gap:.35rem; margin-block:1rem; font-size:.85rem; font-weight:600; }
+.antara-theme .at-field :is(input,textarea,select) { width:100%; min-height:44px; border:1px solid #8b96a4; border-radius:4px; padding:.65rem .85rem; background:#fffdf9; color:var(--at-ink); }
+.antara-theme .at-field :is(input,textarea)::placeholder { color:#657184; opacity:1; }
+.antara-theme .at-hud { position:sticky; top:0; z-index:20; display:flex; align-items:center; justify-content:space-between; min-height:5.3rem; padding:.45rem 1.2rem .85rem; background:linear-gradient(180deg,rgb(15 17 21 / .86),rgb(15 17 21 / .74) 72%,rgb(15 17 21 / .2)); backdrop-filter:blur(10px); }
+.antara-theme .at-brand { font-size:.92rem; font-weight:500; letter-spacing:.18em; text-transform:uppercase; color:var(--at-ice); }
+@media(max-width:900px) { .antara-theme .at-grid { grid-template-columns:1fr; } }
+@media(max-width:720px) { .antara-theme .at-hud { min-height:4.8rem; padding-inline:.65rem; } }
+@media(prefers-reduced-motion:reduce) { .antara-theme *, .antara-theme *::before, .antara-theme *::after { animation:none !important; transition:none !important; scroll-behavior:auto !important; } .antara-theme .at-card--interactive:hover { transform:none; } }

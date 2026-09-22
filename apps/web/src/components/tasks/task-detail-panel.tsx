@@ -40,8 +40,8 @@ export function TaskDetailPanel({
 
   if (!task) {
     return (
-      <aside className="glass-panel rounded-[2rem] p-6">
-        <p className="text-xs uppercase tracking-[0.28em] text-accent">Task Console</p>
+      <aside className="section-dark grid-texture-dark rounded-[2rem] p-6">
+        <p className="text-xs uppercase tracking-[0.28em] text-saffron">Task Console</p>
         <h2 className="mt-3 text-2xl font-semibold">Select a task to inspect dependencies and discussion</h2>
         <p className="mt-3 text-sm text-muted">
           This rail becomes the collaboration center for status changes, blockers, comments, and future AI suggestions.
@@ -51,26 +51,26 @@ export function TaskDetailPanel({
   }
 
   return (
-    <aside className="glass-panel rounded-[2rem] p-6">
+    <aside className="section-dark grid-texture-dark rounded-[2rem] p-6">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <p className="text-xs uppercase tracking-[0.28em] text-accent">{task.subsystem}</p>
+          <p className="text-xs uppercase tracking-[0.28em] text-saffron">{task.subsystem}</p>
           <h2 className="mt-2 text-2xl font-semibold">{task.title}</h2>
           <p className="mt-3 text-sm text-muted">{task.description}</p>
         </div>
-        <span className="rounded-full border border-line px-3 py-1 text-xs uppercase tracking-[0.2em] text-cobalt">
+        <span className="rounded-full border border-steel/30 px-3 py-1 text-xs uppercase tracking-[0.2em] text-saffron">
           {task.priority}
         </span>
       </div>
 
       <div className="mt-6 grid gap-3 sm:grid-cols-3">
-        <div className="rounded-2xl border border-line bg-white/5 p-4">
-          <RadioTower className="size-4 text-accent" />
+        <div className="rounded-xl border border-steel/30 bg-white/5 p-4">
+          <RadioTower className="size-4 text-saffron" />
           <p className="mt-3 text-xs uppercase tracking-[0.18em] text-muted">Assignee</p>
           <select
             value={task.assignedToId ?? ""}
             onChange={(event) => reassignTask.mutate({ taskId: task.id, assignedToId: event.target.value || null })}
-            className="mt-2 w-full rounded-2xl border border-line bg-panel px-3 py-2 text-sm outline-none"
+            className="input-field mt-2"
           >
             <option value="">Unassigned</option>
             {memberData.map((member) => (
@@ -81,13 +81,13 @@ export function TaskDetailPanel({
           </select>
           <p className="mt-2 text-xs text-muted">{task.assigneeName}</p>
         </div>
-        <div className="rounded-2xl border border-line bg-white/5 p-4">
-          <Workflow className="size-4 text-accent" />
+        <div className="rounded-xl border border-steel/30 bg-white/5 p-4">
+          <Workflow className="size-4 text-saffron" />
           <p className="mt-3 text-xs uppercase tracking-[0.18em] text-muted">Dependencies</p>
           <p className="mt-1 font-medium">{task.dependencyCount}</p>
         </div>
-        <div className="rounded-2xl border border-line bg-white/5 p-4">
-          <MessageSquare className="size-4 text-accent" />
+        <div className="rounded-xl border border-steel/30 bg-white/5 p-4">
+          <MessageSquare className="size-4 text-saffron" />
           <p className="mt-3 text-xs uppercase tracking-[0.18em] text-muted">Comments</p>
           <p className="mt-1 font-medium">{task.comments.length}</p>
         </div>
@@ -99,7 +99,7 @@ export function TaskDetailPanel({
           value={task.status}
           disabled={isMutating}
           onChange={(event) => onStatusChange(task.id, event.target.value as TaskStatus)}
-          className="w-full rounded-2xl border border-line bg-white/5 px-4 py-3 text-sm outline-none"
+          className="input-field"
         >
           {statuses.map((status) => (
             <option key={status} value={status} className="bg-panel text-text">
@@ -112,16 +112,16 @@ export function TaskDetailPanel({
       <div className="mt-8">
         <div className="flex items-center justify-between gap-3">
           <h3 className="text-lg font-semibold">Discussion Feed</h3>
-          {typing?.taskId === task.id ? <span className="text-xs text-accent">{typing.userName} is typing...</span> : null}
+          {typing?.taskId === task.id ? <span className="text-xs text-saffron">{typing.userName} is typing...</span> : null}
         </div>
         <div className="mt-4 max-h-72 space-y-3 overflow-auto pr-1">
           {task.comments.length === 0 ? (
-            <div className="rounded-2xl border border-dashed border-line p-4 text-sm text-muted">
+            <div className="rounded-xl border border-dashed border-steel/30 p-4 text-sm text-muted">
               No comments yet. This is ready for subsystem discussion and review notes.
             </div>
           ) : (
             task.comments.map((entry) => (
-              <article key={entry.id} className="rounded-2xl border border-line bg-white/5 p-4">
+              <article key={entry.id} className="rounded-xl border border-steel/30 bg-white/5 p-4">
                 <div className="flex items-center justify-between gap-3">
                   <p className="text-sm font-medium">{entry.authorName}</p>
                   <span className="text-xs text-muted">
@@ -152,7 +152,7 @@ export function TaskDetailPanel({
           }}
           rows={4}
           placeholder="Capture integration notes, blockers, or review feedback..."
-          className="w-full rounded-2xl border border-line bg-white/5 px-4 py-3 text-sm outline-none placeholder:text-muted"
+          className="input-field resize-none"
         />
         <Button
           className="mt-3 gap-2"
@@ -171,4 +171,3 @@ export function TaskDetailPanel({
     </aside>
   );
 }
-

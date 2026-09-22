@@ -19,13 +19,13 @@ export function SubsystemHealthClient({ slug }: SubsystemHealthClientProps) {
   if (isLoading) {
     return (
       <div className="space-y-6">
-        <div className="glass-panel rounded-[2rem] p-6 animate-pulse">
+        <div className="section-dark grid-texture-dark rounded-[2rem] p-6 animate-pulse">
           <div className="h-8 w-48 bg-white/10 rounded-xl" />
           <div className="mt-4 h-4 w-64 bg-white/10 rounded-xl" />
         </div>
         <div className="grid gap-4 md:grid-cols-4">
           {[1, 2, 3, 4].map((i) => (
-            <div key={i} className="glass-panel rounded-3xl p-6 animate-pulse">
+            <div key={i} className="card-dark rounded-[1.25rem] p-6 animate-pulse">
               <div className="h-4 w-24 bg-white/10 rounded-xl" />
               <div className="mt-3 h-10 w-16 bg-white/10 rounded-xl" />
             </div>
@@ -37,7 +37,7 @@ export function SubsystemHealthClient({ slug }: SubsystemHealthClientProps) {
 
   if (error || !data) {
     return (
-      <div className="glass-panel rounded-[2rem] p-8 text-center">
+      <div className="section-dark grid-texture-dark rounded-[2rem] p-8 text-center">
         <AlertTriangle className="size-12 text-red-400 mx-auto" />
         <p className="mt-4 text-lg text-muted">Failed to load subsystem health</p>
       </div>
@@ -50,7 +50,7 @@ export function SubsystemHealthClient({ slug }: SubsystemHealthClientProps) {
 
   return (
     <div className="space-y-6">
-      <section className="glass-panel rounded-[2rem] p-6 md:p-8">
+      <section className="section-dark grid-texture-dark rounded-[2rem] p-6 md:p-8">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
             <div
@@ -60,7 +60,7 @@ export function SubsystemHealthClient({ slug }: SubsystemHealthClientProps) {
               {subsystem.name.charAt(0)}
             </div>
             <div>
-              <p className="text-xs uppercase tracking-[0.28em] text-accent">Subsystem Command Center</p>
+              <p className="text-xs uppercase tracking-[0.28em] text-saffron">Subsystem Command Center</p>
               <h1 className="mt-1 text-3xl font-semibold">{subsystem.name}</h1>
               <p className="mt-1 text-sm text-muted">{subsystem.memberCount} members</p>
             </div>
@@ -104,10 +104,10 @@ export function SubsystemHealthClient({ slug }: SubsystemHealthClientProps) {
 
       <section className="grid gap-6 lg:grid-cols-[1.5fr_1fr]">
         <div className="space-y-6">
-          <article className="glass-panel rounded-2xl p-6">
+          <article className="card-dark rounded-[1.25rem] p-6">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-lg font-semibold">Upcoming Deadlines</h2>
-              <span className="text-xs text-accent">{metrics.upcomingDeadlines.length} tasks</span>
+              <span className="text-xs text-saffron">{metrics.upcomingDeadlines.length} tasks</span>
             </div>
             {metrics.upcomingDeadlines.length === 0 ? (
               <p className="text-sm text-muted">No upcoming deadlines in the next 7 days</p>
@@ -117,7 +117,7 @@ export function SubsystemHealthClient({ slug }: SubsystemHealthClientProps) {
                   <div
                     key={task.id}
                     className={cn(
-                      "rounded-xl border border-line bg-white/5 p-4 flex items-center justify-between",
+                      "rounded-xl border border-steel/30 bg-white/5 p-4 flex items-center justify-between",
                       task.priority === TaskPriority.CRITICAL && "border-red-500/30",
                       task.priority === TaskPriority.HIGH && "border-amber-500/30",
                     )}
@@ -153,7 +153,7 @@ export function SubsystemHealthClient({ slug }: SubsystemHealthClientProps) {
             )}
           </article>
 
-          <article className="glass-panel rounded-2xl p-6">
+          <article className="card-dark rounded-[1.25rem] p-6">
             <h2 className="text-lg font-semibold mb-4">Recent Activity</h2>
             {recentActivity.length === 0 ? (
               <p className="text-sm text-muted">No recent activity</p>
@@ -162,7 +162,7 @@ export function SubsystemHealthClient({ slug }: SubsystemHealthClientProps) {
                 {recentActivity.map((activity, index) => (
                   <div
                     key={index}
-                    className="rounded-xl border border-line bg-white/5 p-4"
+                    className="rounded-xl border border-steel/30 bg-white/5 p-4"
                   >
                     <div className="flex items-start gap-3">
                       <div
@@ -198,13 +198,13 @@ export function SubsystemHealthClient({ slug }: SubsystemHealthClientProps) {
         </div>
 
         <div className="space-y-6">
-          <article className="glass-panel rounded-2xl p-6">
+          <article className="card-dark rounded-[1.25rem] p-6">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-lg font-semibold flex items-center gap-2">
-                <ArrowLeftRight className="size-5 text-accent" />
+                <ArrowLeftRight className="size-5 text-saffron" />
                 Cross-Subsystem Blockers
               </h2>
-              <span className="text-xs text-accent">
+              <span className="text-xs text-saffron">
                 {incomingBlockers.length + outgoingBlockers.length} total
               </span>
             </div>
@@ -259,13 +259,13 @@ export function SubsystemHealthClient({ slug }: SubsystemHealthClientProps) {
             )}
           </article>
 
-          <article className="glass-panel rounded-2xl p-6">
+          <article className="card-dark rounded-[1.25rem] p-6">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-lg font-semibold flex items-center gap-2">
-                <Users className="size-5 text-accent" />
+                <Users className="size-5 text-saffron" />
                 Workload Balance
               </h2>
-              <span className="text-xs text-accent">{workload.length} members</span>
+              <span className="text-xs text-saffron">{workload.length} members</span>
             </div>
             {workload.length === 0 ? (
               <p className="text-sm text-muted text-center py-4">No members in this subsystem</p>
@@ -274,11 +274,11 @@ export function SubsystemHealthClient({ slug }: SubsystemHealthClientProps) {
                 {workload.map((member) => (
                   <div
                     key={member.memberId}
-                    className="rounded-xl border border-line bg-white/5 p-3"
+                    className="rounded-xl border border-steel/30 bg-white/5 p-3"
                   >
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-full bg-accent/20 flex items-center justify-center text-accent text-sm font-medium">
+                        <div className="w-8 h-8 rounded-full bg-saffron/20 flex items-center justify-center text-saffron text-sm font-medium">
                           {member.name.charAt(0)}
                         </div>
                         <div>
@@ -287,13 +287,13 @@ export function SubsystemHealthClient({ slug }: SubsystemHealthClientProps) {
                         </div>
                       </div>
                       <div className="text-right">
-                        <p className="text-lg font-semibold text-accent">{member.availabilityScore}%</p>
+                        <p className="text-lg font-semibold text-saffron">{member.availabilityScore}%</p>
                         <p className="text-xs text-muted">Availability</p>
                       </div>
                     </div>
                     <div className="mt-2 h-2 bg-white/10 rounded-full overflow-hidden">
                       <div
-                        className="h-full bg-accent/50 rounded-full transition-all"
+                        className="h-full bg-saffron/50 rounded-full transition-all"
                         style={{ width: `${member.availabilityScore}%` }}
                       />
                     </div>

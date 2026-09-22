@@ -1,0 +1,97 @@
+/* Exact source root blocks; reference only, not the recommended migration stylesheet. */
+
+/* src/index.css */
+:root {
+  --space-990: #272757;
+  --space-950: #272757;
+  --space-900: #272757;
+  --space-850: #272757;
+  --space-800: #272757;
+  --nebula-violet: #1E90FF;
+  --nebula-cyan: #1E90FF;
+  --solar-amber: #f5a64a;
+  --aurora-teal: #38bfb3;
+  --cloud-white: #F0F4FF;
+  --text-primary: #F0F4FF;
+  --text-secondary: #F0F4FF;
+  --text-muted: #F0F4FF;
+  --border-soft: rgba(109, 129, 150, 0.4);
+  --glass-bg: linear-gradient(160deg, rgba(67, 48, 171, 0.68), rgba(0, 0, 0, 0.52));
+  --glass-panel: linear-gradient(150deg, rgba(255, 0, 76, 0.199), rgba(0, 0, 0, 0.18));
+  --gradient-hero:
+    radial-gradient(1200px 560px at 50% -8%, rgba(116, 88, 255, 0.664), transparent 64%),
+    radial-gradient(820px 420px at 10% 8%, rgba(68, 212, 255, 0.16), transparent 62%),
+    radial-gradient(880px 420px at 88% 12%, rgba(245, 166, 74, 0.14), transparent 62%),
+    linear-gradient(180deg,#272757 0%, #1E2A4A 100%);
+  --shadow-soft: 0 18px 44px rgba(1, 5, 12, 0.45);
+  --shadow-card: 0 22px 54px rgba(1, 5, 12, 0.48);
+  --glow-cyan: 0 0 0 1px rgba(68, 212, 255, 0.35), 0 0 40px rgba(68, 212, 255, 0.22);
+  --glow-amber: 0 0 0 1px rgba(245, 166, 74, 0.35), 0 0 42px rgba(245, 166, 74, 0.2);
+  --radius-xs: 0.6rem;
+  --radius-sm: 0.95rem;
+  --radius-md: 1.25rem;
+  --radius-lg: 1.6rem;
+  --radius-pill: 999px;
+  --space-1: 0.4rem;
+  --space-2: 0.7rem;
+  --space-3: 1rem;
+  --space-4: 1.3rem;
+  --space-5: 1.7rem;
+  --space-6: 2.2rem;
+  --space-7: 3rem;
+  --space-8: 4rem;
+  --font-hero: "Sora", "Inter", "Segoe UI", sans-serif;
+  --font-heading: "Sora", "Inter", "Segoe UI", sans-serif;
+  --font-body: "IBM Plex Sans", "Inter", "Segoe UI", sans-serif;
+  --font-display: var(--font-heading);
+  --bg-space: var(--space-990);
+  --gold-soft: var(--solar-amber);
+  --rust-soft: #b56538;
+  --teal-soft: var(--aurora-teal);
+  --ink-deep: #040913;
+  --fs-hero: clamp(3.2rem, 8.8vw, 7.6rem);
+  --fs-display: clamp(2.1rem, 5vw, 4.4rem);
+  --fs-h2: clamp(1.55rem, 3.2vw, 2.8rem);
+  --fs-h3: clamp(1.2rem, 2.2vw, 1.8rem);
+  --fs-body-lg: clamp(1.02rem, 1.4vw, 1.16rem);
+  --fs-body: 1rem;
+  --fs-caption: 0.78rem;
+  --ease-premium: cubic-bezier(0.22, 0.8, 0.3, 1);
+  font-family: var(--font-body);
+  color: var(--text-primary);
+  background: var(--gradient-hero);
+  color-scheme: dark;
+  font-synthesis: none;
+  text-rendering: geometricPrecision;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* src/App.css */
+:root {
+  /* Background Colors */
+  --color-background-primary: #0f141b;
+  --color-background-secondary: #151b24;
+  --color-background-info: rgba(68, 212, 255, 0.12);
+  --color-background-success: rgba(201, 120, 43, 0.14);
+
+  /* Text Colors */
+  --color-text-info: rgba(182, 224, 255, 0.92);
+  --color-text-success: rgba(255, 233, 206, 0.92);
+  --color-text-tertiary: rgba(244, 238, 227, 0.56);
+
+  /* Border Colors */
+  --color-border-tertiary: rgba(255, 255, 255, 0.12);
+
+  /* Border Radius */
+  --border-radius-md: var(--radius-md);
+}
+
+/* src/App.css */
+:root {
+  --af-graphite: #0f1115;
+  --af-beige: #e7dfd1;
+  --af-saffron: #c9782b;
+  --af-steel: #7d868c;
+  --af-ice: #8fa9b5;
+}

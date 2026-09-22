@@ -1,6 +1,7 @@
 import { Module } from "@nestjs/common";
-import { ConfigModule } from "@nestjs/config";
+import { ConfigModule, ConfigService } from "@nestjs/config";
 import { ThrottlerModule } from "@nestjs/throttler";
+import { BullModule } from "@nestjs/bullmq";
 
 import { CacheModule } from "./common/cache/cache.module";
 import { appConfig } from "./common/config/app.config";
@@ -25,11 +26,43 @@ import { HealthModule } from "./modules/health/health.module";
 import { SwaggerModule } from "./modules/swagger/swagger.module";
 import { InvitationsModule } from "./modules/invitations/invitations.module";
 
+function buildRedisConnection(configService: ConfigService) {
+  const redisUrl = configService.get<string>("redis.url");
+
+  if (!redisUrl) {
+    if (process.env.NODE_ENV === "production") {
+      throw new Error("REDIS_URL is not configured");
+    }
+    return {
+      host: "localhost",
+      port: 6379,
+      maxRetriesPerRequest: null,
+    };
+  }
+
+  const url = new URL(redisUrl);
+  const isTls = url.protocol === "rediss:";
+
+  return {
+    host: url.hostname,
+    port: Number(url.port || 6379),
+    username: url.username || "default",
+    password: url.password || undefined,
+    tls: isTls ? {} : undefined,
+    maxRetriesPerRequest: null,
+  };
+}
+
 @Module({
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
       load: [appConfig],
+    }),
+    BullModule.forRootAsync({
+      imports: [ConfigModule],
+      inject: [ConfigService],
+      useFactory: buildRedisConnection,
     }),
     CacheModule,
     ThrottlerModule.forRoot([

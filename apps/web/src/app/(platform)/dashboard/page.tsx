@@ -22,8 +22,8 @@ export default function DashboardPage() {
 
   return (
     <main className="space-y-6">
-      <section className="glass-panel rounded-[2rem] p-8">
-        <p className="text-xs uppercase tracking-[0.28em] text-accent">{role}</p>
+      <section className="section-dark grid-texture-dark rounded-[2rem] p-8">
+        <p className="text-xs uppercase tracking-[0.28em] text-saffron">{role}</p>
         <h1 className="mt-3 text-4xl font-semibold">Mission control dashboard</h1>
         <p className="mt-3 max-w-2xl text-muted">
           {name}, {roleGreeting[role]}. This dashboard reshapes itself around your responsibilities instead of showing everyone the same view.
@@ -33,4 +33,3 @@ export default function DashboardPage() {
     </main>
   );
 }
-

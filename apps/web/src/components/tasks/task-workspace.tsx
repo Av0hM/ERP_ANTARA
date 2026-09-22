@@ -65,10 +65,10 @@ export function TaskWorkspace({ tasks }: TaskWorkspaceProps) {
 
   return (
     <div className="space-y-6">
-      <section className="glass-panel rounded-[2rem] p-6">
+      <section className="section-dark grid-texture-dark rounded-[2rem] p-6">
         <div className="grid gap-4 xl:grid-cols-[1.4fr_1fr]">
           <div>
-            <p className="text-xs uppercase tracking-[0.28em] text-accent">Mission Task Control</p>
+            <p className="text-xs uppercase tracking-[0.28em] text-saffron">Mission Task Control</p>
             <h2 className="mt-2 text-2xl font-semibold">Search, filter, and rebalance subsystem work</h2>
             <p className="mt-3 max-w-2xl text-sm text-muted">
               This workspace now supports live-ready task queries, optimistic status mutations, comments, and collaboration presence rails.
@@ -79,10 +79,10 @@ export function TaskWorkspace({ tasks }: TaskWorkspaceProps) {
           </div>
           <div className="grid gap-3 sm:grid-cols-3">
             {metrics.map(({ label, value, icon: Icon }) => (
-              <div key={label} className="rounded-2xl border border-line bg-white/5 p-4">
+              <div key={label} className="card-dark rounded-[1.25rem] p-4">
                 <div className="flex items-center justify-between">
                   <span className="text-xs uppercase tracking-[0.18em] text-muted">{label}</span>
-                  <Icon className="size-4 text-accent" />
+                  <Icon className="size-4 text-saffron" />
                 </div>
                 <p className="mt-3 text-3xl font-semibold">{value}</p>
               </div>
@@ -91,7 +91,7 @@ export function TaskWorkspace({ tasks }: TaskWorkspaceProps) {
         </div>
 
         <div className="mt-6 grid gap-3 xl:grid-cols-[1.8fr_1fr_1fr]">
-          <label className="flex items-center gap-3 rounded-2xl border border-line bg-white/5 px-4 py-3">
+          <label className="flex items-center gap-3 rounded-xl border border-steel/30 bg-white/5 px-4 py-3">
             <Search className="size-4 text-muted" />
             <input
               value={query}
@@ -104,7 +104,7 @@ export function TaskWorkspace({ tasks }: TaskWorkspaceProps) {
           <select
             value={priority}
             onChange={(event) => setPriority(event.target.value as (typeof priorities)[number])}
-            className="rounded-2xl border border-line bg-white/5 px-4 py-3 text-sm outline-none"
+            className="input-field"
           >
             {priorities.map((option) => (
               <option key={option} value={option} className="bg-panel text-text">
@@ -116,7 +116,7 @@ export function TaskWorkspace({ tasks }: TaskWorkspaceProps) {
           <select
             value={subsystem}
             onChange={(event) => setSubsystem(event.target.value)}
-            className="rounded-2xl border border-line bg-white/5 px-4 py-3 text-sm outline-none"
+            className="input-field"
           >
             {["ALL", ...subsystemData.map((option) => option.name)].map((option) => (
               <option key={option} value={option} className="bg-panel text-text">
@@ -128,7 +128,7 @@ export function TaskWorkspace({ tasks }: TaskWorkspaceProps) {
       </section>
 
       {control.tasks.length === 0 ? (
-        <section className="glass-panel rounded-[2rem] border border-dashed border-line/70 p-6 text-sm text-muted">
+        <section className="section-dark grid-texture-dark rounded-[2rem] border border-dashed border-steel/30 p-6 text-sm text-muted">
           No live tasks are loaded yet. Once the backend is populated, this board will show subsystem work, dependencies, and collaboration history.
         </section>
       ) : null}
@@ -152,4 +152,3 @@ export function TaskWorkspace({ tasks }: TaskWorkspaceProps) {
     </div>
   );
 }
-

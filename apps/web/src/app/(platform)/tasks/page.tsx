@@ -12,8 +12,8 @@ export default function TasksPage() {
 
   return (
     <main className="space-y-6">
-      <section className="glass-panel rounded-[2rem] p-8">
-        <p className="text-xs uppercase tracking-[0.28em] text-accent">Task Operations</p>
+      <section className="section-dark grid-texture-dark rounded-[2rem] p-8">
+        <p className="text-xs uppercase tracking-[0.28em] text-saffron">Task Operations</p>
         <h1 className="mt-3 text-4xl font-semibold">Subsystem mission board</h1>
         <p className="mt-3 max-w-2xl text-muted">
           {actor.role} workspace for dependencies, priorities, deadlines, and subsystem ownership across engineering execution.

@@ -61,7 +61,7 @@ const rolePanels: Record<
       { label: "Momentum", value: "Progress feed", icon: Layers3 },
       { label: "Support", value: "Mentor-aware", icon: Users2 },
     ],
-    focusTitle: "Today’s priorities",
+    focusTitle: "Today's priorities",
     focusItems: [
       { title: "Assigned tasks", body: "Review the next item in your queue and update progress as you go.", icon: ClipboardList },
       { title: "Deadlines and reminders", body: "Stay ahead of blockers and deadlines surfaced by the AI layer.", icon: ClipboardList },
@@ -79,17 +79,17 @@ function FocusRail({
 }) {
   const config = rolePanels[role];
   return (
-    <div className="glass-panel rounded-3xl p-6">
-      <p className="text-xs uppercase tracking-[0.28em] text-accent">{config.focusTitle}</p>
+    <div className="card-dark rounded-[1.25rem] p-6">
+      <p className="text-xs uppercase tracking-[0.28em] text-saffron">{config.focusTitle}</p>
       <h2 className="mt-2 text-xl font-semibold">{config.title}</h2>
       <p className="mt-2 text-sm text-muted">{config.subtitle}</p>
       <div className="mt-5 space-y-3">
         {items.map((item) => {
           const Icon = item.icon;
           return (
-            <article key={item.title} className="rounded-2xl border border-line bg-white/5 p-4">
+            <article key={item.title} className="rounded-xl border border-steel/30 bg-white/5 p-4">
               <div className="flex items-center gap-3">
-                <span className="flex size-9 items-center justify-center rounded-2xl bg-accent/10 text-accent">
+                <span className="flex size-9 items-center justify-center rounded-2xl bg-saffron/10 text-saffron">
                   <Icon className="size-4" />
                 </span>
                 <h3 className="font-medium">{item.title}</h3>
@@ -109,10 +109,10 @@ export function DashboardLive({ role }: { role: AppRole }) {
 
   return (
     <>
-      <section className="glass-panel rounded-[2rem] p-6 md:p-8">
+      <section className="section-dark grid-texture-dark rounded-[2rem] p-6 md:p-8">
         <div className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr] xl:items-start">
           <div>
-            <p className="text-xs uppercase tracking-[0.32em] text-accent">{config.eyebrow}</p>
+            <p className="text-xs uppercase tracking-[0.32em] text-saffron">{config.eyebrow}</p>
             <h2 className="mt-3 text-3xl font-semibold">{config.title}</h2>
             <p className="mt-3 max-w-3xl text-sm leading-6 text-muted">{config.subtitle}</p>
           </div>
@@ -120,9 +120,9 @@ export function DashboardLive({ role }: { role: AppRole }) {
             {config.chips.map((chip) => {
               const Icon = chip.icon;
               return (
-                <div key={chip.label} className="rounded-2xl border border-line bg-white/5 p-4">
+                <div key={chip.label} className="card-dark rounded-[1.25rem] p-4">
                   <div className="flex items-center gap-3 text-xs uppercase tracking-[0.18em] text-muted">
-                    <Icon className="size-4 text-accent" />
+                    <Icon className="size-4 text-saffron" />
                     {chip.label}
                   </div>
                   <p className="mt-2 text-lg font-medium">{chip.value}</p>
@@ -136,15 +136,15 @@ export function DashboardLive({ role }: { role: AppRole }) {
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         {isLoading
           ? Array.from({ length: 4 }).map((_, index) => (
-              <div key={index} className="glass-panel rounded-3xl p-6">
-                <div className="h-4 w-24 animate-pulse rounded-xl bg-white/10" />
-                <div className="mt-3 h-10 w-16 animate-pulse rounded-xl bg-white/10" />
+              <div key={index} className="card-dark rounded-[1.25rem] p-6 animate-pulse">
+                <div className="h-4 w-24 rounded-xl bg-white/10" />
+                <div className="mt-3 h-10 w-16 rounded-xl bg-white/10" />
               </div>
             ))
           : (data?.metrics ?? []).length
-            ? (data?.metrics ?? []).map((metric) => <MetricCard key={metric.label} metric={metric} />)
-            : (
-              <div className="col-span-full rounded-2xl border border-line/40 bg-white/5 p-6 text-center text-sm text-muted">
+          ? (data?.metrics ?? []).map((metric) => <MetricCard key={metric.label} metric={metric} />)
+          : (
+              <div className="col-span-full card-dark rounded-[1.25rem] p-6 text-center text-sm text-muted">
                 No data yet - metrics will appear once tasks and worklogs are created.
               </div>
             )}

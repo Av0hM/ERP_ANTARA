@@ -56,9 +56,9 @@ export function ToastProvider({ children }: { children: ReactNode }) {
             <div className="fixed bottom-4 right-4 z-50 flex w-[calc(100vw-2rem)] max-w-sm flex-col gap-3 md:w-full">
               {toasts.map((toast) => {
                 const styles = {
-                  success: "bg-emerald-900/80 border-emerald-500/40 text-emerald-200",
-                  error: "bg-red-900/80 border-red-500/40 text-red-200",
-                  info: "bg-cobalt/20 border-cobalt/40 text-cobalt",
+                  success: "border-emerald-500/40 text-emerald-200 bg-emerald-900/80",
+                  error: "border-red-500/40 text-red-200 bg-red-900/80",
+                  info: "border-ice/40 text-ice bg-panel/90",
                 }[toast.type];
                 const Icon = {
                   success: CheckCircle2,
@@ -69,7 +69,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
                 return (
                   <div
                     key={toast.id}
-                    className={`flex items-start gap-3 rounded-2xl border px-4 py-3 text-sm shadow-lg backdrop-blur-md transition-all duration-200 ${styles}`}
+                    className={`flex items-start gap-3 rounded-[1.25rem] border px-4 py-3 text-sm shadow-glass backdrop-blur-xl transition-all duration-200 glass-modal ${styles}`}
                   >
                     <Icon className="mt-0.5 size-4 shrink-0" />
                     <p className="flex-1">{toast.message}</p>

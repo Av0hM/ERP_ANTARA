@@ -9,10 +9,10 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 const statusConfig: Record<DecisionStatus, { label: string; color: string; icon: typeof CheckCircle }> = {
-  PROPOSED: { label: "Proposed", color: "text-blue-400 bg-blue-400/10", icon: PauseCircle },
+  PROPOSED: { label: "Proposed", color: "text-ice bg-ice/10", icon: PauseCircle },
   ACCEPTED: { label: "Accepted", color: "text-emerald-400 bg-emerald-400/10", icon: CheckCircle },
   REJECTED: { label: "Rejected", color: "text-red-400 bg-red-400/10", icon: XCircle },
-  SUPERSEDED: { label: "Superseded", color: "text-amber-400 bg-amber-400/10", icon: AlertCircle },
+  SUPERSEDED: { label: "Superseded", color: "text-saffron bg-saffron/10", icon: AlertCircle },
   DEFERRED: { label: "Deferred", color: "text-slate-400 bg-slate-400/10", icon: Clock },
 };
 
@@ -29,9 +29,9 @@ export function DecisionCard({ decision: decisionData, onClick }: DecisionCardPr
   return (
     <article
       className={cn(
-        "glass-panel rounded-2xl border p-5 transition-all cursor-pointer",
-        "hover:border-accent/30",
-        expanded && "ring-2 ring-accent/30",
+        "card-dark rounded-xl border border-steel/30 p-5 transition-all cursor-pointer",
+        "hover:border-saffron/30",
+        expanded && "ring-2 ring-saffron/30",
       )}
       onClick={onClick}
     >
@@ -66,7 +66,7 @@ export function DecisionCard({ decision: decisionData, onClick }: DecisionCardPr
             variant="ghost"
             size="sm"
             onClick={(e) => { e.stopPropagation(); setExpanded(!expanded); }}
-            className={cn(expanded && "text-accent")}
+            className={cn(expanded && "text-saffron")}
           >
             {expanded ? <ChevronDown className="size-4" /> : <ChevronRight className="size-4" />}
           </Button>
@@ -74,7 +74,7 @@ export function DecisionCard({ decision: decisionData, onClick }: DecisionCardPr
       </div>
 
       {expanded && (
-        <div className="mt-5 pt-5 border-t border-line/40 space-y-4 animate-in fade-in slide-in-from-top-2 duration-200">
+        <div className="mt-5 pt-5 border-t border-steel/20 space-y-4 animate-in fade-in slide-in-from-top-2 duration-200">
           <div className="grid gap-4 md:grid-cols-2">
             <div>
               <p className="text-xs uppercase tracking-[0.18em] text-muted mb-1">Decision</p>
@@ -120,7 +120,7 @@ export function DecisionCard({ decision: decisionData, onClick }: DecisionCardPr
             </div>
           )}
 
-          <div className="flex items-center justify-between text-xs text-muted pt-2 border-t border-line/40">
+          <div className="flex items-center justify-between text-xs text-muted pt-2 border-t border-steel/20">
             <span>Created: {new Date(decisionData.createdAt).toLocaleString()}</span>
             {decisionData.decidedAt && (
               <span>Decided: {new Date(decisionData.decidedAt).toLocaleString()}</span>
@@ -144,7 +144,7 @@ export function DecisionList({ decisions, onSelect, selectedId, isLoading }: Dec
     return (
       <div className="space-y-4">
         {[1, 2, 3].map((i) => (
-          <div key={i} className="glass-panel rounded-2xl border p-5 animate-pulse">
+          <div key={i} className="card-dark rounded-xl border border-steel/30 p-5 animate-pulse">
             <div className="h-6 w-48 bg-white/10 rounded-xl mb-3" />
             <div className="h-4 w-64 bg-white/10 rounded-xl" />
           </div>
@@ -155,7 +155,7 @@ export function DecisionList({ decisions, onSelect, selectedId, isLoading }: Dec
 
   if (decisions.length === 0) {
     return (
-      <div className="glass-panel rounded-2xl border border-dashed border-line/50 p-8 text-center text-muted">
+      <div className="section-dark grid-texture-dark rounded-xl border border-dashed border-steel/30 p-8 text-center text-muted">
         <FileText className="size-12 mx-auto mb-3 opacity-30" />
         <p>No decisions recorded yet</p>
         <p className="mt-1 text-sm">Create your first ADR to start building institutional memory</p>

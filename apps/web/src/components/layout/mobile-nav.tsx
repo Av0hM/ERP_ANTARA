@@ -17,7 +17,7 @@ export function MobileNav() {
   const pathname = usePathname();
 
   return (
-    <nav className="fixed inset-x-0 bottom-3 z-40 mx-auto flex max-w-[calc(100vw-1.5rem)] gap-1 rounded-full border border-line bg-panel/95 p-2 shadow-glow backdrop-blur-xl lg:hidden">
+    <nav className="fixed inset-x-0 bottom-3 z-40 mx-auto flex max-w-[calc(100vw-1.5rem)] gap-1 rounded-full border border-white/10 bg-white/5 p-2 shadow-glass backdrop-blur-xl lg:hidden">
       <div className="flex flex-1 gap-1">
         {links.map(({ href, label, icon: Icon }) => {
           const active = pathname === href;
@@ -28,7 +28,7 @@ export function MobileNav() {
               data-transition="true"
               aria-current={active ? "page" : undefined}
               className={`flex min-w-0 flex-1 flex-col items-center justify-center gap-1 rounded-full px-2 py-2 text-[10px] uppercase tracking-[0.18em] transition ${
-                active ? "border-accent/40 bg-accent/10 text-text" : "border-transparent text-muted"
+                active ? "border-saffron/40 bg-saffron/10 text-text" : "border-transparent text-muted"
               }`}
             >
               <Icon className="size-4" />
@@ -40,7 +40,7 @@ export function MobileNav() {
       <button
         type="button"
         data-transition="true"
-        className="rounded-full border border-line px-3 py-2 text-[10px] uppercase tracking-[0.18em] text-muted transition hover:bg-white/5"
+        className="rounded-full border border-steel/30 px-3 py-2 text-[10px] uppercase tracking-[0.18em] text-muted transition hover:bg-white/5"
         onClick={() => void signOut({ callbackUrl: "/login" })}
       >
         Sign Out

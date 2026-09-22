@@ -20,12 +20,12 @@ export function MetricCard({ metric }: { metric: ExtendedMetric }) {
   const Icon = metric.icon ?? (metric.direction ? iconMap[metric.direction] : ArrowRight);
 
   return (
-    <div className="glass-panel rounded-3xl p-5">
+    <div className="card-dark rounded-[1.25rem] p-5">
       <p className="text-sm text-muted">{metric.label}</p>
       <div className="mt-3 flex items-end justify-between">
         <h3 className="text-3xl font-semibold">{metric.value}</h3>
         {metric.delta && (
-          <div className="flex items-center gap-2 text-xs uppercase tracking-[0.18em] text-accent">
+          <div className="flex items-center gap-2 text-xs uppercase tracking-[0.18em] text-saffron">
             <Icon className="size-4" />
             {metric.delta}
           </div>
@@ -34,5 +34,3 @@ export function MetricCard({ metric }: { metric: ExtendedMetric }) {
     </div>
   );
 }
-
-

@@ -8,10 +8,10 @@ export default function ResourcesPage() {
 
   return (
     <div className="space-y-6">
-      <section className="glass-panel rounded-[2rem] p-6 md:p-8">
+      <section className="section-dark grid-texture-dark rounded-[2rem] p-6 md:p-8">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
-            <p className="text-xs uppercase tracking-[0.28em] text-accent">Resource Management</p>
+            <p className="text-xs uppercase tracking-[0.28em] text-saffron">Resource Management</p>
             <h1 className="mt-2 text-3xl font-semibold">Team Capacity Board</h1>
             <p className="mt-2 max-w-2xl text-sm text-muted">
               Visualize team capacity across subsystems and weeks. Drag tasks to balance workload and resolve conflicts.
@@ -21,7 +21,7 @@ export default function ResourcesPage() {
             <button
               onClick={() => refetch()}
               disabled={isLoading}
-              className="rounded-2xl border border-line bg-white/5 px-4 py-2 text-sm outline-none flex items-center gap-2 text-muted hover:text-text"
+              className="rounded-[1.25rem] border border-steel/30 bg-white/5 px-4 py-2 text-sm outline-none flex items-center gap-2 text-muted hover:text-text"
             >
               <svg className="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <path d="M23 4v6h-6" />

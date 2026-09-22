@@ -95,17 +95,17 @@ export function AttachmentVault() {
     selectedMimeType === "application/pdf" ? (
       <FileText className="size-4 text-red-300" />
     ) : selectedMimeType.startsWith("image/") ? (
-      <ImageIcon className="size-4 text-cobalt" />
+      <ImageIcon className="size-4 text-ice" />
     ) : (
       <Paperclip className="size-4 text-muted" />
     );
 
   return (
-    <div className="glass-panel rounded-[2rem] p-6">
+    <div className="section-dark grid-texture-dark rounded-[2rem] p-6">
       <div className="flex items-center gap-3">
-        <Paperclip className="size-5 text-accent" />
+        <Paperclip className="size-5 text-saffron" />
         <div>
-          <p className="text-xs uppercase tracking-[0.24em] text-accent">Attachments</p>
+          <p className="text-xs uppercase tracking-[0.24em] text-saffron">Attachments</p>
           <h2 className="text-xl font-semibold">Drive-backed file vault</h2>
         </div>
       </div>
@@ -117,7 +117,7 @@ export function AttachmentVault() {
             <select
               value={taskId}
               onChange={(event) => setTaskId(event.target.value)}
-              className="w-full rounded-2xl border border-line bg-white/5 px-4 py-3 text-sm outline-none"
+              className="input-field"
             >
               <option value="" disabled>
                 Select a task (optional)...
@@ -135,7 +135,7 @@ export function AttachmentVault() {
             <input
               value={tags}
               onChange={(event) => setTags(event.target.value)}
-              className="w-full rounded-2xl border border-line bg-white/5 px-4 py-3 text-sm outline-none"
+              className="input-field"
               placeholder="CAD, review, thermal"
             />
           </label>
@@ -145,11 +145,11 @@ export function AttachmentVault() {
             <input
               type="file"
               onChange={handleFile}
-              className="w-full rounded-2xl border border-line bg-white/5 px-4 py-3 text-sm outline-none file:mr-4 file:rounded-full file:border-0 file:bg-accent/10 file:px-4 file:py-2 file:text-accent"
+              className="w-full rounded-xl border border-steel/30 bg-white/5 px-4 py-3 text-sm outline-none file:mr-4 file:rounded-full file:border-0 file:bg-saffron/10 file:px-4 file:py-2 file:text-saffron"
             />
           </label>
 
-          <div className="rounded-2xl border border-line bg-white/5 p-4 text-sm text-muted">
+          <div className="rounded-xl border border-steel/30 bg-white/5 p-4 text-sm text-muted">
             <div className="flex items-center gap-2">
               {fileIcon}
               <p className="font-medium text-text">Selected file</p>
@@ -163,19 +163,19 @@ export function AttachmentVault() {
           </Button>
 
           <p className="text-xs text-muted">
-            Uploaded by <span className="text-accent">{actor.name}</span>. If Google Drive credentials are present, the file is mirrored there automatically.
+            Uploaded by <span className="text-saffron">{actor.name}</span>. If Google Drive credentials are present, the file is mirrored there automatically.
           </p>
         </div>
 
         <div className="space-y-3">
           {attachments.map((item) => (
-            <article key={item.id} className="rounded-2xl border border-line bg-white/5 p-4">
+            <article key={item.id} className="rounded-xl border border-steel/30 bg-white/5 p-4">
               <div className="flex items-start justify-between gap-3">
                 <div className="flex items-start gap-2">
                   {item.mimeType === "application/pdf" ? (
                     <FileText className="mt-1 size-4 text-red-300" />
                   ) : item.mimeType.startsWith("image/") ? (
-                    <ImageIcon className="mt-1 size-4 text-cobalt" />
+                    <ImageIcon className="mt-1 size-4 text-ice" />
                   ) : (
                     <Paperclip className="mt-1 size-4 text-muted" />
                   )}
@@ -184,7 +184,7 @@ export function AttachmentVault() {
                   <p className="mt-1 text-xs text-muted">{item.mimeType}</p>
                 </div>
                 </div>
-                <span className="text-xs text-accent">{Math.round(item.sizeBytes / 1024)} KB</span>
+                <span className="text-xs text-saffron">{Math.round(item.sizeBytes / 1024)} KB</span>
               </div>
               <p className="mt-3 text-sm text-muted">
                 {item.task?.title ? `Linked to ${item.task.title}` : "Not linked to a task yet"}
@@ -192,13 +192,13 @@ export function AttachmentVault() {
               <div className="mt-3 flex items-center justify-between text-xs text-muted">
                 <span>{item.uploadedBy?.name ?? "Mission Member"}</span>
                 {item.storageUrl.startsWith("http") ? (
-                  <a className="text-accent" href={item.storageUrl} target="_blank" rel="noreferrer">
+                  <a className="text-saffron" href={item.storageUrl} target="_blank" rel="noreferrer">
                     Open file
                   </a>
                 ) : (
                   <button
                     type="button"
-                    className="inline-flex items-center gap-1 text-accent"
+                    className="inline-flex items-center gap-1 text-saffron"
                     onClick={() => void navigator.clipboard.writeText(item.storageUrl)}
                   >
                     <Copy className="size-3" />
@@ -213,5 +213,3 @@ export function AttachmentVault() {
     </div>
   );
 }
-
-

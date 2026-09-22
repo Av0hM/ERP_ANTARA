@@ -2,6 +2,21 @@ import { Injectable, OnModuleDestroy, OnModuleInit } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import Redis from "ioredis";
 
+function parseRedisUrl(redisUrl: string) {
+  const url = new URL(redisUrl);
+  const isTls = url.protocol === "rediss:";
+
+  return {
+    host: url.hostname,
+    port: Number(url.port || 6379),
+    username: url.username || "default",
+    password: url.password || undefined,
+    tls: isTls ? {} : undefined,
+    maxRetriesPerRequest: 1,
+    lazyConnect: true,
+  };
+}
+
 @Injectable()
 export class RedisCacheService implements OnModuleInit, OnModuleDestroy {
   private client: Redis | null = null;
@@ -9,15 +24,12 @@ export class RedisCacheService implements OnModuleInit, OnModuleDestroy {
   constructor(private readonly configService: ConfigService) {}
 
   async onModuleInit() {
-    const url = this.configService.get<string>("redis.url");
-    if (!url) {
+    const redisUrl = this.configService.get<string>("redis.url");
+    if (!redisUrl) {
       return;
     }
 
-    const client = new Redis(url, {
-      lazyConnect: true,
-      maxRetriesPerRequest: 1,
-    });
+    const client = new Redis(parseRedisUrl(redisUrl));
 
     client.on("error", () => {
       // Cache is best-effort. The API continues without Redis if the cache is unavailable.

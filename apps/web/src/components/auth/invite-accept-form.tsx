@@ -73,7 +73,7 @@ export function InviteAcceptForm({ token }: { token: string }) {
 
   if (validation.status === "loading") {
     return (
-      <section className="glass-panel w-full max-w-lg rounded-[2rem] border border-line/80 p-8 shadow-2xl shadow-black/20">
+      <section className="glass-modal w-full max-w-lg rounded-[2rem] p-8">
         <p className="text-sm text-muted">Checking your invitation…</p>
       </section>
     );
@@ -81,8 +81,8 @@ export function InviteAcceptForm({ token }: { token: string }) {
 
   if (validation.status === "invalid") {
     return (
-      <section className="glass-panel w-full max-w-lg rounded-[2rem] border border-line/80 p-8 shadow-2xl shadow-black/20">
-        <div className="flex items-start gap-3 rounded-2xl border border-danger/30 bg-danger/10 px-4 py-3 text-sm text-danger">
+      <section className="glass-modal w-full max-w-lg rounded-[2rem] p-8">
+        <div className="flex items-start gap-3 rounded-xl border border-danger/30 bg-danger/10 px-4 py-3 text-sm text-danger">
           <AlertTriangle className="mt-0.5 size-4 shrink-0" />
           <p>This invitation link is invalid or has expired. Ask your team admin to send a new one.</p>
         </div>
@@ -92,9 +92,9 @@ export function InviteAcceptForm({ token }: { token: string }) {
 
   if (accepted) {
     return (
-      <section className="glass-panel w-full max-w-lg rounded-[2rem] border border-line/80 p-8 shadow-2xl shadow-black/20">
-        <div className="flex items-start gap-3 rounded-2xl border border-accent/30 bg-accent/10 px-4 py-3 text-sm text-text">
-          <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-accent" />
+      <section className="glass-modal w-full max-w-lg rounded-[2rem] p-8">
+        <div className="flex items-start gap-3 rounded-xl border border-saffron/30 bg-saffron/10 px-4 py-3 text-sm text-text">
+          <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-saffron" />
           <p>Account created. Redirecting you to sign in…</p>
         </div>
       </section>
@@ -102,13 +102,13 @@ export function InviteAcceptForm({ token }: { token: string }) {
   }
 
   return (
-    <section className="glass-panel w-full max-w-lg rounded-[2rem] border border-line/80 p-8 shadow-2xl shadow-black/20">
+    <section className="glass-modal w-full max-w-lg rounded-[2rem] p-8">
       <div className="flex items-center gap-3">
-        <div className="flex size-11 items-center justify-center rounded-2xl bg-accent/10 text-accent">
+        <div className="flex size-11 items-center justify-center rounded-2xl bg-saffron/10 text-saffron">
           <Sparkles className="size-5" />
         </div>
         <div>
-          <p className="text-xs uppercase tracking-[0.32em] text-accent">You&apos;re invited</p>
+          <p className="text-xs uppercase tracking-[0.32em] text-saffron">You&apos;re invited</p>
           <h1 className="mt-1 text-3xl font-semibold text-text">Join AntaraERP</h1>
         </div>
       </div>
@@ -121,7 +121,7 @@ export function InviteAcceptForm({ token }: { token: string }) {
         <label className="block">
           <span className="mb-2 block text-sm text-muted">Full name</span>
           <input
-            className="w-full rounded-2xl border border-line bg-white/5 px-4 py-3 text-text outline-none ring-0 transition placeholder:text-muted/60 focus:border-accent/60"
+            className="input-field"
             placeholder="Your name"
             autoComplete="name"
             value={name}
@@ -132,7 +132,7 @@ export function InviteAcceptForm({ token }: { token: string }) {
         <label className="block">
           <span className="mb-2 block text-sm text-muted">Password</span>
           <input
-            className="w-full rounded-2xl border border-line bg-white/5 px-4 py-3 text-text outline-none ring-0 transition placeholder:text-muted/60 focus:border-accent/60"
+            className="input-field"
             type="password"
             placeholder="Choose a password"
             autoComplete="new-password"
@@ -144,7 +144,7 @@ export function InviteAcceptForm({ token }: { token: string }) {
         </label>
 
         {error ? (
-          <div className="flex items-start gap-3 rounded-2xl border border-danger/30 bg-danger/10 px-4 py-3 text-sm text-danger">
+          <div className="flex items-start gap-3 rounded-xl border border-danger/30 bg-danger/10 px-4 py-3 text-sm text-danger">
             <AlertTriangle className="mt-0.5 size-4 shrink-0" />
             <p>{error}</p>
           </div>

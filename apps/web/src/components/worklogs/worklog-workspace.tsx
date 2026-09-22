@@ -74,24 +74,24 @@ export function WorklogWorkspace() {
   return (
     <div className="space-y-6">
       <section className="grid gap-4 md:grid-cols-3">
-        <div className="glass-panel rounded-3xl p-5">
+        <div className="card-dark rounded-[1.25rem] p-5">
           <p className="text-xs uppercase tracking-[0.2em] text-muted">Total Minutes</p>
           <p className="mt-3 text-3xl font-semibold">{summary?.totalMinutes ?? 0}</p>
         </div>
-        <div className="glass-panel rounded-3xl p-5">
+        <div className="card-dark rounded-[1.25rem] p-5">
           <p className="text-xs uppercase tracking-[0.2em] text-muted">Sessions</p>
           <p className="mt-3 text-3xl font-semibold">{summary?.totalSessions ?? 0}</p>
         </div>
-        <div className="glass-panel rounded-3xl p-5">
+        <div className="card-dark rounded-[1.25rem] p-5">
           <p className="text-xs uppercase tracking-[0.2em] text-muted">Average Session</p>
           <p className="mt-3 text-3xl font-semibold">{summary?.avgSessionMinutes ?? 0}m</p>
         </div>
       </section>
 
       <section className="grid gap-6 xl:grid-cols-[0.9fr_1.4fr]">
-        <div className="glass-panel rounded-[2rem] p-6">
-          <p className="text-xs uppercase tracking-[0.28em] text-accent">Live Timer</p>
-          <div className="mt-4 rounded-3xl border border-line bg-black/20 p-5 text-center">
+        <div className="card-dark rounded-[1.25rem] p-6">
+          <p className="text-xs uppercase tracking-[0.28em] text-saffron">Live Timer</p>
+          <div className="mt-4 card-dark rounded-[1.25rem] p-5 text-center">
             <p className="font-mono text-5xl font-semibold tracking-[0.2em]">{formatClock(elapsedSeconds)}</p>
             <p className="mt-2 text-xs uppercase tracking-[0.2em] text-muted">{isRunning ? "Running" : "Idle"}</p>
           </div>
@@ -127,15 +127,15 @@ export function WorklogWorkspace() {
           {!taskId ? <p className="mt-2 text-xs text-muted">Select a task first</p> : null}
         </div>
 
-        <div className="glass-panel rounded-[2rem] p-6">
-          <p className="text-xs uppercase tracking-[0.28em] text-accent">Manual Log</p>
+        <div className="card-dark rounded-[1.25rem] p-6">
+          <p className="text-xs uppercase tracking-[0.28em] text-saffron">Manual Log</p>
           <div className="mt-4 space-y-3">
             <label className="block">
               <span className="mb-2 block text-sm text-muted">Task</span>
               <select
                 value={taskId}
                 onChange={(event) => setTaskId(event.target.value)}
-                className="w-full rounded-2xl border border-line bg-white/5 px-4 py-3 text-sm outline-none"
+                className="input-field"
               >
                 <option value="" disabled>
                   Select a task...
@@ -158,7 +158,7 @@ export function WorklogWorkspace() {
                     type="number"
                     min="0"
                     max="23"
-                    className="w-full rounded-2xl border border-line bg-white/5 px-4 py-3 text-sm outline-none"
+                    className="input-field"
                   />
                 </label>
                 <label className="block">
@@ -169,7 +169,7 @@ export function WorklogWorkspace() {
                     type="number"
                     min="0"
                     max="59"
-                    className="w-full rounded-2xl border border-line bg-white/5 px-4 py-3 text-sm outline-none"
+                    className="input-field"
                   />
                 </label>
               </div>
@@ -179,7 +179,7 @@ export function WorklogWorkspace() {
               onChange={(event) => setNotes(event.target.value)}
               rows={5}
               placeholder="Record engineering work, test notes, or review activity..."
-              className="w-full rounded-2xl border border-line bg-white/5 px-4 py-3 text-sm outline-none"
+              className="input-field resize-none"
             />
             <Button
               className="w-full"
@@ -191,14 +191,14 @@ export function WorklogWorkspace() {
           </div>
         </div>
 
-        <div className="glass-panel rounded-[2rem] p-6 xl:col-span-2">
-          <p className="text-xs uppercase tracking-[0.28em] text-accent">Recent Sessions</p>
+        <div className="card-dark rounded-[1.25rem] p-6 xl:col-span-2">
+          <p className="text-xs uppercase tracking-[0.28em] text-saffron">Recent Sessions</p>
           <div className="mt-4 space-y-3">
             {logs.map((log) => (
-              <div key={log.id} className="rounded-2xl border border-line bg-white/5 p-4">
+              <div key={log.id} className="rounded-xl border border-steel/30 bg-white/5 p-4">
                 <div className="flex items-center justify-between gap-3">
                   <p className="font-medium">{log.task?.title ?? "Unlinked Task"}</p>
-                  <span className="text-xs text-accent">{formatDuration(log.durationMin)}</span>
+                  <span className="text-xs text-saffron">{formatDuration(log.durationMin)}</span>
                 </div>
                 <p className="mt-2 text-sm text-muted">{log.notes}</p>
                 <div className="mt-3 flex items-center justify-between text-xs text-muted">

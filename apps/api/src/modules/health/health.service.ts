@@ -77,7 +77,7 @@ export class HealthService {
     const start = Date.now();
     try {
       // If Redis is not configured, return healthy
-      const redisUrl = this.configService.get<string>("REDIS_URL");
+      const redisUrl = this.configService.get<string>("redis.url");
       if (!redisUrl) {
         return { status: "healthy", latencyMs: 0 };
       }
