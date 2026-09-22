@@ -3,6 +3,7 @@
 import { Bell, CheckCircle2, Trash2 } from "lucide-react";
 
 import { useNotificationCenter } from "@/hooks/use-operations";
+import { Button } from "@/components/ui/button";
 
 export function NotificationCenter() {
   const { notifications, markRead, deleteNotification, markAllAsRead } = useNotificationCenter();
@@ -43,14 +44,15 @@ export function NotificationCenter() {
                 >
                   {notification.isRead ? "Read" : "Unread"}
                 </button>
-                <button
+                <Button
                   type="button"
+                  variant="danger"
+                  size="sm"
                   onClick={() => deleteNotification(notification.id)}
-                  className="rounded-full border border-steel/30 p-2 text-muted transition hover:bg-white/5"
                   aria-label="Delete notification"
                 >
                   <Trash2 className="size-3" />
-                </button>
+                </Button>
               </div>
             </div>
             <div className="mt-3 flex items-center justify-between text-xs text-muted">

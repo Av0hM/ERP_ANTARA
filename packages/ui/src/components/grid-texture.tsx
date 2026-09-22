@@ -14,7 +14,7 @@ export const GridTexture = forwardRef<HTMLDivElement, GridTextureProps>(
       <div
         ref={ref}
         className={clsx(
-          "relative isolation:isolate",
+          "relative isolate",
           variant === "dark" && "bg-graphite text-text",
           variant === "light" && "bg-paper text-admin-ink",
           className
@@ -25,7 +25,8 @@ export const GridTexture = forwardRef<HTMLDivElement, GridTextureProps>(
           className={clsx(
             "pointer-events-none absolute inset-0 -z-10",
             "bg-[size:44px_44px]",
-            "mask-image-[linear-gradient(180deg,transparent,#000_16%,#000_84%,transparent)]",
+            "[mask-image:linear-gradient(180deg,transparent,#000_16%,#000_84%,transparent)]",
+            "[-webkit-mask-image:linear-gradient(180deg,transparent,#000_16%,#000_84%,transparent)]",
             variant === "dark" && "bg-grid-texture-dark",
             variant === "light" && "bg-grid-texture-light"
           )}

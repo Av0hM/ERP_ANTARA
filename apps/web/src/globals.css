@@ -55,11 +55,7 @@ body {
   }
 
   .saffron-focus:focus-visible {
-    @apply outline-3 outline-offset-3 outline-saffron;
-  }
-
-  .dark .saffron-focus:focus-visible {
-    @apply outline-dark-focus;
+    @apply outline-2 outline-offset-2 outline-saffron;
   }
 
   .eyebrow {
@@ -67,11 +63,11 @@ body {
   }
 
   .card-dark {
-    @apply rounded-[0.2rem] border border-steel/40 bg-gradient-to-b from-space-panel to-graphite text-text shadow-glass transition-transform duration-180 transition-shadow duration-220 ease-premium;
+    @apply rounded-[0.2rem] border border-steel/40 bg-gradient-to-b from-space-panel to-graphite text-text shadow-glass transition-[transform,box-shadow,border-color] duration-200 ease-premium;
   }
 
   .card-light {
-    @apply rounded-[0.2rem] border border-steel/40 bg-gradient-to-b from-paper-highlight to-paper text-admin-ink shadow-glass transition-transform duration-180 transition-shadow duration-220 ease-premium;
+    @apply rounded-[0.2rem] border border-steel/40 bg-gradient-to-b from-paper-highlight to-paper text-admin-ink shadow-glass transition-[transform,box-shadow,border-color] duration-200 ease-premium;
   }
 
   .card-dark:hover,
@@ -85,7 +81,7 @@ body {
 
   .btn-primary {
     @apply inline-flex items-center justify-center min-h-11 rounded-full px-4 py-2 text-sm font-medium transition;
-    @apply bg-gradient-to-r from-saffron to-amber text-white hover:from-saffron/90 hover:to-amber/90;
+    @apply bg-saffron text-white hover:bg-saffron/90;
     @apply border border-saffron/50 shadow-[0_0_0_1px_rgba(201,120,43,0.3)];
   }
 
@@ -106,7 +102,7 @@ body {
 
   .btn-danger {
     @apply inline-flex items-center justify-center min-h-11 rounded-full px-4 py-2 text-sm font-medium transition;
-    @apply bg-danger-bg text-danger border border-danger/40 hover:bg-danger/10;
+    @apply bg-danger/15 text-[#ff6b6b] border border-danger/50 hover:bg-danger/25;
   }
 
   .input-field {
