@@ -73,10 +73,10 @@ services:
         value: production
 
       - key: NEXT_PUBLIC_API_URL
-        value: https://antara-api.onrender.com/api
+        value: https://antara-api-ev5f.onrender.com/api
 
       - key: API_URL
-        value: https://antara-api.onrender.com/api
+        value: https://antara-api-ev5f.onrender.com/api
 
       - key: NEXTAUTH_URL
         value: https://antara-web.onrender.com
