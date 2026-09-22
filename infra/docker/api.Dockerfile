@@ -134,4 +134,4 @@ EXPOSE 4000
 # Prisma migrations run first.
 # If successful, NestJS starts.
 # ------------------------------------------------------------
-CMD ["/bin/sh", "-c", "npx prisma migrate deploy --schema apps/api/prisma/schema.prisma && exec node apps/api/dist/apps/api/src/main.js"]
+CMD ["node", "apps/api/dist/apps/api/src/main.js"]

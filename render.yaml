@@ -5,6 +5,8 @@ services:
     runtime: docker
     plan: free
 
+    autoDeployTrigger: checksPass
+
     dockerfilePath: ./infra/docker/api.Dockerfile
     dockerContext: .
 

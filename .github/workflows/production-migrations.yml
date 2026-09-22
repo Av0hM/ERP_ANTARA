@@ -1,0 +1,58 @@
+name: Production Database Migration
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "apps/api/prisma/**"
+      - ".github/workflows/production-migrations.yml"
+      - "infra/scripts/migrate-with-retry.sh"
+
+  workflow_dispatch:
+
+concurrency:
+  group: production-database-migration
+  cancel-in-progress: false
+
+jobs:
+  migrate:
+    name: Apply production migrations
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Install npm 11.6.2
+        run: npm install --global npm@11.6.2
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Validate Prisma schema
+        run: npx prisma validate --schema apps/api/prisma/schema.prisma
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DIRECT_URL: ${{ secrets.DIRECT_URL }}
+
+      - name: Apply production migrations
+        run: ./infra/scripts/migrate-with-retry.sh
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DIRECT_URL: ${{ secrets.DIRECT_URL }}
+          PRISMA_SCHEMA_DISABLE_ADVISORY_LOCK: "1"
+
+      - name: Verify migration status
+        run: npx prisma migrate status --schema apps/api/prisma/schema.prisma
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DIRECT_URL: ${{ secrets.DIRECT_URL }}
+          PRISMA_SCHEMA_DISABLE_ADVISORY_LOCK: "1"
