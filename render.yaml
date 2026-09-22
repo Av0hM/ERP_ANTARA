@@ -1,8 +1,5 @@
 services:
 
-  # ==========================================================
-  # NESTJS API
-  # ==========================================================
   - type: web
     name: antara-api
     runtime: docker
@@ -12,14 +9,6 @@ services:
     dockerContext: .
 
     healthCheckPath: /api/health
-
-    # --------------------------------------------------------
-    # IMPORTANT:
-    # Force Render to overwrite the stale old Docker Command.
-    # Do NOT put prisma migrate here.
-    # Database is already migrated.
-    # --------------------------------------------------------
-    dockerCommand: node apps/api/dist/apps/api/src/main.js
 
     envVars:
       - key: DATABASE_URL
@@ -71,9 +60,6 @@ services:
         sync: false
 
 
-  # ==========================================================
-  # NEXT.JS FRONTEND
-  # ==========================================================
   - type: web
     name: antara-web
     runtime: docker
