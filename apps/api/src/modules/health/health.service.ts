@@ -2,6 +2,7 @@ import { Injectable } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 
 import { PrismaService } from "../../common/prisma/prisma.service";
+import { RedisCacheService } from "../../common/cache/redis-cache.service";
 
 interface HealthCheckResult {
   status: "healthy" | "degraded" | "unhealthy";
@@ -9,8 +10,8 @@ interface HealthCheckResult {
   checks: {
     database: { status: "healthy" | "degraded" | "unhealthy"; latencyMs: number };
     redis: { status: "healthy" | "degraded" | "unhealthy"; latencyMs: number };
-    memory: { usedMb: number; totalMb: number; percentage: number };
-    disk: { freeGb: number; totalGb: number; percentage: number };
+    memory: { status: "healthy" | "degraded" | "unhealthy"; usedMb: number; totalMb: number; percentage: number };
+    disk: { status: "healthy" | "degraded" | "unhealthy"; freeGb: number; totalGb: number; percentage: number };
   };
 }
 
@@ -19,6 +20,7 @@ export class HealthService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly configService: ConfigService,
+    private readonly redisCacheService: RedisCacheService,
   ) {}
 
   async checkHealth(): Promise<HealthCheckResult> {
@@ -39,6 +41,7 @@ export class HealthService {
       return "unhealthy";
     };
 
+    const hasRejected = checks.some((r) => r.status === "rejected");
     const hasUnhealthy = checks.some(
       (r) => r.status === "fulfilled" && getStatus(r) === "unhealthy",
     );
@@ -47,7 +50,7 @@ export class HealthService {
     );
 
     let overallStatus: "healthy" | "degraded" | "unhealthy" = "healthy";
-    if (hasUnhealthy) overallStatus = "unhealthy";
+    if (hasRejected || hasUnhealthy) overallStatus = "unhealthy";
     else if (hasDegraded) overallStatus = "degraded";
 
     return {
@@ -56,8 +59,8 @@ export class HealthService {
       checks: {
         database: dbResult.status === "fulfilled" ? dbResult.value : { status: "unhealthy", latencyMs: -1 },
         redis: redisResult.status === "fulfilled" ? redisResult.value : { status: "unhealthy", latencyMs: -1 },
-        memory: memoryResult.status === "fulfilled" ? memoryResult.value : { usedMb: 0, totalMb: 0, percentage: 0 },
-        disk: diskResult.status === "fulfilled" ? diskResult.value : { freeGb: 0, totalGb: 0, percentage: 0 },
+        memory: memoryResult.status === "fulfilled" ? memoryResult.value : { status: "unhealthy", usedMb: 0, totalMb: 0, percentage: 0 },
+        disk: diskResult.status === "fulfilled" ? diskResult.value : { status: "unhealthy", freeGb: 0, totalGb: 0, percentage: 0 },
       },
     };
   }
@@ -81,7 +84,9 @@ export class HealthService {
       if (!redisUrl) {
         return { status: "healthy", latencyMs: 0 };
       }
-      // In a real implementation, you would ping Redis here
+
+      await this.redisCacheService.ping();
+
       const latencyMs = Date.now() - start;
       return { status: latencyMs < 50 ? "healthy" : "degraded", latencyMs };
     } catch {
@@ -89,17 +94,18 @@ export class HealthService {
     }
   }
 
-  private checkMemory(): { usedMb: number; totalMb: number; percentage: number } {
+  private checkMemory(): { status: "healthy" | "degraded" | "unhealthy"; usedMb: number; totalMb: number; percentage: number } {
     const used = process.memoryUsage();
     const usedMb = Math.round(used.heapUsed / 1024 / 1024);
     const totalMb = Math.round(used.heapTotal / 1024 / 1024);
     const percentage = Math.round((used.heapUsed / used.heapTotal) * 100);
-    return { usedMb, totalMb, percentage };
+    // Consider healthy if memory usage is under 90%
+    return { status: percentage < 90 ? "healthy" : "degraded", usedMb, totalMb, percentage };
   }
 
-  private checkDisk(): { freeGb: number; totalGb: number; percentage: number } {
+  private checkDisk(): { status: "healthy" | "degraded" | "unhealthy"; freeGb: number; totalGb: number; percentage: number } {
     // In a real implementation, you would check disk space
-    // For now, return mock values
-    return { freeGb: 50, totalGb: 100, percentage: 50 };
+    // For now, return mock values with healthy status
+    return { status: "healthy", freeGb: 50, totalGb: 100, percentage: 50 };
   }
 }

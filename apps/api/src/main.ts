@@ -48,17 +48,16 @@ async function bootstrap() {
   app.use(cookieParser());
 
   // Security headers (applied early)
-  app.use(new SecurityHeadersMiddleware().use);
+  const securityHeaders = new SecurityHeadersMiddleware();
+  app.use(securityHeaders.use.bind(securityHeaders));
 
   // API versioning middleware
-  app.use(new ApiVersioningMiddleware().use);
+  const apiVersioning = new ApiVersioningMiddleware();
+  app.use(apiVersioning.use.bind(apiVersioning));
 
   // Rate limiting (after versioning, before routes)
   const rateLimiter = new RateLimitingMiddleware(app.get(ConfigService));
   app.use(rateLimiter.use.bind(rateLimiter));
-
-  // Cookie parser
-  app.use(cookieParser());
 
   // Global validation pipe
   app.useGlobalPipes(

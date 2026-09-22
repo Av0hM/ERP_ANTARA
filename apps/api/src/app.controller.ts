@@ -2,8 +2,8 @@ import { Controller, Get } from "@nestjs/common";
 
 @Controller()
 export class AppController {
-  @Get("health")
-  health() {
+  @Get()
+  root() {
     return {
       status: "ok",
       service: "antara-erp-api",

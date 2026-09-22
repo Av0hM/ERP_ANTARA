@@ -87,4 +87,11 @@ export class RedisCacheService implements OnModuleInit, OnModuleDestroy {
       // Ignore cache eviction failures.
     }
   }
+
+  async ping(): Promise<string> {
+    if (!this.client) {
+      throw new Error("Redis client not initialized");
+    }
+    return this.client.ping();
+  }
 }
