@@ -436,6 +436,7 @@ export function ResourceAllocationBoardView({
               <Button
                 variant="ghost"
                 size="sm"
+                surface="light"
                 onClick={() => setShowAiSuggestions(!showAiSuggestions)}
               >
                 <ChevronUp className="size-4" />
