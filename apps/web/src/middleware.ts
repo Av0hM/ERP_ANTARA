@@ -1,17 +1,30 @@
-import { NextResponse, type NextRequest } from "next/server";
-import { locales, Locale, defaultLocale, isValidLocale, getLocaleFromPath } from "@/i18n/config";
+import { NextResponse } from "next/server";
+import type { NextRequest } from "next/server";
+import createMiddleware from "next-intl/middleware";
+import { routing } from "@/i18n/routing";
 
 const authCookiePattern = /^(authjs\.|__Secure-authjs\.|next-auth\.)/;
 const demoCookieName = "orbitalops-dev-session";
 const demoLoginEnabled = process.env.NEXT_PUBLIC_ENABLE_DEMO_LOGIN === "true";
 
+const handleI18nRouting = createMiddleware(routing);
+
 export default function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
-  
-  // Extract locale from path
-  const pathnameLocale = getLocaleFromPath(pathname);
-  const locale = pathnameLocale || defaultLocale;
-  
+
+  // Let next-intl handle locale routing first
+  const response = handleI18nRouting(
+    request as unknown as Parameters<typeof handleI18nRouting>[0]
+  );
+
+  // If next-intl redirected, return that response
+  if (response.status === 307 || response.status === 308) {
+    return response;
+  }
+
+  // Get locale from response headers (set by next-intl middleware)
+  const locale = response.headers.get("x-next-intl-locale") || routing.defaultLocale;
+
   // Check auth
   const hasAuthCookie = request.cookies.getAll().some((cookie) => 
     /^(authjs\.|__Secure-authjs\.|next-auth\.)/.test(cookie.name)
@@ -29,7 +42,6 @@ export default function middleware(request: NextRequest) {
   }
 
   // Add locale to response headers
-  const response = NextResponse.next();
   response.headers.set("x-locale", locale);
   
   return response;
@@ -37,6 +49,8 @@ export default function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
+    "/",
+    "/(en|hi)/:path*",
     "/((?!api|_next/static|_next/image|favicon.ico|.*\\.png$).*)",
   ],
 };

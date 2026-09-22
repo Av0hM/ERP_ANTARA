@@ -60,7 +60,11 @@
     "thisYear": "This Year",
     "lastWeek": "Last Week",
     "lastMonth": "Last Month",
-    "customRange": "Custom Range"
+    "customRange": "Custom Range",
+    "appName": "AntaraERP",
+    "heroTitle": "AI-powered operations and collaboration for college satellite engineering teams.",
+    "heroDescription": "Startup-grade ERP software built for subsystem coordination, technical execution, workload intelligence, and mission-readiness analytics.",
+    "enterMissionControl": "Enter Mission Control"
   },
   "auth": {
     "login": "Login",
@@ -542,5 +546,15 @@
     "communications": "Communications",
     "thermal": "Thermal",
     "groundStation": "Ground Station"
+  },
+  "landing": {
+    "subsystemOperations": "Subsystem-specific operations",
+    "subsystemOperationsDesc": "Separate boards, calendars, documents, and analytics for avionics, payload, software, and mission ops.",
+    "aiIntelligence": "AI mission intelligence",
+    "aiIntelligenceDesc": "Predict schedule slip, summarize technical discussions, redistribute work, and surface burnout signals.",
+    "realExecutionVisibility": "Real execution visibility",
+    "realExecutionVisibilityDesc": "Track work sessions, dependency risk, engineering throughput, and live collaboration activity.",
+    "productionGovernance": "Production-grade governance",
+    "productionGovernanceDesc": "Secure RBAC, audit logs, typed APIs, Dockerized services, and CI-ready workflows."
   }
 }

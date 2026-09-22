@@ -1,12 +1,18 @@
 import { getRequestConfig } from "next-intl/server";
-import { locales, Locale, defaultLocale } from "@/i18n/config";
+import { hasLocale } from "next-intl";
+import { routing } from "./routing";
+import { messages } from "../messages";
 
-export default getRequestConfig(async ({ locale }) => {
-  const validLocale = locale && ["en", "hi"].includes(locale) ? locale : "en";
-  
+export default getRequestConfig(async ({ requestLocale }) => {
+  const requested = await requestLocale;
+
+  const locale = hasLocale(routing.locales, requested)
+    ? requested
+    : routing.defaultLocale;
+
   return {
-    locale: validLocale,
-    messages: (await import(`@/messages/${validLocale}.json`)).default,
+    locale,
+    messages: messages[locale],
     timeZone: "Asia/Kolkata",
     now: new Date(),
   };

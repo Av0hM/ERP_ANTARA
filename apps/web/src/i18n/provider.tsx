@@ -1,38 +1,12 @@
 "use client";
 
-import { NextIntlClientProvider } from "next-intl";
-import { useParams } from "next/navigation";
-import { notFound } from "next/navigation";
-import { Locale, locales, defaultLocale } from "@/i18n/config";
-
-interface I18nProviderProps {
-  children: React.ReactNode;
-  messages: any;
-  locale: Locale;
-}
-
-export function I18nProvider({ children, messages, locale }: I18nProviderProps) {
-  return (
-    <NextIntlClientProvider locale={locale} messages={messages}>
-      {children}
-    </NextIntlClientProvider>
-  );
-}
+import { useTranslations as useNextIntlTranslations, useLocale as useNextIntlLocale } from "next-intl";
+import { Locale, routing } from "@/i18n/routing";
 
 export function useLocale(): Locale {
-  const params = useParams();
-  const locale = params.locale as Locale;
-  
-  if (!locale || !["en", "hi"].includes(locale)) {
-    return "en";
-  }
-  
-  return locale;
+  return useNextIntlLocale() as Locale;
 }
 
-export function useTranslations() {
-  const locale = useLocale();
-  // This would be replaced with next-intl's useTranslations hook in actual usage
-  // For now, we return a simple translation function
-  return (key: string) => key;
+export function useTranslations(namespace?: string) {
+  return useNextIntlTranslations(namespace);
 }

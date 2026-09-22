@@ -1,6 +1,9 @@
 import { Space_Grotesk } from "next/font/google";
 import type { Metadata } from "next";
-import { getTranslations } from "next-intl/server";
+import { notFound } from "next/navigation";
+import { getTranslations, getMessages, setRequestLocale } from "next-intl/server";
+import { NextIntlClientProvider } from "next-intl";
+import { routing, type Locale } from "@/i18n/routing";
 
 import "@/globals.css";
 import { AppProviders } from "@/components/providers/app-providers";
@@ -12,6 +15,10 @@ export const metadata: Metadata = {
   description: "AI-powered operations and collaboration platform for the ANTARA CubeSat mission.",
 };
 
+export function generateStaticParams() {
+  return routing.locales.map((locale) => ({ locale }));
+}
+
 export default async function LocaleLayout({
   children,
   params,
@@ -20,12 +27,22 @@ export default async function LocaleLayout({
   params: Promise<{ locale: string }>;
 }) {
   const { locale } = await params;
+
+  if (!routing.locales.includes(locale as Locale)) {
+    notFound();
+  }
+
+  setRequestLocale(locale);
+
+  const messages = await getMessages();
   const t = await getTranslations({ locale, namespace: "common" });
 
   return (
-    <html lang="en" className={font.variable}>
+    <html lang={locale} className={font.variable}>
       <body>
-        <AppProviders>{children}</AppProviders>
+        <NextIntlClientProvider locale={locale} messages={messages}>
+          <AppProviders>{children}</AppProviders>
+        </NextIntlClientProvider>
       </body>
     </html>
   );
