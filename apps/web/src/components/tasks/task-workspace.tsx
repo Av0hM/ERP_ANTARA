@@ -4,6 +4,8 @@ import { useEffect, useMemo, useState } from "react";
 import { Search, Signal, TimerReset, Users } from "lucide-react";
 import { TaskCard, TaskPriority, TaskStatus } from "@antara/contracts";
 
+import { useActorProfile } from "@/hooks/use-actor-profile";
+import { canManageOperations } from "@/lib/permissions";
 import { useTaskControl } from "@/hooks/use-task-control";
 import { useSubsystemCatalog } from "@/hooks/use-operations";
 import { TaskRecord } from "@/lib/task-types";
@@ -25,6 +27,7 @@ export function TaskWorkspace({ tasks }: TaskWorkspaceProps) {
   const [subsystem, setSubsystem] = useState<string>("ALL");
   const [selectedTaskId, setSelectedTaskId] = useState<string | undefined>(tasks[0]?.id);
   const control = useTaskControl(tasks);
+  const actor = useActorProfile();
 
   useEffect(() => {
     if (!selectedTaskId && control.tasks[0]) {
@@ -74,7 +77,7 @@ export function TaskWorkspace({ tasks }: TaskWorkspaceProps) {
               This workspace now supports live-ready task queries, optimistic status mutations, comments, and collaboration presence rails.
             </p>
             <div className="mt-5">
-              <CreateTaskDialog onCreate={control.createTask} isCreating={control.isCreatingTask} />
+              {canManageOperations(actor?.role) && <CreateTaskDialog onCreate={control.createTask} isCreating={control.isCreatingTask} />}
             </div>
           </div>
           <div className="grid gap-3 sm:grid-cols-3">

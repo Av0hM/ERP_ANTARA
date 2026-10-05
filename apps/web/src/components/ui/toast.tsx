@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from "react";
+import { createContext, useEffect, useCallback, useContext, useMemo, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { AlertTriangle, CheckCircle2, Info, X } from "lucide-react";
 
@@ -27,6 +27,8 @@ export function useToast() {
 }
 
 export function ToastProvider({ children }: { children: ReactNode }) {
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
   const [toasts, setToasts] = useState<ToastItem[]>([]);
 
   const removeToast = useCallback((id: string) => {
@@ -51,9 +53,9 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   return (
     <ToastContext.Provider value={value}>
       {children}
-      {typeof document !== "undefined"
+      {mounted
         ? createPortal(
-            <div className="fixed bottom-4 right-4 z-50 flex w-[calc(100vw-2rem)] max-w-sm flex-col gap-3 md:w-full">
+            <div className="fixed bottom-4 right-4 z-[60] flex w-[calc(100vw-2rem)] max-w-sm flex-col gap-3 md:w-full">
               {toasts.map((toast) => {
                 const styles = {
                   success: "border-emerald-500/40 text-emerald-200 bg-emerald-900/80",
@@ -69,6 +71,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
                 return (
                   <div
                     key={toast.id}
+                    role={toast.type === "error" ? "alert" : "status"}
                     className={`flex items-start gap-3 rounded-[1.25rem] border px-4 py-3 text-sm shadow-glass backdrop-blur-xl transition-all duration-200 glass-modal ${styles}`}
                   >
                     <Icon className="mt-0.5 size-4 shrink-0" />

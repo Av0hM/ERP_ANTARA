@@ -3,6 +3,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { InsightCard } from "@antara/contracts";
 
+import { canManageOperations } from "@/lib/permissions";
 import { useToast } from "@/components/ui/toast";
 import { useActorProfile } from "@/hooks/use-actor-profile";
 import {
@@ -63,10 +64,10 @@ export function useAnalyticsData() {
   const analytics = useQuery({
     queryKey: ["analytics-bundle", actor?.accessToken],
     queryFn: async () => {
-      const [analyticsBundle, aiBundle] = await Promise.all([
-        fetchAnalyticsBundle(actor!.accessToken),
-        fetchAiBundle(actor!.accessToken),
-      ]);
+      const analyticsBundle = await fetchAnalyticsBundle(actor!.accessToken);
+      const aiBundle = analyticsBundle.scope === "GLOBAL"
+        ? await fetchAiBundle(actor!.accessToken)
+        : { insights: analyticsBundle.insights, reminders: [], schedule: [], workload: [] };
 
       return { ...analyticsBundle, ...aiBundle };
     },
@@ -111,6 +112,7 @@ export function useNotificationCenter() {
       return { previous };
     },
     onError: (_error, _vars, context) => {
+      addToast("Unable to update notification", "error");
       if (context?.previous) {
         queryClient.setQueryData(["notifications", actor?.accessToken], context.previous);
       }
@@ -128,6 +130,7 @@ export function useNotificationCenter() {
       return { previous };
     },
     onError: (_error, _id, context) => {
+      addToast("Unable to delete notification", "error");
       if (context?.previous) {
         queryClient.setQueryData(["notifications", actor?.accessToken], context.previous);
       }
@@ -145,7 +148,7 @@ export function useNotificationCenter() {
       }
       void Promise.all(unread.map((item) => markRead.mutateAsync({ id: item.id, isRead: true }))).then(() => {
         addToast("Notifications marked as read", "success");
-      });
+      }).catch(() => { /* Individual mutations display their errors. */ });
     },
   };
 }
@@ -311,7 +314,7 @@ export function useMemberCatalog() {
   return useQuery({
     queryKey: ["members", actor?.accessToken],
     queryFn: () => fetchMembers(actor!.accessToken),
-    enabled: !!actor,
+    enabled: !!actor && canManageOperations(actor.role),
   });
 }
 
@@ -455,7 +458,7 @@ export function useSuggestedMoves() {
   return useQuery<ResourceAllocationSuggestedMove[]>({
     queryKey: ["suggested-moves", actor?.accessToken],
     queryFn: () => fetchSuggestedMoves(actor!.accessToken),
-    enabled: !!actor,
+    enabled: !!actor && canManageOperations(actor.role),
   });
 }
 

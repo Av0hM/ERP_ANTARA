@@ -28,7 +28,7 @@ export default async function LandingPage({ params }: { params: Promise<{ locale
             {t("heroDescription")}
           </p>
           <div className="mt-10 flex flex-wrap gap-4">
-            <Link href={`/${t("login")}`}>
+            <Link href="/login">
               <Button className="gap-2">
                 {t("enterMissionControl")}
                 <ArrowRight className="size-4" />

@@ -3,36 +3,28 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { signOut } from "next-auth/react";
-import { BarChart3, CalendarRange, LayoutDashboard, RadioTower, ScrollText } from "lucide-react";
-
-const links = [
-  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/tasks", label: "Tasks", icon: RadioTower },
-  { href: "/calendar", label: "Calendar", icon: CalendarRange },
-  { href: "/worklogs", label: "Logs", icon: ScrollText },
-  { href: "/analytics", label: "Analytics", icon: BarChart3 },
-];
+import { navLinks } from "@/lib/nav-links";
 
 export function MobileNav() {
   const pathname = usePathname();
 
   return (
-    <nav className="fixed inset-x-0 bottom-3 z-40 mx-auto flex max-w-[calc(100vw-1.5rem)] gap-1 rounded-full border border-white/10 bg-white/5 p-2 shadow-glass backdrop-blur-xl lg:hidden">
-      <div className="flex flex-1 gap-1">
-        {links.map(({ href, label, icon: Icon }) => {
-          const active = pathname === href;
+    <nav aria-label="Mobile navigation" className="fixed inset-x-0 bottom-3 z-40 mx-auto flex max-w-[calc(100vw-1.5rem)] gap-1 rounded-full border border-white/10 bg-white/5 p-2 shadow-glass backdrop-blur-xl lg:hidden">
+      <div className="flex min-w-0 flex-1 gap-1 overflow-x-auto">
+        {navLinks.map(({ href, label, icon: Icon }) => {
+          const active = (pathname === href || pathname.startsWith(`${href}/`));
           return (
             <Link
               key={href}
               href={href}
               data-transition="true"
               aria-current={active ? "page" : undefined}
-              className={`flex min-w-0 flex-1 flex-col items-center justify-center gap-1 rounded-full px-2 py-2 text-[10px] uppercase tracking-[0.18em] transition ${
+              className={`flex min-w-20 shrink-0 flex-col items-center justify-center gap-1 rounded-full px-2 py-2 text-[10px] uppercase tracking-[0.18em] transition ${
                 active ? "border-saffron/40 bg-saffron/10 text-text" : "border-transparent text-muted"
               }`}
             >
               <Icon className="size-4" />
-              <span className="truncate">{label}</span>
+              <span className="whitespace-nowrap">{label}</span>
             </Link>
           );
         })}

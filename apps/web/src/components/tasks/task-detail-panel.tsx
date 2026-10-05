@@ -1,11 +1,14 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 import { MessageSquare, RadioTower, Send, Workflow } from "lucide-react";
 import { TaskStatus } from "@antara/contracts";
 
+import { useActorProfile } from "@/hooks/use-actor-profile";
+import { canManageOperations } from "@/lib/permissions";
 import { Button } from "@/components/ui/button";
-import { useMemberCatalog, useReassignTask } from "@/hooks/use-operations";
+import { useMemberCatalog, useReassignTask, useSubsystemCatalog } from "@/hooks/use-operations";
 import { TaskRecord, TypingRecord } from "@/lib/task-types";
 
 const statuses = [
@@ -34,9 +37,12 @@ export function TaskDetailPanel({
   onTyping,
   isMutating,
 }: TaskDetailPanelProps) {
+  const actor = useActorProfile();
   const [comment, setComment] = useState("");
   const { data: memberData = [] } = useMemberCatalog();
   const reassignTask = useReassignTask();
+  const { data: subsystems = [] } = useSubsystemCatalog();
+  const subsystem = subsystems.find((entry) => entry.id === task?.subsystemId);
 
   if (!task) {
     return (
@@ -54,7 +60,7 @@ export function TaskDetailPanel({
     <aside className="section-dark grid-texture-dark rounded-[2rem] p-6">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <p className="text-xs uppercase tracking-[0.28em] text-saffron">{task.subsystem}</p>
+          <p className="text-xs uppercase tracking-[0.28em] text-saffron">{subsystem ? <Link href={`/subsystems/${subsystem.slug}`} className="underline underline-offset-4">{task.subsystem}</Link> : task.subsystem}</p>
           <h2 className="mt-2 text-2xl font-semibold">{task.title}</h2>
           <p className="mt-3 text-sm text-muted">{task.description}</p>
         </div>
@@ -67,7 +73,9 @@ export function TaskDetailPanel({
         <div className="rounded-xl border border-steel/30 bg-white/5 p-4">
           <RadioTower className="size-4 text-saffron" />
           <p className="mt-3 text-xs uppercase tracking-[0.18em] text-muted">Assignee</p>
-          <select
+          {canManageOperations(actor?.role) && <select
+            aria-label="Assign task"
+            disabled={reassignTask.isPending}
             value={task.assignedToId ?? ""}
             onChange={(event) => reassignTask.mutate({ taskId: task.id, assignedToId: event.target.value || null })}
             className="input-field mt-2"
@@ -78,7 +86,7 @@ export function TaskDetailPanel({
                 {member.name} ({member.subsystem?.name ?? member.role})
               </option>
             ))}
-          </select>
+          </select>}
           <p className="mt-2 text-xs text-muted">{task.assigneeName}</p>
         </div>
         <div className="rounded-xl border border-steel/30 bg-white/5 p-4">

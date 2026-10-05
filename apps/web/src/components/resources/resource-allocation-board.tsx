@@ -38,6 +38,8 @@ import { TaskPriority, TaskStatus } from "@antara/contracts";
 
 import { ResourceAllocationBoard, ResourceAllocationUser, WeeklyAllocation, ResourceAllocationConflict, ResourceAllocationAiSuggestion } from "@/lib/operations-types";
 import { useResourceAllocationBoard, useSuggestedMoves, useApplyResourceMove } from "@/hooks/use-operations";
+import { useActorProfile } from "@/hooks/use-actor-profile";
+import { canManageOperations } from "@/lib/permissions";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -67,6 +69,8 @@ export function ResourceAllocationBoardView({
   horizonWeeks = 4,
   onRefresh,
 }: ResourceAllocationBoardProps) {
+  const actor = useActorProfile();
+  const canManage = canManageOperations(actor?.role);
   const [activeWeek, setActiveWeek] = useState(0);
   const [showConflicts, setShowConflicts] = useState(false);
   const [showAiSuggestions, setShowAiSuggestions] = useState(true);
@@ -426,7 +430,7 @@ export function ResourceAllocationBoardView({
           </div>
         </section>
 
-        {showAiSuggestions && aiSuggestions.length > 0 && (
+        {canManage && showAiSuggestions && aiSuggestions.length > 0 && (
           <section className="section-light grid-texture-light rounded-[2rem] p-6">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-lg font-semibold flex items-center gap-2 text-admin-ink">

@@ -12,6 +12,7 @@ import { LogoutDto } from "./dto/logout.dto";
 import { RefreshSessionDto } from "./dto/refresh-session.dto";
 import { RegisterDto } from "./dto/register.dto";
 import { AuditService } from "../audit/audit.service";
+import { dummyLoginAllowed } from "./dummy-credentials";
 
 function toAppRole(role: PrismaRole): AppRole {
   switch (role) {
@@ -73,8 +74,8 @@ export class AuthService {
   }
 
   async login(payload: LoginDto) {
-    const user = await this.usersService.findByEmail(payload.email);
-    if (!user?.passwordHash) {
+    const user = await this.usersService.findByEmail(payload.email.trim().toLowerCase());
+    if (!user?.passwordHash || !dummyLoginAllowed(user)) {
       throw new UnauthorizedException("Invalid credentials");
     }
 
@@ -251,4 +252,3 @@ export class AuthService {
     };
   }
 }
-

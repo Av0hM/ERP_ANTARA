@@ -13,7 +13,8 @@
     "test": "jest --runInBand --config jest.config.js",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
-    "prisma:migrate:deploy": "prisma migrate deploy"
+    "prisma:migrate:deploy": "prisma migrate deploy",
+    "seed:dummy": "ts-node src/scripts/seed-dummy-users.ts"
   },
   "dependencies": {
     "@nestjs/bullmq": "^12.0.0",

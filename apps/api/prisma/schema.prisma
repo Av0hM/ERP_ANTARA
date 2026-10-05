@@ -53,6 +53,7 @@ enum InsightSeverity {
 model User {
   id                 String               @id @default(cuid())
   email              String               @unique
+  isDummySeed        Boolean              @default(false)
   passwordHash       String?
   name               String
   avatarUrl          String?

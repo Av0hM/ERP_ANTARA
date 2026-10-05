@@ -49,6 +49,7 @@ export type CreateTaskInput = {
   description: string;
   priority: TaskRecord["priority"];
   subsystem: TaskRecord["subsystem"];
+  subsystemId: string;
   estimatedHours: number;
   deadline: string;
   tags: string[];

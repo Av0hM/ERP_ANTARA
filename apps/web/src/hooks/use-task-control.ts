@@ -5,7 +5,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { TaskStatus } from "@antara/contracts";
 import { io, Socket } from "socket.io-client";
 
-import { subsystemIdMap } from "@/lib/demo-context";
+import { useToast } from "@/components/ui/toast";
 import { addTaskComment, createTask, fetchActivityFeed, fetchTasks, updateTaskStatus } from "@/lib/task-api";
 import { ActivityFeedRecord, CreateTaskInput, PresenceRecord, TaskRecord, TypingRecord } from "@/lib/task-types";
 import { useActorProfile } from "./use-actor-profile";
@@ -15,6 +15,7 @@ const socketBaseUrl = process.env.NEXT_PUBLIC_API_URL?.replace(/\/api$/, "") ?? 
 export function useTaskControl(initialTasks: TaskRecord[]) {
   const queryClient = useQueryClient();
   const actor = useActorProfile();
+  const { addToast } = useToast();
   const [presence, setPresence] = useState<PresenceRecord[]>([]);
   const [typing, setTyping] = useState<TypingRecord | null>(null);
   const socketRef = useRef<Socket | null>(null);
@@ -22,7 +23,7 @@ export function useTaskControl(initialTasks: TaskRecord[]) {
   const tasksQuery = useQuery({
     queryKey: ["tasks", actor?.accessToken],
     queryFn: () => fetchTasks(actor!.accessToken),
-    initialData: initialTasks,
+    initialData: initialTasks.length ? initialTasks : undefined,
     enabled: !!actor,
   });
 
@@ -124,7 +125,8 @@ export function useTaskControl(initialTasks: TaskRecord[]) {
       );
       return { previous };
     },
-    onError: (_error, _variables, context) => {
+    onError: (error, _variables, context) => {
+      addToast(error.message.includes("403") ? "You do not have permission to perform this action." : "Unable to save changes. Please try again.", "error");
       if (context?.previous) {
         queryClient.setQueryData(["tasks", actor?.accessToken], context.previous);
       }
@@ -156,7 +158,8 @@ export function useTaskControl(initialTasks: TaskRecord[]) {
 
       return { previous };
     },
-    onError: (_error, _variables, context) => {
+    onError: (error, _variables, context) => {
+      addToast(error.message.includes("403") ? "You do not have permission to perform this action." : "Unable to save changes. Please try again.", "error");
       if (context?.previous) {
         queryClient.setQueryData(["tasks", actor?.accessToken], context.previous);
       }
@@ -194,14 +197,15 @@ export function useTaskControl(initialTasks: TaskRecord[]) {
         deadline: new Date(variables.deadline).toLocaleDateString("en-US", { month: "short", day: "numeric" }),
         assignedToId: variables.assignedToId,
         assignedById: actor!.id,
-        subsystemId: subsystemIdMap[variables.subsystem],
+        subsystemId: variables.subsystemId,
         comments: [],
       };
 
       queryClient.setQueryData<TaskRecord[]>(["tasks", actor?.accessToken], (current = []) => [optimisticTask, ...current]);
       return { previous };
     },
-    onError: (_error, _variables, context) => {
+    onError: (error, _variables, context) => {
+      addToast(error.message.includes("403") ? "You do not have permission to perform this action." : "Unable to save changes. Please try again.", "error");
       if (context?.previous) {
         queryClient.setQueryData(["tasks", actor?.accessToken], context.previous);
       }
@@ -243,7 +247,7 @@ export function useTaskControl(initialTasks: TaskRecord[]) {
     typing,
     summary,
     updateStatus: (taskId: string, status: TaskStatus) => statusMutation.mutate({ taskId, status }),
-    createTask: (input: CreateTaskInput) => createTaskMutation.mutate(input),
+    createTask: (input: CreateTaskInput) => createTaskMutation.mutateAsync(input),
     addComment: (taskId: string, content: string) =>
       commentMutation.mutate({
         taskId,

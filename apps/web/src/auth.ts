@@ -1,34 +1,10 @@
 import NextAuth from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import Google from "next-auth/providers/google";
-import * as bcrypt from "bcryptjs";
-
-import demoUsers from "./lib/demo-users.json";
+import { authenticateWithBackend } from "./lib/backend-auth";
 
 const apiUrl = process.env.API_URL ?? "http://localhost:4000/api";
 const resolvedNextAuthSecret = process.env.NEXTAUTH_SECRET ?? "dev-nextauth-secret";
-const allowJsonCredentials = process.env.AUTH_ALLOW_JSON_CREDENTIALS === "true";
-
-type DemoCredentialUser = {
-  id: string;
-  email: string;
-  name: string;
-  role: string;
-  passwordHash: string;
-};
-
-const demoCredentialUsers = demoUsers as DemoCredentialUser[];
-
-async function getDemoCredentialUser(email: string, password: string) {
-  const user = demoCredentialUsers.find((entry) => entry.email.trim().toLowerCase() === email.trim().toLowerCase());
-  if (!user) {
-    return null;
-  }
-
-  const isMatch = await bcrypt.compare(password, user.passwordHash);
-  return isMatch ? user : null;
-}
-
 async function refreshAccessToken(token: {
   accessToken?: string;
   accessTokenExpires?: number;
@@ -102,49 +78,12 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         }
 
         try {
-          const response = await fetch(`${apiUrl}/auth/login`, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({ email, password }),
-          });
-
-          if (response.ok) {
-            const payload = (await response.json()) as {
-              user: { id: string; email: string; name: string; role: string };
-              accessToken: string;
-              refreshToken: string;
-              accessTokenExpiresAt: string;
-            };
-
-            return {
-              id: payload.user.id,
-              email: payload.user.email,
-              name: payload.user.name,
-              role: payload.user.role,
-              accessToken: payload.accessToken,
-              refreshToken: payload.refreshToken,
-              accessTokenExpiresAt: payload.accessTokenExpiresAt,
-            };
-          }
+          return await authenticateWithBackend(apiUrl, "login", { email, password });
         } catch {
-          // Fall through to the demo fixture.
+          // Backend authentication failures must never create a tokenless session.
         }
 
-        if (!allowJsonCredentials) {
-          return null;
-        }
-
-        const demoUser = await getDemoCredentialUser(email, password);
-        return demoUser
-          ? {
-              id: demoUser.id,
-              email: demoUser.email,
-              name: demoUser.name,
-              role: demoUser.role,
-            }
-          : null;
+        return null;
       },
     }),
     ...(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET
@@ -173,7 +112,15 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       const email = (profile as { email?: string | null } | null)?.email?.toLowerCase();
       return Boolean(email && allowlist.includes(email));
     },
-    async jwt({ token, user }) {
+    async jwt({ token, user, account, profile }) {
+      if (account?.provider === "google") {
+        if (!profile?.email) throw new Error("Google profile is missing an email");
+        user = await authenticateWithBackend(apiUrl, "google-callback", {
+          email: profile.email.trim().toLowerCase(),
+          name: profile.name ?? user?.name ?? profile.email,
+          ...(user?.image ? { avatarUrl: user.image } : {}),
+        });
+      }
       if (user) {
         token.sub = (user as { id?: string }).id ?? token.sub;
         token.email = (user as { email?: string }).email ?? token.email;

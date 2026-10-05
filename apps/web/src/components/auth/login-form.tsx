@@ -1,13 +1,12 @@
 "use client";
 
 import { useEffect, useState, type FormEvent } from "react";
-import { getCsrfToken, signIn, useSession } from "next-auth/react";
+import { signIn, useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { AlertTriangle, Sparkles } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 
-const demoLoginEnabled = process.env.NEXT_PUBLIC_ENABLE_DEMO_LOGIN === "true";
 
 export function LoginForm({
   callbackUrl = "/dashboard",
@@ -22,7 +21,9 @@ export function LoginForm({
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [showForgotPassword, setShowForgotPassword] = useState(false);
-  const [csrfToken, setCsrfToken] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [ready, setReady] = useState(false);
+  useEffect(() => setReady(true), []);
 
   useEffect(() => {
     if (status === "authenticated") {
@@ -30,32 +31,24 @@ export function LoginForm({
     }
   }, [callbackUrl, router, status]);
 
-  useEffect(() => {
-    void getCsrfToken().then((token) => setCsrfToken(token ?? null));
-  }, []);
-
   const handleCredentialsSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    const values = new FormData(event.currentTarget);
     setError(null);
-
-    if (demoLoginEnabled) {
-      document.cookie = "orbitalops-dev-session=1; path=/; SameSite=Lax";
-      window.location.assign(callbackUrl);
-      return;
+    setSubmitting(true);
+    try {
+      const result = await signIn("credentials", { email: String(values.get("email") ?? ""), password: String(values.get("password") ?? ""), redirect: false, redirectTo: callbackUrl });
+      if (!result || result.error) {
+        setError("Invalid email or password. Use your team login.");
+        return;
+      }
+      router.replace(callbackUrl);
+      router.refresh();
+    } catch {
+      setError("Unable to sign in. Please try again.");
+    } finally {
+      setSubmitting(false);
     }
-
-    const form = event.currentTarget;
-    const tokenInput = form.elements.namedItem("csrfToken") as HTMLInputElement | null;
-    const token = csrfToken ?? (await getCsrfToken());
-
-    if (!token || !tokenInput) {
-      setError("Invalid email or password. Use your team login.");
-      return;
-    }
-
-    tokenInput.value = token;
-    await new Promise((resolve) => window.setTimeout(resolve, 50));
-    form.submit();
   };
 
   const handleGoogleSignIn = () => {
@@ -81,14 +74,14 @@ export function LoginForm({
       <form
         className="mt-8 space-y-4"
         method="POST"
-        action={`/api/auth/callback/credentials?callbackUrl=${encodeURIComponent(callbackUrl)}`}
+        action="/api/auth/callback/credentials"
         onSubmit={handleCredentialsSubmit}
       >
-        <input type="hidden" name="csrfToken" value={csrfToken ?? ""} />
         <label className="block">
           <span className="mb-2 block text-sm text-muted">Email</span>
           <input
             name="email"
+            disabled={!ready || submitting}
             className="input-field"
             placeholder="owner@antara.club"
             autoComplete="email"
@@ -100,6 +93,7 @@ export function LoginForm({
           <span className="mb-2 block text-sm text-muted">Password</span>
           <input
             name="password"
+            disabled={!ready || submitting}
             className="input-field"
             type="password"
             placeholder="Enter password"
@@ -131,8 +125,8 @@ export function LoginForm({
           </div>
         ) : null}
 
-        <Button className="w-full gap-2" type="submit">
-          Sign In
+        <Button className="w-full gap-2" type="submit" disabled={!ready || submitting}>
+          {submitting ? "Signing in..." : "Sign In"}
         </Button>
         <Button
           type="button"

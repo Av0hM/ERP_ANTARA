@@ -145,7 +145,7 @@ export function DashboardLive({ role }: { role: AppRole }) {
           ? (data?.metrics ?? []).map((metric) => <MetricCard key={metric.label} metric={metric} />)
           : (
               <div className="col-span-full card-dark rounded-[1.25rem] p-6 text-center text-sm text-muted">
-                No data yet - metrics will appear once tasks and worklogs are created.
+                {data?.scope === "EMPTY" ? "No subsystem assigned. Ask an owner to assign your subsystem." : "No data yet - metrics will appear once tasks and worklogs are created."}
               </div>
             )}
       </section>

@@ -325,28 +325,32 @@ export async function fetchMembers(
 }
 
 export async function fetchDashboardBundle(accessToken?: string): Promise<DashboardBundle> {
-  const [overview, velocity, insights, notifications] = await Promise.all([
-    fetchAnalyticsOverview(accessToken),
-    fetchAnalyticsVelocity(accessToken),
-    fetchAiInsights(accessToken),
+  const [analytics, notifications] = await Promise.all([
+    fetchAnalyticsBundle(accessToken),
     fetchNotifications(accessToken),
   ]);
+  const { overview, velocity, scope } = analytics;
+  const insights = scope === "GLOBAL" ? await fetchAiInsights(accessToken) : analytics.insights.map((item) => ({
+    ...item, severity: item.severity as InsightSeverity, subsystem: scope === "SUBSYSTEM" ? "Your subsystem" : "Your work",
+  }));
+  const scopeLabel = scope === "GLOBAL" ? "Club-wide" : scope === "SUBSYSTEM" ? "Your subsystem" : "Your work";
 
   const metrics: DashboardMetric[] = [
-    { label: "Productivity Index", value: `${overview.productivityIndex}`, delta: "Club-wide", direction: "up" },
+    { label: "Productivity Index", value: `${overview.productivityIndex}`, delta: scopeLabel, direction: "up" },
     { label: "Subsystem Velocity", value: `${overview.subsystemVelocity}%`, delta: "Trend improving", direction: "up" },
     { label: "Overdue Rate", value: `${overview.overdueRate}%`, delta: "Keep below 10%", direction: "down" },
-    { label: "Club Health", value: `${overview.clubHealth}`, delta: "AI composite", direction: "flat" },
+    { label: scope === "GLOBAL" ? "Club Health" : "Workload Health", value: `${overview.clubHealth}`, delta: "AI composite", direction: "flat" },
   ];
 
-  const hasRealData =
+  const hasRealData = scope !== "EMPTY" && (
     metrics.some((metric) => Number(metric.value.replace(/[^0-9.]/g, "")) > 0) ||
     velocity.length > 0 ||
     insights.length > 0 ||
-    notifications.length > 0;
+    notifications.length > 0);
 
   return hasRealData
     ? {
+        scope,
         metrics,
         activity: [],
         insights,
@@ -354,6 +358,7 @@ export async function fetchDashboardBundle(accessToken?: string): Promise<Dashbo
         velocity,
       }
     : {
+        scope,
         metrics: [],
         activity: [],
         insights: [],

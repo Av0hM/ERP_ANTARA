@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { Plus, X } from "lucide-react";
 import { TaskPriority } from "@antara/contracts";
 
@@ -11,7 +12,7 @@ import { CreateTaskInput, TaskRecord } from "@/lib/task-types";
 const priorities = [TaskPriority.LOW, TaskPriority.MEDIUM, TaskPriority.HIGH, TaskPriority.CRITICAL];
 
 type CreateTaskDialogProps = {
-  onCreate: (input: CreateTaskInput) => void;
+  onCreate: (input: CreateTaskInput) => Promise<unknown>;
   isCreating: boolean;
 };
 
@@ -34,16 +35,19 @@ export function CreateTaskDialog({ onCreate, isCreating }: CreateTaskDialogProps
     }
   }, [subsystem, subsystemData]);
 
-  const submit = () => {
-    if (!title.trim() || !description.trim() || !deadline) {
+  const submit = async () => {
+    const selectedSubsystem = subsystemData.find((entry) => entry.name === subsystem);
+    if (!title.trim() || !description.trim() || !deadline || !selectedSubsystem) {
       return;
     }
 
-    onCreate({
+    try {
+      await onCreate({
       title: title.trim(),
       description: description.trim(),
       priority,
       subsystem,
+      subsystemId: selectedSubsystem.id,
       estimatedHours: Number(estimatedHours),
       deadline,
       ...(assignedToId ? { assignedToId } : {}),
@@ -52,6 +56,11 @@ export function CreateTaskDialog({ onCreate, isCreating }: CreateTaskDialogProps
         .map((tag) => tag.trim())
         .filter(Boolean),
     });
+
+    } catch {
+      // The mutation displays the error; keep the dialog and entered values.
+      return;
+    }
 
     setTitle("");
     setDescription("");
@@ -71,8 +80,8 @@ export function CreateTaskDialog({ onCreate, isCreating }: CreateTaskDialogProps
         Create Task
       </Button>
 
-      {open ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-6">
+      {open && typeof document !== "undefined" ? createPortal(
+        <div role="dialog" aria-modal="true" aria-label="Create task" className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-6">
           <div className="glass-modal w-full max-w-2xl rounded-[2rem] p-0 max-h-[90vh] overflow-y-auto">
             <div className="section-light grid-texture-light rounded-[2rem] p-6">
               <div className="flex items-start justify-between gap-4">
@@ -189,7 +198,8 @@ export function CreateTaskDialog({ onCreate, isCreating }: CreateTaskDialogProps
               </div>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body,
       ) : null}
     </>
   );

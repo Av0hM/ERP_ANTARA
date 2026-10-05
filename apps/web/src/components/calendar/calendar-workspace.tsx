@@ -6,10 +6,13 @@ import dayGridPlugin from "@fullcalendar/daygrid";
 import timeGridPlugin from "@fullcalendar/timegrid";
 import interactionPlugin from "@fullcalendar/interaction";
 
+import { useActorProfile } from "@/hooks/use-actor-profile";
+import { canManageOperations } from "@/lib/permissions";
 import { Button } from "@/components/ui/button";
 import { useCalendarData, useSubsystemCatalog } from "@/hooks/use-operations";
 
 export function CalendarWorkspace() {
+  const actor = useActorProfile();
   const { events, createEvent, isCreating } = useCalendarData();
   const { data: subsystemData = [] } = useSubsystemCatalog();
   const [title, setTitle] = useState("");
@@ -53,7 +56,7 @@ export function CalendarWorkspace() {
           </div>
 
           <div className="space-y-4">
-            <div className="card-dark rounded-[1.25rem] p-5">
+            {canManageOperations(actor?.role) && <div className="card-dark rounded-[1.25rem] p-5">
               <p className="text-xs uppercase tracking-[0.2em] text-saffron">Create Event</p>
               <div className="mt-4 space-y-3">
                 <input
@@ -100,7 +103,7 @@ export function CalendarWorkspace() {
                   {isCreating ? "Scheduling..." : "Schedule Event"}
                 </Button>
               </div>
-            </div>
+            </div>}
 
             <div className="card-dark rounded-[1.25rem] p-5">
               <p className="text-xs uppercase tracking-[0.2em] text-saffron">Upcoming Milestones</p>

@@ -87,6 +87,7 @@ export type AiWorkloadSuggestion = {
 };
 
 export type DashboardBundle = {
+  scope: "GLOBAL" | "SUBSYSTEM" | "PERSONAL" | "EMPTY";
   metrics: DashboardMetric[];
   activity: Array<{ id: string; title: string; description: string; timestamp: string }>;
   insights: InsightCard[];
@@ -95,6 +96,8 @@ export type DashboardBundle = {
 };
 
 export type AnalyticsBundle = {
+  scope: DashboardBundle["scope"];
+  insights: Array<{ id: string; title: string; summary: string; severity: string; recommendation: string }>;
   overview: {
     productivityIndex: number;
     subsystemVelocity: number;

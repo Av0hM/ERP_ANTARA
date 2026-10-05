@@ -9,6 +9,7 @@ import { useDecisions, useCreateDecision } from "@/hooks/use-operations";
 import { useSubsystemCatalog } from "@/hooks/use-operations";
 import { DecisionList } from "@/components/decisions/decision-log";
 import { Button } from "@/components/ui/button";
+import { canManageOperations } from "@/lib/permissions";
 import { cn } from "@/lib/utils";
 
 const statusOptions = ["ALL", "PROPOSED", "ACCEPTED", "REJECTED", "SUPERSEDED", "DEFERRED"] as const;
@@ -24,7 +25,7 @@ export default function DecisionsPage() {
   const [subsystemFilter, setSubsystemFilter] = useState<string>("ALL");
   const [searchQuery, setSearchQuery] = useState("");
   const [showCreateDialog, setShowCreateDialog] = useState(false);
-  const [selectedDecision, setSelectedDecision] = useState<any>(null);
+  const [selectedDecision, setSelectedDecision] = useState<DecisionRecord | null>(null);
   const [formData, setFormData] = useState({
     title: "",
     context: "",
@@ -78,7 +79,7 @@ export default function DecisionsPage() {
     }
   };
 
-  const handleDecisionClick = (decision: any) => {
+  const handleDecisionClick = (decision: DecisionRecord) => {
     setSelectedDecision(decision);
   };
 
@@ -95,14 +96,14 @@ export default function DecisionsPage() {
               Architectural Decision Records for the team. Track context, rationale, and consequences so next year's leads inherit why, not just what.
             </p>
           </div>
-          <Button
+          {canManageOperations(actor?.role) && <Button
             className="gap-2 shrink-0"
             onClick={() => setShowCreateDialog(true)}
             disabled={createMutation.isPending}
           >
             <Plus className="size-4" />
             New Decision
-          </Button>
+          </Button>}
         </div>
       </section>
 
@@ -152,7 +153,7 @@ export default function DecisionsPage() {
         isLoading={isLoading}
       />
 
-      {showCreateDialog && (
+      {showCreateDialog && canManageOperations(actor?.role) && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
           <div className="glass-modal rounded-[1.6rem] w-full max-w-3xl max-h-[90vh] overflow-y-auto">
             <div className="section-light grid-texture-light rounded-[1.6rem] p-6 space-y-6">

@@ -1,6 +1,5 @@
 import { TaskCard, TaskStatus } from "@antara/contracts";
 
-import { subsystemIdMap } from "./demo-context";
 import { ActivityFeedRecord, CommentMutationInput, CreateTaskInput, StatusMutationInput, TaskCommentRecord, TaskRecord } from "./task-types";
 
 type ApiTask = {
@@ -109,8 +108,8 @@ export async function updateTaskStatus(
       taskId: task.id,
       status: task.status,
     };
-  } catch {
-    return { taskId: input.taskId, status: input.status };
+  } catch (error) {
+    throw error;
   }
 }
 
@@ -155,7 +154,7 @@ export async function createTask(input: CreateTaskInput, actorId: string, access
           description: input.description,
           priority: input.priority,
           status: "TODO",
-          subsystemId: subsystemIdMap[input.subsystem],
+          subsystemId: input.subsystemId,
           assignedById: actorId,
           assignedToId: input.assignedToId,
           estimatedHours: input.estimatedHours,

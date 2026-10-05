@@ -1,5 +1,6 @@
 import { Controller, Get, UseGuards } from "@nestjs/common";
 
+import { CurrentUser } from "../../common/decorators/current-user.decorator";
 import { Roles } from "../../common/decorators/roles.decorator";
 import { RolesGuard } from "../../common/guards/roles.guard";
 import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard";
@@ -12,31 +13,36 @@ export class AnalyticsController {
 
   @Get("overview")
   @Roles("OWNER", "ADMIN", "MEMBER")
-  getOverview() {
-    return this.analyticsService.getOwnerOverview();
+  async getOverview(@CurrentUser() user: { id: string }) {
+    const scope = await this.analyticsService.resolveScope(user.id);
+    return this.analyticsService.getOverview(scope);
   }
 
   @Get("bundle")
   @Roles("OWNER", "ADMIN", "MEMBER")
-  getBundle() {
-    return this.analyticsService.getBundle();
+  async getBundle(@CurrentUser() user: { id: string }) {
+    const scope = await this.analyticsService.resolveScope(user.id);
+    return this.analyticsService.getBundle(scope);
   }
 
   @Get("velocity")
   @Roles("OWNER", "ADMIN", "MEMBER")
-  getVelocity() {
-    return this.analyticsService.getVelocityTrend();
+  async getVelocity(@CurrentUser() user: { id: string }) {
+    const scope = await this.analyticsService.resolveScope(user.id);
+    return this.analyticsService.getVelocityTrend(scope);
   }
 
   @Get("heatmap")
   @Roles("OWNER", "ADMIN", "MEMBER")
-  getHeatmap() {
-    return this.analyticsService.getHeatmap();
+  async getHeatmap(@CurrentUser() user: { id: string }) {
+    const scope = await this.analyticsService.resolveScope(user.id);
+    return this.analyticsService.getHeatmap(scope);
   }
 
   @Get("subsystems")
   @Roles("OWNER", "ADMIN", "MEMBER")
-  getSubsystems() {
-    return this.analyticsService.getSubsystemBreakdown();
+  async getSubsystems(@CurrentUser() user: { id: string }) {
+    const scope = await this.analyticsService.resolveScope(user.id);
+    return this.analyticsService.getSubsystemBreakdown(scope);
   }
 }
