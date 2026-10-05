@@ -29,6 +29,12 @@ The Playwright web server uses port 3100; start the test API with `FRONTEND_URL=
 
 ## Dashboard scope
 
-OWNER sees club-wide analytics. ADMIN uses the single `User.subsystemId`: tasks in that subsystem, worklogs on those tasks, and availability of its users. An unassigned ADMIN sees an empty scope. MEMBER sees assigned tasks and their own worklogs. The server reads current database roles/assignments, and all analytics cache keys and historical snapshot reads include the scope. Scoped history remains empty until matching scoped snapshots exist; global snapshots are never substituted.
+OWNER sees club-wide analytics. ADMIN uses the single `User.subsystemId`: tasks in that subsystem, worklogs on those tasks, and availability of its users. An unassigned ADMIN sees an empty scope. MEMBER sees assigned tasks and their own worklogs. The server reads current database roles/assignments, and all analytics cache keys and historical snapshot reads include the scope. The 15-minute refresh generates global, assigned ADMIN subsystem, and MEMBER personal snapshots. Each scope has a daily sample updated during the day; the latest eight samples appear chronologically. Global snapshots are never substituted. Snapshot completion hours measure logged effort per completed task, rather than elapsed calendar time.
 
 Task subsystem names link to the existing subsystem page. Desktop sidebar collapse persists locally under `antara.sidebar.collapsed`. The platform container uses a responsive width capped at 1800px.
+
+## Troubleshooting sign-in
+
+Creating the local JSON file does not create database users. Run the migration and seed against the same development database used by the running API. Accounts seeded in an isolated test database will not exist in a hosted database. Do not seed these public dummy credentials into production.
+
+The password eye button reveals/hides the value without submitting. Incorrect credentials, rate limiting, and an unavailable sign-in service now have distinct messages; backend downtime must not be mistaken for a password mismatch.

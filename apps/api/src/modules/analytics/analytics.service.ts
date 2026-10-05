@@ -1,4 +1,4 @@
-import { Injectable, OnModuleDestroy, OnModuleInit, UnauthorizedException } from "@nestjs/common";
+import { Injectable, Logger, OnModuleDestroy, OnModuleInit, UnauthorizedException } from "@nestjs/common";
 import { Prisma } from "@prisma/client";
 import { subsystemCatalog, TaskStatus } from "@antara/contracts";
 
@@ -51,6 +51,8 @@ type SubsystemBreakdown = { name: string; velocity: number; risk: number; comple
 
 @Injectable()
 export class AnalyticsService implements OnModuleInit, OnModuleDestroy {
+  private readonly logger = new Logger(AnalyticsService.name);
+  private refreshing = false;
   private readonly refreshIntervalMs = 15 * 60 * 1000;
   private snapshotTimer?: NodeJS.Timeout;
 
@@ -62,7 +64,7 @@ export class AnalyticsService implements OnModuleInit, OnModuleDestroy {
   async onModuleInit() {
     await this.refreshAnalyticsSnapshot();
     this.snapshotTimer = setInterval(() => {
-      void this.refreshAnalyticsSnapshot();
+      void this.refreshAnalyticsSnapshot().catch(() => this.logger.error("Analytics snapshot refresh failed"));
     }, this.refreshIntervalMs);
     this.snapshotTimer.unref?.();
   }
@@ -106,12 +108,12 @@ export class AnalyticsService implements OnModuleInit, OnModuleDestroy {
     const snapshots = await this.prisma.analyticsSnapshot.findMany({
       where: { scope: scopeKey(scope) },
       take: 8,
-      orderBy: { periodStart: "asc" },
+      orderBy: { periodStart: "desc" },
     });
 
     const series =
       snapshots.length > 0
-        ? snapshots.map((snapshot, index) => ({
+        ? snapshots.reverse().map((snapshot, index) => ({
             label: `P${index + 1}`,
             value: Number(snapshot.velocityScore),
           }))
@@ -216,40 +218,63 @@ export class AnalyticsService implements OnModuleInit, OnModuleDestroy {
   }
 
   async refreshAnalyticsSnapshot() {
-    const [overview, velocity, heatmap, subsystems] = await Promise.all([
-      this.computeOverview(),
-      this.getVelocityTrend(),
-      this.getHeatmap(),
-      this.getSubsystemBreakdown(),
-    ]);
-
-    const now = new Date();
-    const periodEnd = new Date(now);
-    const periodStart = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-    const existing = await this.prisma.analyticsSnapshot.findFirst({
-      where: {
-        scope: "GLOBAL",
-        periodStart: {
-          gte: periodStart,
-        },
-      },
-      orderBy: { createdAt: "desc" },
-    });
-
-    if (!existing) {
-      await this.prisma.analyticsSnapshot.create({
-        data: {
-          scope: "GLOBAL",
-          periodStart,
-          periodEnd,
-          tasksCompleted: Math.round(overview.productivityIndex),
-          avgCompletionHours: 12,
-          overduePercentage: overview.overdueRate,
-          velocityScore: overview.subsystemVelocity,
-          payload: { overview, velocity, heatmap, subsystems },
-        },
+    if (this.refreshing) return;
+    this.refreshing = true;
+    try {
+      const users = await this.prisma.user.findMany({
+        where: { isActive: true, deletedAt: null, role: { in: ["ADMIN", "MEMBER"] } },
+        select: { id: true, role: true, subsystemId: true },
       });
+      const scopes = new Map<string, AnalyticsScope>([["GLOBAL", globalScope]]);
+      for (const user of users) {
+        const scope: AnalyticsScope | null = user.role === "MEMBER"
+          ? { kind: "PERSONAL", id: user.id }
+          : user.subsystemId ? { kind: "SUBSYSTEM", id: user.subsystemId } : null;
+        if (scope) scopes.set(scopeKey(scope), scope);
+      }
+      for (const scope of scopes.values()) await this.refreshScopeSnapshot(scope);
+    } finally {
+      this.refreshing = false;
     }
+  }
+
+  private async refreshScopeSnapshot(scope: AnalyticsScope) {
+    const [overview, velocity, heatmap, subsystems, completedTasks] = await Promise.all([
+      this.computeOverview(scope),
+      this.getVelocityTrend(scope),
+      this.getHeatmap(scope),
+      this.getSubsystemBreakdown(scope),
+      this.prisma.task.findMany({
+        where: { ...taskScope(scope), deletedAt: null, isArchived: false, status: "COMPLETED" },
+        select: { worklogs: { where: worklogScope(scope), select: { durationMin: true } } },
+      }),
+    ]);
+    const periodEnd = new Date();
+    const periodStart = new Date(periodEnd);
+    periodStart.setUTCHours(0, 0, 0, 0);
+    periodStart.setUTCDate(periodStart.getUTCDate() - 7);
+    const key = scopeKey(scope);
+    // Serialize each scope/day across API instances without changing the schema.
+    await this.prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${key + periodStart.toISOString()}))::text`;
+      const existing = await tx.analyticsSnapshot.findFirst({ where: { scope: key, periodStart } });
+      const data = {
+        periodEnd,
+        tasksCompleted: completedTasks.length,
+        avgCompletionHours: completedTasks.length
+          ? completedTasks.reduce((sum, task) => sum + task.worklogs.reduce((minutes, log) => minutes + log.durationMin, 0), 0) / 60 / completedTasks.length
+          : 0,
+        overduePercentage: overview.overdueRate,
+        velocityScore: overview.subsystemVelocity,
+        payload: { overview, velocity, heatmap, subsystems },
+      };
+      if (existing) {
+        await tx.analyticsSnapshot.update({ where: { id: existing.id }, data });
+      } else {
+        await tx.analyticsSnapshot.create({ data: { scope: key, periodStart, ...data } });
+      }
+    });
+    await this.cache.del(`analytics:velocity:${key}`);
   }
 
   private async computeOverview(scope: AnalyticsScope = globalScope): Promise<AnalyticsOverview> {

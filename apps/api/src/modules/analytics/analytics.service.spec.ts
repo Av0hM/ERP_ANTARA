@@ -2,9 +2,12 @@ import { AnalyticsService } from "./analytics.service";
 
 describe("AnalyticsService", () => {
   const prisma = {
+    $transaction: jest.fn(),
+    $queryRaw: jest.fn(),
     analyticsSnapshot: {
       findMany: jest.fn(),
       create: jest.fn(),
+      update: jest.fn(),
       findFirst: jest.fn(),
     },
     task: {
@@ -21,6 +24,7 @@ describe("AnalyticsService", () => {
   const cache = {
     getJson: jest.fn(),
     setJson: jest.fn(),
+    del: jest.fn(),
   };
 
   let service: AnalyticsService;
@@ -30,6 +34,7 @@ describe("AnalyticsService", () => {
     cache.getJson.mockResolvedValue(null);
     cache.setJson.mockResolvedValue(undefined);
     prisma.analyticsSnapshot.findFirst.mockResolvedValue(null);
+    prisma.$transaction.mockImplementation((callback: (tx: unknown) => Promise<unknown>) => callback(prisma));
     service = new AnalyticsService(prisma as never, cache as never);
   });
 
@@ -88,6 +93,34 @@ describe("AnalyticsService", () => {
     prisma.analyticsSnapshot.findMany.mockResolvedValue([]);
     await expect(service.getVelocityTrend({ kind: "PERSONAL", id: "member" })).resolves.toEqual([]);
     expect(prisma.analyticsSnapshot.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: { scope: "PERSONAL:member" } }));
+  });
+
+  it("generates distinct member and subsystem snapshots, skipping unassigned admins", async () => {
+    prisma.user.findMany.mockImplementation(async (query: { select: { role?: boolean } }) => query.select.role ? [
+      { id: "admin-a", role: "ADMIN", subsystemId: "software" },
+      { id: "admin-b", role: "ADMIN", subsystemId: "software" },
+      { id: "unassigned", role: "ADMIN", subsystemId: null },
+      { id: "member", role: "MEMBER", subsystemId: "software" },
+    ] : []);
+    prisma.task.findMany.mockResolvedValue([]);
+    prisma.workLog.findMany.mockResolvedValue([]);
+    prisma.analyticsSnapshot.findMany.mockResolvedValue([]);
+    await service.refreshAnalyticsSnapshot();
+    const expectedScopes = ["GLOBAL", "SUBSYSTEM:software", "PERSONAL:member"];
+    expect(prisma.analyticsSnapshot.create.mock.calls.map(([query]) => query.data.scope)).toEqual(expectedScopes);
+    expect(prisma.$queryRaw).toHaveBeenCalledTimes(3);
+    for (const scope of expectedScopes) expect(cache.del).toHaveBeenCalledWith(`analytics:velocity:${scope}`);
+    prisma.analyticsSnapshot.create.mockClear();
+    prisma.analyticsSnapshot.findFirst.mockResolvedValue({ id: "existing" });
+    await service.refreshAnalyticsSnapshot();
+    expect(prisma.analyticsSnapshot.create).not.toHaveBeenCalled();
+    expect(prisma.analyticsSnapshot.update).toHaveBeenCalledTimes(3);
+  });
+
+  it("returns the latest eight snapshots chronologically", async () => {
+    prisma.analyticsSnapshot.findMany.mockResolvedValue([{ velocityScore: 90 }, { velocityScore: 40 }]);
+    await expect(service.getVelocityTrend()).resolves.toEqual([{ label: "P1", value: 40 }, { label: "P2", value: 90 }]);
+    expect(prisma.analyticsSnapshot.findMany).toHaveBeenCalledWith(expect.objectContaining({ take: 8, orderBy: { periodStart: "desc" } }));
   });
 
 });

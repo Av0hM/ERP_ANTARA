@@ -16,7 +16,7 @@ export class DecisionsController {
   constructor(private readonly decisionsService: DecisionsService) {}
 
   @Post()
-  @Roles("OWNER", "ADMIN", "MEMBER")
+  @Roles("OWNER", "ADMIN")
   create(@Body() dto: CreateDecisionDto, @Req() req: AuthenticatedRequest) {
     return this.decisionsService.create(dto, req.user.id);
   }

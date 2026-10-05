@@ -1,7 +1,14 @@
-import NextAuth from "next-auth";
+import NextAuth, { CredentialsSignin } from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import Google from "next-auth/providers/google";
-import { authenticateWithBackend } from "./lib/backend-auth";
+import { authenticateWithBackend, BackendAuthError } from "./lib/backend-auth";
+
+class BackendSignInError extends CredentialsSignin {
+  constructor(code: string) {
+    super();
+    this.code = code;
+  }
+}
 
 const apiUrl = process.env.API_URL ?? "http://localhost:4000/api";
 const resolvedNextAuthSecret = process.env.NEXTAUTH_SECRET ?? "dev-nextauth-secret";
@@ -79,8 +86,11 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
 
         try {
           return await authenticateWithBackend(apiUrl, "login", { email, password });
-        } catch {
-          // Backend authentication failures must never create a tokenless session.
+        } catch (error) {
+          if (error instanceof BackendAuthError && error.code !== "credentials") {
+            throw new BackendSignInError(error.code);
+          }
+          // Invalid credentials never create a tokenless session.
         }
 
         return null;

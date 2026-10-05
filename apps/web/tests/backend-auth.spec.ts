@@ -31,3 +31,21 @@ test("backend rejection and incomplete tokens cannot create a session", async ()
     await expect(authenticateWithBackend("http://localhost/api", "google-callback", { email: "owner@dummy.local", name: "Owner" })).rejects.toThrow();
   } finally { globalThis.fetch = originalFetch; }
 });
+
+for (const [status, code] of [[401, "credentials"], [403, "credentials"], [429, "rate_limited"], [500, "backend_unavailable"]] as const) {
+  test(`backend ${status} reports ${code}`, async () => {
+    const originalFetch = globalThis.fetch;
+    try {
+      globalThis.fetch = async () => new Response(null, { status });
+      await expect(authenticateWithBackend("http://localhost/api", "login", { email: "owner@dummy.local", password: "test" })).rejects.toMatchObject({ code });
+    } finally { globalThis.fetch = originalFetch; }
+  });
+}
+
+test("network failures report service unavailable", async () => {
+  const originalFetch = globalThis.fetch;
+  try {
+    globalThis.fetch = async () => { throw new TypeError("fetch failed"); };
+    await expect(authenticateWithBackend("http://localhost/api", "login", { email: "owner@dummy.local", password: "test" })).rejects.toMatchObject({ code: "backend_unavailable" });
+  } finally { globalThis.fetch = originalFetch; }
+});
