@@ -1,3 +1,7 @@
+import { Inject } from "@nestjs/common";
+import { UseGuards } from "@nestjs/common";
+import { WsJwtAuthGuard } from "../../auth/guards/ws-jwt-auth.guard";
+import { SessionService } from "../../../common/sessions/session.service";
 import {
   ConnectedSocket,
   MessageBody,
@@ -16,22 +20,34 @@ interface AuthenticatedSocket extends Socket {
   user: { id: string; email: string; name: string; role: string };
 }
 
+@UseGuards(WsJwtAuthGuard)
 @WebSocketGateway({
   cors: {
-    origin: [process.env.FRONTEND_URL ?? process.env.NEXTAUTH_URL ?? "http://localhost:3000"],
+    origin: [
+      process.env.FRONTEND_URL ??
+        process.env.NEXTAUTH_URL ??
+        "http://localhost:3000",
+    ],
     credentials: true,
   },
   namespace: "/collaboration",
 })
-export class TaskCollaborationGateway implements OnGatewayConnection, OnGatewayDisconnect {
+export class TaskCollaborationGateway
+  implements OnGatewayConnection, OnGatewayDisconnect
+{
   @WebSocketServer()
   server?: Server;
 
-  private readonly onlineUsers = new Map<string, { socketId: string; name: string }>();
+  private readonly onlineUsers = new Map<
+    string,
+    { socketId: string; name: string }
+  >();
 
   constructor(
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
+    @Inject(SessionService)
+    private readonly sessions: Pick<SessionService, "authenticateAccess">,
   ) {}
 
   private serializePresence() {
@@ -50,11 +66,15 @@ export class TaskCollaborationGateway implements OnGatewayConnection, OnGatewayD
       return;
     }
 
-    const accessSecret = this.configService.get<string>("auth.accessSecret") ?? "dev-access-secret";
+    const accessSecret =
+      this.configService.get<string>("auth.accessSecret") ??
+      "dev-access-secret";
 
     try {
-      const payload = await this.jwtService.verifyAsync(token, { secret: accessSecret });
-      client.user = payload;
+      const payload = await this.jwtService.verifyAsync<
+        Record<string, unknown>
+      >(token, { secret: accessSecret });
+      client.user = await this.sessions.authenticateAccess(payload);
     } catch {
       client.emit("error", new Error("Invalid or expired token"));
       client.disconnect(true);

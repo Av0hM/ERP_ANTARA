@@ -41,27 +41,14 @@ export class UsersService {
     });
   }
 
-  async updateRole(userId: string, newRole: AppRole, actorId: string) {
-    const oldUser = await this.prisma.user.findUnique({ where: { id: userId } });
-
-    const user = await this.prisma.user.update({
+  async updateProfile(
+    userId: string,
+    data: { skills?: string[]; weeklyCapacityHours?: number },
+    actorId: string,
+  ) {
+    const oldUser = await this.prisma.user.findUnique({
       where: { id: userId },
-      data: { role: newRole },
     });
-
-    await this.auditService.log({
-      action: "ROLE_CHANGE",
-      entityType: "User",
-      entityId: userId,
-      actorId,
-      payload: { oldRole: oldUser?.role, newRole },
-    });
-
-    return user;
-  }
-
-  async updateProfile(userId: string, data: { skills?: string[]; weeklyCapacityHours?: number }, actorId: string) {
-    const oldUser = await this.prisma.user.findUnique({ where: { id: userId } });
 
     const user = await this.prisma.user.update({
       where: { id: userId },
@@ -107,4 +94,3 @@ export class UsersService {
     });
   }
 }
-

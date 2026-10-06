@@ -1,0 +1,67 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "OWNER-reviewed subsystem mapping (no executor in Phase 1A)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "version",
+    "status",
+    "inventorySha256",
+    "reviewedByOwnerId",
+    "reviewedAt",
+    "mappings",
+    "unresolvedSubsystemIds",
+    "notes"
+  ],
+  "properties": {
+    "$schema": { "type": "string" },
+    "version": { "const": 1 },
+    "status": { "enum": ["DRAFT", "REVIEWED"] },
+    "inventorySha256": {
+      "type": ["string", "null"],
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "reviewedByOwnerId": { "type": ["string", "null"], "minLength": 1 },
+    "reviewedAt": { "type": ["string", "null"], "minLength": 1 },
+    "mappings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "legacySubsystemId",
+          "targetKey",
+          "rationale",
+          "membershipReviewRequired"
+        ],
+        "properties": {
+          "legacySubsystemId": { "type": "string", "minLength": 1 },
+          "targetKey": {
+            "enum": ["ADCS", "PAYLOAD", "GROUND_COMMS", "SDM", "MAIN_SATELLITE"]
+          },
+          "rationale": { "type": "string", "minLength": 1 },
+          "membershipReviewRequired": { "const": true }
+        }
+      }
+    },
+    "unresolvedSubsystemIds": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "notes": { "type": "string" }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "status": { "const": "REVIEWED" } } },
+      "then": {
+        "properties": {
+          "inventorySha256": { "type": "string" },
+          "reviewedByOwnerId": { "type": "string" },
+          "reviewedAt": { "type": "string" },
+          "unresolvedSubsystemIds": { "maxItems": 0 }
+        }
+      }
+    }
+  ]
+}

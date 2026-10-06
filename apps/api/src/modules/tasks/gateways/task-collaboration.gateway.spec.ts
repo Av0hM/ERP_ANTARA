@@ -1,3 +1,5 @@
+import { z } from "zod";
+import { SessionService } from "../../../common/sessions/session.service";
 import { WsException } from "@nestjs/websockets";
 import { JwtService } from "@nestjs/jwt";
 import { ConfigService } from "@nestjs/config";
@@ -23,6 +25,7 @@ describe("TaskCollaborationGateway (unit)", () => {
     gateway = new TaskCollaborationGateway(
       mockJwtService as JwtService,
       mockConfigService as ConfigService,
+      new SessionServiceMock(),
     );
 
     mockClient = {
@@ -47,7 +50,9 @@ describe("TaskCollaborationGateway (unit)", () => {
 
     it("should disconnect client with invalid token", async () => {
       mockClient.handshake.auth = { token: "invalid-token" };
-      (mockJwtService.verifyAsync as jest.Mock).mockRejectedValue(new Error("Invalid token"));
+      (mockJwtService.verifyAsync as jest.Mock).mockRejectedValue(
+        new Error("Invalid token"),
+      );
 
       await gateway.handleConnection(mockClient);
 
@@ -57,7 +62,9 @@ describe("TaskCollaborationGateway (unit)", () => {
 
     it("should disconnect client with expired token", async () => {
       mockClient.handshake.auth = { token: "expired-token" };
-      (mockJwtService.verifyAsync as jest.Mock).mockRejectedValue(new Error("Token expired"));
+      (mockJwtService.verifyAsync as jest.Mock).mockRejectedValue(
+        new Error("Token expired"),
+      );
 
       await gateway.handleConnection(mockClient);
 
@@ -83,12 +90,15 @@ describe("TaskCollaborationGateway (unit)", () => {
         name: "Test User",
         role: "MEMBER",
       });
-      expect(mockClient.emit).toHaveBeenCalledWith("presence.connected", expect.objectContaining({
-        socketId: "socket-1",
-        onlineCount: 1,
-        userId: "user-1",
-        userName: "Test User",
-      }));
+      expect(mockClient.emit).toHaveBeenCalledWith(
+        "presence.connected",
+        expect.objectContaining({
+          socketId: "socket-1",
+          onlineCount: 1,
+          userId: "user-1",
+          userName: "Test User",
+        }),
+      );
       expect(mockClient.disconnect).not.toHaveBeenCalled();
     });
 
@@ -242,3 +252,17 @@ describe("TaskCollaborationGateway (unit)", () => {
     });
   });
 });
+class SessionServiceMock implements Pick<SessionService, "authenticateAccess"> {
+  async authenticateAccess(
+    payload: Parameters<SessionService["authenticateAccess"]>[0],
+  ) {
+    return z
+      .object({
+        id: z.string(),
+        email: z.string(),
+        name: z.string(),
+        role: z.enum(["OWNER", "ADMIN", "MEMBER"]),
+      })
+      .parse(payload);
+  }
+}

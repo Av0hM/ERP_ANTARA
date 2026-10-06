@@ -11,7 +11,8 @@ class BackendSignInError extends CredentialsSignin {
 }
 
 const apiUrl = process.env.API_URL ?? "http://localhost:4000/api";
-const resolvedNextAuthSecret = process.env.NEXTAUTH_SECRET ?? "dev-nextauth-secret";
+const resolvedNextAuthSecret =
+  process.env.NEXTAUTH_SECRET ?? "dev-nextauth-secret";
 async function refreshAccessToken(token: {
   accessToken?: string;
   accessTokenExpires?: number;
@@ -85,9 +86,15 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         }
 
         try {
-          return await authenticateWithBackend(apiUrl, "login", { email, password });
+          return await authenticateWithBackend(apiUrl, "login", {
+            email,
+            password,
+          });
         } catch (error) {
-          if (error instanceof BackendAuthError && error.code !== "credentials") {
+          if (
+            error instanceof BackendAuthError &&
+            error.code !== "credentials"
+          ) {
             throw new BackendSignInError(error.code);
           }
           // Invalid credentials never create a tokenless session.
@@ -105,6 +112,23 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         ]
       : []),
   ],
+  events: {
+    async signOut(message) {
+      if (
+        "token" in message &&
+        typeof message.token?.refreshToken === "string"
+      ) {
+        const response = await fetch(`${apiUrl}/auth/logout`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ refreshToken: message.token.refreshToken }),
+          cache: "no-store",
+          signal: AbortSignal.timeout(10000),
+        });
+        if (!response.ok) throw new Error("Backend session revocation failed");
+      }
+    },
+  },
   callbacks: {
     async signIn({ account, profile }) {
       if (account?.provider !== "google") {
@@ -119,33 +143,44 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         return true;
       }
 
-      const email = (profile as { email?: string | null } | null)?.email?.toLowerCase();
+      const email = (
+        profile as { email?: string | null } | null
+      )?.email?.toLowerCase();
       return Boolean(email && allowlist.includes(email));
     },
-    async jwt({ token, user, account, profile }) {
+    async jwt({ token, user, account }) {
       if (account?.provider === "google") {
-        if (!profile?.email) throw new Error("Google profile is missing an email");
+        if (!account.id_token)
+          throw new Error("Google identity token is missing");
         user = await authenticateWithBackend(apiUrl, "google-callback", {
-          email: profile.email.trim().toLowerCase(),
-          name: profile.name ?? user?.name ?? profile.email,
-          ...(user?.image ? { avatarUrl: user.image } : {}),
+          idToken: account.id_token,
         });
       }
       if (user) {
-        token.sub = (user as { id?: string }).id ?? token.sub;
-        token.email = (user as { email?: string }).email ?? token.email;
-        token.name = (user as { name?: string }).name ?? token.name;
-        token.role = (user as { role?: string }).role ?? "MEMBER";
-        token.accessToken = (user as { accessToken?: string }).accessToken;
-        token.refreshToken = (user as { refreshToken?: string }).refreshToken;
-        token.accessTokenExpires = (() => {
-          const value = (user as { accessTokenExpiresAt?: string }).accessTokenExpiresAt;
-          return value ? new Date(value).getTime() : Date.now() + 15 * 60 * 1000;
-        })();
+        const expires = Date.parse(user.accessTokenExpiresAt ?? "");
+        if (
+          !user.id ||
+          !["OWNER", "ADMIN", "MEMBER"].includes(user.role) ||
+          !user.accessToken ||
+          !user.refreshToken ||
+          !Number.isFinite(expires)
+        ) {
+          throw new Error("Backend session is incomplete");
+        }
+        token.sub = user.id;
+        token.email = user.email;
+        token.name = user.name;
+        token.role = user.role;
+        token.accessToken = user.accessToken;
+        token.refreshToken = user.refreshToken;
+        token.accessTokenExpires = expires;
         return token;
       }
 
-      if (typeof token.accessTokenExpires === "number" && Date.now() < token.accessTokenExpires - 30_000) {
+      if (
+        typeof token.accessTokenExpires === "number" &&
+        Date.now() < token.accessTokenExpires - 30_000
+      ) {
         return token;
       }
 
@@ -156,8 +191,9 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         session.user.id = String(token.sub ?? "");
         session.user.email = token.email ?? session.user.email;
         session.user.name = token.name ?? session.user.name;
-        session.user.role = String(token.role ?? "MEMBER");
-        session.accessToken = typeof token.accessToken === "string" ? token.accessToken : undefined;
+        session.user.role = typeof token.role === "string" ? token.role : "";
+        session.accessToken =
+          typeof token.accessToken === "string" ? token.accessToken : undefined;
       }
 
       session.error = typeof token.error === "string" ? token.error : undefined;

@@ -1,4 +1,18 @@
-import { Body, Controller, Get, Post, Param, Req, UseGuards } from "@nestjs/common";
+import { Throttle, ThrottlerGuard } from "@nestjs/throttler";
+import {
+  CreateInvitationDto,
+  AcceptInvitationDto,
+  AcceptExistingInvitationDto,
+} from "./invitations.dto";
+import {
+  Body,
+  Controller,
+  Get,
+  Post,
+  Param,
+  Req,
+  UseGuards,
+} from "@nestjs/common";
 
 import { Roles } from "../../common/decorators/roles.decorator";
 import { RolesGuard } from "../../common/guards/roles.guard";
@@ -14,6 +28,8 @@ interface AuthenticatedRequest extends Request {
 // - accept and validate/:token are public — a brand-new invitee has no JWT yet,
 //   and is authenticated by possession of the invitation token itself
 @Controller("invitations")
+@UseGuards(ThrottlerGuard)
+@Throttle({ default: { limit: 20, ttl: 60000 } })
 export class InvitationsController {
   constructor(private readonly invitationsService: InvitationsService) {}
 
@@ -21,7 +37,7 @@ export class InvitationsController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles("OWNER", "ADMIN")
   async create(
-    @Body() body: { email: string; role: "OWNER" | "ADMIN" | "MEMBER"; subsystemId?: string },
+    @Body() body: CreateInvitationDto,
     @Req() req: AuthenticatedRequest,
   ) {
     return this.invitationsService.createInvitation(
@@ -35,8 +51,8 @@ export class InvitationsController {
   @Get()
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles("OWNER", "ADMIN")
-  async listPending() {
-    return this.invitationsService.listPendingInvitations();
+  async listPending(@Req() req: AuthenticatedRequest) {
+    return this.invitationsService.listPendingInvitations(req.user.id);
   }
 
   @Post(":id/revoke")
@@ -47,14 +63,21 @@ export class InvitationsController {
   }
 
   @Post("accept")
-  async accept(
-    @Body() body: { token: string; password: string; name: string },
-  ) {
+  async accept(@Body() body: AcceptInvitationDto) {
     return this.invitationsService.acceptInvitation(
       body.token,
       body.password,
       body.name,
     );
+  }
+
+  @Post("accept-existing")
+  @UseGuards(JwtAuthGuard)
+  acceptExisting(
+    @Body() body: AcceptExistingInvitationDto,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    return this.invitationsService.acceptForAccount(body.token, req.user.id);
   }
 
   @Get("validate/:token")

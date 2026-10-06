@@ -1,141 +1,113 @@
-import { UnauthorizedException } from "@nestjs/common";
-import { JwtService } from "@nestjs/jwt";
 import { ConfigService } from "@nestjs/config";
-import * as bcrypt from "bcryptjs";
-import { AppRole } from "@antara/contracts";
-
+import { JwtService } from "@nestjs/jwt";
+import { PrismaClient } from "@prisma/client";
+import { plainToInstance } from "class-transformer";
+import { validate } from "class-validator";
 import { AuthService } from "./auth.service";
+import { AuthController } from "./auth.controller";
+import { RegisterDto } from "./dto/register.dto";
+import { GoogleCallbackDto } from "./dto/google-callback.dto";
+import { GoogleIdentityService } from "./google-identity.service";
+import {
+  SessionService,
+  refreshDigest,
+  accountCanAuthenticate,
+} from "../../common/sessions/session.service";
 
-jest.mock("bcryptjs", () => ({
-  hash: jest.fn(),
-  compare: jest.fn(),
-}));
-
-describe("AuthService", () => {
-  const usersService = {
-    findByEmail: jest.fn(),
-    create: jest.fn(),
-  };
-
-  const prisma = {
-    session: {
-      create: jest.fn(),
-      findUnique: jest.fn(),
-      update: jest.fn(),
-      updateMany: jest.fn(),
+describe("Auth contract safety", () => {
+  const db = new PrismaClient({
+    datasources: { db: { url: "postgresql://unused@127.0.0.1:1/unused" } },
+  });
+  const config = new ConfigService();
+  const google = new GoogleIdentityService(config);
+  const sessions = new SessionService(db, new JwtService(), config);
+  const service = new AuthService(db, sessions, config, google);
+  afterEach(() => jest.restoreAllMocks());
+  afterAll(() => db.$disconnect());
+  it.each(["OWNER", "ADMIN", "MEMBER"])(
+    "public registration rejects %s and creates no user",
+    async (role) => {
+      const create = jest.spyOn(db.user, "create");
+      const dto = plainToInstance(RegisterDto, {
+        email: "user@fixture.invalid",
+        name: "User",
+        password: "fixture-password",
+        role,
+      });
+      expect(
+        (
+          await validate(dto, { whitelist: true, forbidNonWhitelisted: true })
+        ).some((error) => error.property === "role"),
+      ).toBe(true);
+      expect(() => new AuthController(service).register()).toThrow(
+        "Registration requires an invitation",
+      );
+      expect(create).not.toHaveBeenCalled();
     },
-  };
-
-  const jwtService = {
-    signAsync: jest.fn(),
-    verifyAsync: jest.fn(),
-  } as unknown as JwtService;
-
-  const configService = {
-    get: jest.fn((key: string) => {
-      if (key === "auth.accessSecret") return "access-secret";
-      if (key === "auth.refreshSecret") return "refresh-secret";
-      if (key === "auth.allowJsonCredentials") return "true";
-      return undefined;
-    }),
-  } as unknown as ConfigService;
-
-  const auditService = {
-    log: jest.fn().mockResolvedValue(null),
-  };
-
-  let service: AuthService;
-
-  beforeEach(() => {
-    jest.clearAllMocks();
-    service = new AuthService(
-      usersService as never,
-      prisma as never,
-      jwtService,
-      configService,
-      auditService as never,
+  );
+  it("rejects public registration without a role too", () =>
+    expect(() => service.register()).toThrow(
+      "Registration requires an invitation",
+    ));
+  it("rejects plain-email Google callback DTO", async () => {
+    const errors = await validate(
+      plainToInstance(GoogleCallbackDto, {
+        email: "owner@fixture.invalid",
+        name: "Owner",
+      }),
+      { whitelist: true, forbidNonWhitelisted: true },
+    );
+    expect(errors.map((e) => e.property)).toEqual(
+      expect.arrayContaining(["email", "name", "idToken"]),
     );
   });
-
-  it("registers a new user and creates a session", async () => {
-    usersService.findByEmail.mockResolvedValue(null);
-    (bcrypt.hash as jest.Mock).mockResolvedValue("hashed-password");
-    usersService.create.mockResolvedValue({
-      id: "user-1",
-      email: "owner@antara.club",
-      name: "Mission Director",
-      role: AppRole.OWNER,
-    });
-    (jwtService.signAsync as jest.Mock)
-      .mockResolvedValueOnce("access-token")
-      .mockResolvedValueOnce("refresh-token");
-    prisma.session.create.mockResolvedValue({});
-
-    const result = await service.register({
-      email: "owner@antara.club",
-      name: "Mission Director",
-      password: "antara123erp",
-      role: AppRole.OWNER,
-    });
-
-    expect(result.user.email).toBe("owner@antara.club");
-    expect(result.accessToken).toBe("access-token");
-    expect(result.refreshToken).toBe("refresh-token");
-    expect(prisma.session.create).toHaveBeenCalled();
+  it("rejects invalid Google verification before database access", async () => {
+    jest
+      .spyOn(google, "verify")
+      .mockRejectedValue(new Error("Invalid Google token"));
+    const create = jest.spyOn(db.user, "upsert");
+    await expect(service.googleCallback({ idToken: "fake" })).rejects.toThrow();
+    expect(create).not.toHaveBeenCalled();
   });
-
-  it("rejects invalid login credentials", async () => {
-    usersService.findByEmail.mockResolvedValue({
-      passwordHash: "stored-hash",
+  it("empty backend allowlist denies even a verified identity", async () => {
+    jest.spyOn(google, "verify").mockResolvedValue({
+      email: "owner@fixture.invalid",
+      name: "Owner",
+      avatarUrl: undefined,
     });
-    (bcrypt.compare as jest.Mock).mockResolvedValue(false);
-
+    await expect(
+      service.googleCallback({ idToken: "verified-fixture" }),
+    ).rejects.toThrow("Authentication failed");
+  });
+  it("missing credentials user is rejected without creating a session", async () => {
+    jest.spyOn(db.user, "findUnique").mockResolvedValue(null);
+    const issue = jest.spyOn(sessions, "issue");
     await expect(
       service.login({
-        email: "owner@antara.club",
-        password: "wrongpass123",
+        email: "missing@fixture.invalid",
+        password: "incorrect",
       }),
-    ).rejects.toBeInstanceOf(UnauthorizedException);
+    ).rejects.toThrow("Invalid credentials");
+    expect(issue).not.toHaveBeenCalled();
   });
-
-  it("rejects login for non-existent user", async () => {
-    usersService.findByEmail.mockResolvedValue(null);
-
-    await expect(
-      service.login({
-        email: "nonexistent@example.com",
-        password: "anypassword",
-      }),
-    ).rejects.toBeInstanceOf(UnauthorizedException);
+  it("digests high entropy credentials deterministically, without storing usable plaintext", () => {
+    expect(refreshDigest("fixture")).toMatch(/^[a-f0-9]{64}$/);
+    expect(refreshDigest("fixture")).toBe(refreshDigest("fixture"));
+    expect(refreshDigest("fixture")).not.toBe(refreshDigest("different"));
   });
-
-  it("refreshes a valid session", async () => {
-    (jwtService.verifyAsync as jest.Mock).mockResolvedValue({
-      sub: "user-1",
-      type: "refresh",
-    });
-    prisma.session.findUnique.mockResolvedValue({
-      id: "session-1",
-      refreshToken: "old-refresh",
-      revokedAt: null,
-      expiresAt: new Date(Date.now() + 60_000),
-      user: {
-        id: "user-1",
-        email: "owner@antara.club",
-        name: "Mission Director",
-        role: AppRole.OWNER,
-      },
-    });
-    (jwtService.signAsync as jest.Mock)
-      .mockResolvedValueOnce("new-access-token")
-      .mockResolvedValueOnce("new-refresh-token");
-    prisma.session.update.mockResolvedValue({});
-
-    const result = await service.refreshSession({ refreshToken: "old-refresh" });
-
-    expect(result.accessToken).toBe("new-access-token");
-    expect(result.refreshToken).toBe("new-refresh-token");
-    expect(prisma.session.update).toHaveBeenCalled();
+  it("dummy seeded accounts cannot authenticate in production even with allowlist flag", () => {
+    const original = process.env.NODE_ENV;
+    try {
+      process.env.NODE_ENV = "production";
+      expect(
+        accountCanAuthenticate({
+          isActive: true,
+          deletedAt: null,
+          isDummySeed: true,
+        }),
+      ).toBe(false);
+    } finally {
+      process.env.NODE_ENV = original;
+    }
   });
 });
-

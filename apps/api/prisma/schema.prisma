@@ -50,51 +50,71 @@ enum InsightSeverity {
   CRITICAL
 }
 
+enum MembershipAccessLevel {
+  MEMBER
+  ADMIN
+}
+
+enum DecisionScope {
+  GLOBAL
+  SUBSYSTEM
+}
+
+enum DecisionAuthority {
+  OWNER
+  SUBSYSTEM_ADMIN
+}
+
 model User {
-  id                 String               @id @default(cuid())
-  email              String               @unique
-  isDummySeed        Boolean              @default(false)
-  passwordHash       String?
-  name               String
-  avatarUrl          String?
-  role               Role                 @default(MEMBER)
-  title              String?
-  timezone           String               @default("Asia/Calcutta")
-  locale             String               @default("en")
-  availabilityScore  Int                  @default(75)
-  isActive           Boolean              @default(true)
-  createdAt          DateTime             @default(now())
-  updatedAt          DateTime             @updatedAt
-  deletedAt          DateTime?
-  subsystemId        String?
-  subsystem          Subsystem?           @relation(fields: [subsystemId], references: [id], onDelete: SetNull)
-  assignedTasks      Task[]               @relation("TaskAssignee")
-  createdTasks       Task[]               @relation("TaskCreator")
-  comments           TaskComment[]
-  worklogs           WorkLog[]
-  notifications      Notification[]
-  sessions           Session[]
-  attachments        Attachment[]         @relation("AttachmentUploader")
-  auditLogs          AuditLog[]
-  analyticsSnapshots AnalyticsSnapshot[]  @relation("SnapshotActor")
-  aiInsights         AIInsight[]          @relation("InsightActor")
-  skills             String[]             @default([])
-  weeklyCapacityHours Int                 @default(20)
-  invitedInvitations Invitation[]         @relation("InvitedBy")
-  decisionRecords    DecisionRecord[]     @relation("Author")
+  id                  String                @id @default(cuid())
+  email               String                @unique
+  isDummySeed         Boolean               @default(false)
+  passwordHash        String?
+  name                String
+  avatarUrl           String?
+  role                Role                  @default(MEMBER)
+  title               String?
+  timezone            String                @default("Asia/Calcutta")
+  locale              String                @default("en")
+  availabilityScore   Int                   @default(75)
+  isActive            Boolean               @default(true)
+  createdAt           DateTime              @default(now())
+  updatedAt           DateTime              @updatedAt
+  deletedAt           DateTime?
+  /// Deprecated compatibility state; future authorization uses memberships.
+  subsystemId         String?
+  subsystem           Subsystem?            @relation(fields: [subsystemId], references: [id], onDelete: SetNull)
+  memberships         SubsystemMembership[]
+  assignedTasks       Task[]                @relation("TaskAssignee")
+  createdTasks        Task[]                @relation("TaskCreator")
+  comments            TaskComment[]
+  worklogs            WorkLog[]
+  notifications       Notification[]
+  sessions            Session[]
+  attachments         Attachment[]          @relation("AttachmentUploader")
+  auditLogs           AuditLog[]
+  analyticsSnapshots  AnalyticsSnapshot[]   @relation("SnapshotActor")
+  aiInsights          AIInsight[]           @relation("InsightActor")
+  skills              String[]              @default([])
+  weeklyCapacityHours Int                   @default(20)
+  invitedInvitations  Invitation[]          @relation("InvitedBy")
+  decisionRecords     DecisionRecord[]      @relation("Author")
 
   @@index([role, isActive])
   @@index([subsystemId])
 }
 
 model Subsystem {
-  id          String      @id @default(cuid())
-  name        String      @unique
-  slug        String      @unique
+  /// Null until an explicit OWNER-reviewed legacy mapping is applied.
+  key         String?               @unique
+  memberships SubsystemMembership[]
+  id          String                @id @default(cuid())
+  name        String                @unique
+  slug        String                @unique
   description String
   color       String
-  createdAt   DateTime    @default(now())
-  updatedAt   DateTime    @updatedAt
+  createdAt   DateTime              @default(now())
+  updatedAt   DateTime              @updatedAt
   users       User[]
   tasks       Task[]
   events      CalendarEvent[]
@@ -105,33 +125,48 @@ model Subsystem {
   @@index([slug])
 }
 
+/// Global User.role reconciliation is deferred; membership writes must eventually
+/// maintain ADMIN iff at least one ADMIN membership exists (OWNER is independent).
+model SubsystemMembership {
+  userId      String
+  subsystemId String
+  accessLevel MembershipAccessLevel
+  createdAt   DateTime              @default(now())
+  updatedAt   DateTime              @updatedAt
+  user        User                  @relation(fields: [userId], references: [id], onDelete: Restrict)
+  subsystem   Subsystem             @relation(fields: [subsystemId], references: [id], onDelete: Restrict)
+
+  @@id([userId, subsystemId])
+  @@index([subsystemId, accessLevel, userId])
+}
+
 model Task {
-  id               String          @id @default(cuid())
-  title            String
-  description      String          @db.Text
-  priority         TaskPriority
-  status           TaskStatus      @default(BACKLOG)
-  estimatedHours   Decimal         @db.Decimal(5, 2)
-  deadline         DateTime
-  recurrenceRule   String?
-  tags             String[]
-  dependencyIds    String[]
-  metadata         Json?
-  isArchived       Boolean         @default(false)
-  createdAt        DateTime        @default(now())
-  updatedAt        DateTime        @updatedAt
-  deletedAt        DateTime?
-  subsystemId      String
-  assignedToId     String?
-  assignedById     String
-  subsystem        Subsystem       @relation(fields: [subsystemId], references: [id], onDelete: Restrict)
-  assignedTo       User?           @relation("TaskAssignee", fields: [assignedToId], references: [id], onDelete: SetNull)
-  assignedBy       User            @relation("TaskCreator", fields: [assignedById], references: [id], onDelete: Restrict)
-  comments         TaskComment[]
-  attachments      Attachment[]
-  worklogs         WorkLog[]
-  analytics        AnalyticsSnapshot[]
-  notifications    Notification[]
+  id             String              @id @default(cuid())
+  title          String
+  description    String              @db.Text
+  priority       TaskPriority
+  status         TaskStatus          @default(BACKLOG)
+  estimatedHours Decimal             @db.Decimal(5, 2)
+  deadline       DateTime
+  recurrenceRule String?
+  tags           String[]
+  dependencyIds  String[]
+  metadata       Json?
+  isArchived     Boolean             @default(false)
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+  deletedAt      DateTime?
+  subsystemId    String
+  assignedToId   String?
+  assignedById   String
+  subsystem      Subsystem           @relation(fields: [subsystemId], references: [id], onDelete: Restrict)
+  assignedTo     User?               @relation("TaskAssignee", fields: [assignedToId], references: [id], onDelete: SetNull)
+  assignedBy     User                @relation("TaskCreator", fields: [assignedById], references: [id], onDelete: Restrict)
+  comments       TaskComment[]
+  attachments    Attachment[]
+  worklogs       WorkLog[]
+  analytics      AnalyticsSnapshot[]
+  notifications  Notification[]
 
   @@index([subsystemId, status, deadline])
   @@index([assignedToId, status])
@@ -143,97 +178,97 @@ model TaskComment {
   content   String   @db.Text
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-  taskId     String
-  authorId   String
-  task       Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
-  author     User     @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  taskId    String
+  authorId  String
+  task      Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  author    User     @relation(fields: [authorId], references: [id], onDelete: Cascade)
 
   @@index([taskId, createdAt])
 }
 
 model WorkLog {
-  id          String         @id @default(cuid())
+  id          String        @id @default(cuid())
   startedAt   DateTime
   endedAt     DateTime?
   durationMin Int
-  notes       String?        @db.Text
-  source      WorklogSource  @default(MANUAL)
-  createdAt   DateTime       @default(now())
-  updatedAt   DateTime       @updatedAt
+  notes       String?       @db.Text
+  source      WorklogSource @default(MANUAL)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
   taskId      String
   userId      String
-  task        Task           @relation(fields: [taskId], references: [id], onDelete: Cascade)
-  user        User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  task        Task          @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  user        User          @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, startedAt])
   @@index([taskId])
 }
 
 model Notification {
-  id          String            @id @default(cuid())
-  title       String
-  body        String
-  type        NotificationType
-  isRead      Boolean           @default(false)
-  createdAt   DateTime          @default(now())
-  userId      String
-  taskId      String?
-  user        User              @relation(fields: [userId], references: [id], onDelete: Cascade)
-  task        Task?             @relation(fields: [taskId], references: [id], onDelete: SetNull)
+  id        String           @id @default(cuid())
+  title     String
+  body      String
+  type      NotificationType
+  isRead    Boolean          @default(false)
+  createdAt DateTime         @default(now())
+  userId    String
+  taskId    String?
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  task      Task?            @relation(fields: [taskId], references: [id], onDelete: SetNull)
 
   @@index([userId, isRead, createdAt])
 }
 
 model CalendarEvent {
-  id             String      @id @default(cuid())
+  id             String     @id @default(cuid())
   title          String
-  description    String?     @db.Text
+  description    String?    @db.Text
   startsAt       DateTime
   endsAt         DateTime
-  isRecurring    Boolean     @default(false)
+  isRecurring    Boolean    @default(false)
   recurrenceRule String?
   externalRef    String?
-  createdAt      DateTime    @default(now())
-  updatedAt      DateTime    @updatedAt
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
   subsystemId    String?
-  subsystem      Subsystem?  @relation(fields: [subsystemId], references: [id], onDelete: SetNull)
+  subsystem      Subsystem? @relation(fields: [subsystemId], references: [id], onDelete: SetNull)
 
   @@index([startsAt, endsAt])
   @@index([subsystemId])
 }
 
 model Attachment {
-  id             String   @id @default(cuid())
-  name           String
-  mimeType       String
-  sizeBytes      Int
-  storageUrl     String
-  driveFileId    String?
-  tags           String[]
-  createdAt      DateTime @default(now())
-  taskId         String?
-  uploadedById   String?
-  task           Task?    @relation(fields: [taskId], references: [id], onDelete: SetNull)
-  uploadedBy     User?    @relation("AttachmentUploader", fields: [uploadedById], references: [id], onDelete: SetNull)
+  id           String   @id @default(cuid())
+  name         String
+  mimeType     String
+  sizeBytes    Int
+  storageUrl   String
+  driveFileId  String?
+  tags         String[]
+  createdAt    DateTime @default(now())
+  taskId       String?
+  uploadedById String?
+  task         Task?    @relation(fields: [taskId], references: [id], onDelete: SetNull)
+  uploadedBy   User?    @relation("AttachmentUploader", fields: [uploadedById], references: [id], onDelete: SetNull)
 
   @@index([taskId])
 }
 
 model AnalyticsSnapshot {
-  id                   String   @id @default(cuid())
-  scope                String
-  periodStart          DateTime
-  periodEnd            DateTime
-  tasksCompleted       Int
-  avgCompletionHours   Decimal  @db.Decimal(8, 2)
-  overduePercentage    Decimal  @db.Decimal(5, 2)
-  velocityScore        Decimal  @db.Decimal(5, 2)
-  payload              Json
-  createdAt            DateTime @default(now())
-  actorId              String?
-  taskId               String?
-  actor                User?    @relation("SnapshotActor", fields: [actorId], references: [id], onDelete: SetNull)
-  task                 Task?    @relation(fields: [taskId], references: [id], onDelete: SetNull)
+  id                 String   @id @default(cuid())
+  scope              String
+  periodStart        DateTime
+  periodEnd          DateTime
+  tasksCompleted     Int
+  avgCompletionHours Decimal  @db.Decimal(8, 2)
+  overduePercentage  Decimal  @db.Decimal(5, 2)
+  velocityScore      Decimal  @db.Decimal(5, 2)
+  payload            Json
+  createdAt          DateTime @default(now())
+  actorId            String?
+  taskId             String?
+  actor              User?    @relation("SnapshotActor", fields: [actorId], references: [id], onDelete: SetNull)
+  task               Task?    @relation(fields: [taskId], references: [id], onDelete: SetNull)
 
   @@index([scope, periodStart, periodEnd])
 }
@@ -256,53 +291,57 @@ model AIInsight {
 }
 
 model Session {
-  id             String   @id @default(cuid())
-  refreshToken   String   @unique
-  userAgent      String?
-  ipAddress      String?
-  expiresAt      DateTime
-  createdAt      DateTime @default(now())
-  revokedAt      DateTime?
-  userId         String
-  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id               String    @id @default(cuid())
+  // NULL only for revoked pre-Phase-2 sessions; never an accepted credential.
+  refreshTokenHash String?   @unique
+  userAgent        String?
+  ipAddress        String?
+  expiresAt        DateTime
+  createdAt        DateTime  @default(now())
+  revokedAt        DateTime?
+  userId           String
+  user             User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, expiresAt])
 }
 
 model AuditLog {
-  id          String   @id @default(cuid())
-  action      String
-  entityType  String
-  entityId    String
-  payload     Json?
-  createdAt   DateTime @default(now())
-  actorId     String
-  actor       User     @relation(fields: [actorId], references: [id], onDelete: Cascade)
+  id         String   @id @default(cuid())
+  action     String
+  entityType String
+  entityId   String
+  payload    Json?
+  createdAt  DateTime @default(now())
+  actorId    String
+  actor      User     @relation(fields: [actorId], references: [id], onDelete: Cascade)
 
   @@index([entityType, entityId, createdAt])
   @@index([actorId, createdAt])
 }
 
 model DecisionRecord {
-  id              String   @id @default(cuid())
-  title           String
-  status          DecisionStatus @default(PROPOSED)
-  context         String   @db.Text
-  decision        String   @db.Text
-  rationale       String   @db.Text
-  alternatives    String[] @default([])
-  consequences    String?  @db.Text
-  authorId        String
-  author          User     @relation("Author", fields: [authorId], references: [id], onDelete: Cascade)
-  subsystemId     String?
-  subsystem       Subsystem? @relation(fields: [subsystemId], references: [id], onDelete: SetNull)
-  relatedTaskIds  String[] @default([])
-  supersededById  String?   @unique
-  supersedes      DecisionRecord? @relation("DecisionSupersession", fields: [supersededById], references: [id], onDelete: SetNull)
-  supersededBy    DecisionRecord? @relation("DecisionSupersession")
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-  decidedAt       DateTime?
+  /// Both null for legacy records; explicit values are constrained together in SQL.
+  scope          DecisionScope?
+  authority      DecisionAuthority?
+  id             String             @id @default(cuid())
+  title          String
+  status         DecisionStatus     @default(PROPOSED)
+  context        String             @db.Text
+  decision       String             @db.Text
+  rationale      String             @db.Text
+  alternatives   String[]           @default([])
+  consequences   String?            @db.Text
+  authorId       String
+  author         User               @relation("Author", fields: [authorId], references: [id], onDelete: Cascade)
+  subsystemId    String?
+  subsystem      Subsystem?         @relation(fields: [subsystemId], references: [id], onDelete: Restrict)
+  relatedTaskIds String[]           @default([])
+  supersededById String?            @unique
+  supersedes     DecisionRecord?    @relation("DecisionSupersession", fields: [supersededById], references: [id], onDelete: SetNull)
+  supersededBy   DecisionRecord?    @relation("DecisionSupersession")
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+  decidedAt      DateTime?
 
   @@index([status, createdAt])
   @@index([subsystemId])
@@ -325,21 +364,20 @@ enum InvitationStatus {
 }
 
 model Invitation {
-  id              String   @id @default(cuid())
-  email           String
-  role            Role
-  subsystemId     String?
-  subsystem       Subsystem? @relation(fields: [subsystemId], references: [id], onDelete: SetNull)
-  invitedById     String
-  invitedBy       User       @relation("InvitedBy", fields: [invitedById], references: [id], onDelete: Cascade)
-  token           String     @unique
-  status          InvitationStatus @default(PENDING)
-  expiresAt       DateTime
-  createdAt       DateTime   @default(now())
-  updatedAt       DateTime   @updatedAt
+  id          String           @id @default(cuid())
+  email       String
+  role        Role
+  subsystemId String?
+  subsystem   Subsystem?       @relation(fields: [subsystemId], references: [id], onDelete: SetNull)
+  invitedById String
+  invitedBy   User             @relation("InvitedBy", fields: [invitedById], references: [id], onDelete: Cascade)
+  token       String           @unique
+  status      InvitationStatus @default(PENDING)
+  expiresAt   DateTime
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
 
   @@index([email, status])
   @@index([token])
   @@index([invitedById])
 }
-

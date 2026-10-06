@@ -1,7 +1,9 @@
 import { z } from "zod";
 
 export class BackendAuthError extends Error {
-  constructor(readonly code: "credentials" | "rate_limited" | "backend_unavailable") {
+  constructor(
+    readonly code: "credentials" | "rate_limited" | "backend_unavailable",
+  ) {
     super(code);
     this.name = "BackendAuthError";
   }
@@ -22,7 +24,7 @@ const authResponse = z.object({
 export async function authenticateWithBackend(
   apiUrl: string,
   provider: "login" | "google-callback",
-  credentials: { email: string; password: string } | { email: string; name: string; avatarUrl?: string },
+  credentials: { email: string; password: string } | { idToken: string },
 ) {
   try {
     const response = await fetch(`${apiUrl}/auth/${provider}`, {
@@ -33,8 +35,13 @@ export async function authenticateWithBackend(
       signal: AbortSignal.timeout(10000),
     });
     if (!response.ok) {
-      throw new BackendAuthError(response.status === 429 ? "rate_limited"
-        : response.status === 401 || response.status === 403 ? "credentials" : "backend_unavailable");
+      throw new BackendAuthError(
+        response.status === 429
+          ? "rate_limited"
+          : response.status === 401 || response.status === 403
+            ? "credentials"
+            : "backend_unavailable",
+      );
     }
     const payload = authResponse.parse(await response.json());
     return {

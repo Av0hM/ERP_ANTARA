@@ -1,3 +1,5 @@
+import { z } from "zod";
+import { SessionService } from "../../../common/sessions/session.service";
 import { WsException } from "@nestjs/websockets";
 import { JwtService } from "@nestjs/jwt";
 import { ConfigService } from "@nestjs/config";
@@ -18,12 +20,19 @@ describe("WsJwtAuthGuard", () => {
 
   let guard: WsJwtAuthGuard;
 
-  const createMockClient = (auth?: Record<string, unknown>, query?: Record<string, unknown>) => ({
+  const createMockClient = (
+    auth?: Record<string, unknown>,
+    query?: Record<string, unknown>,
+  ) => ({
     handshake: { auth, query },
-    user: undefined as { id: string; email: string; name: string; role: string } | undefined,
+    user: undefined as
+      { id: string; email: string; name: string; role: string } | undefined,
   });
 
-  const createMockContext = (client: ReturnType<typeof createMockClient>, data?: unknown) => ({
+  const createMockContext = (
+    client: ReturnType<typeof createMockClient>,
+    data?: unknown,
+  ) => ({
     switchToWs: () => ({
       getClient: () => client,
       getData: () => data,
@@ -32,7 +41,11 @@ describe("WsJwtAuthGuard", () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-    guard = new WsJwtAuthGuard(jwtService, configService);
+    guard = new WsJwtAuthGuard(
+      jwtService,
+      configService,
+      new SessionServiceMock(),
+    );
   });
 
   it("allows connection with valid token in handshake.auth", async () => {
@@ -77,27 +90,73 @@ describe("WsJwtAuthGuard", () => {
     const client = createMockClient();
     const context = createMockContext(client);
 
-    await expect(guard.canActivate(context as never)).rejects.toThrow(WsException);
-    await expect(guard.canActivate(context as never)).rejects.toThrow("Authentication required");
+    await expect(guard.canActivate(context as never)).rejects.toThrow(
+      WsException,
+    );
+    await expect(guard.canActivate(context as never)).rejects.toThrow(
+      "Authentication required",
+    );
   });
 
   it("rejects connection with invalid token", async () => {
     const client = createMockClient({ token: "invalid-token" });
     const context = createMockContext(client);
 
-    (jwtService.verifyAsync as jest.Mock).mockRejectedValue(new Error("Invalid token"));
+    (jwtService.verifyAsync as jest.Mock).mockRejectedValue(
+      new Error("Invalid token"),
+    );
 
-    await expect(guard.canActivate(context as never)).rejects.toThrow(WsException);
-    await expect(guard.canActivate(context as never)).rejects.toThrow("Invalid or expired token");
+    await expect(guard.canActivate(context as never)).rejects.toThrow(
+      WsException,
+    );
+    await expect(guard.canActivate(context as never)).rejects.toThrow(
+      "Invalid or expired token",
+    );
+  });
+
+  it("rejects a signed token when its database session was revoked", async () => {
+    (jwtService.verifyAsync as jest.Mock).mockResolvedValue({
+      id: "revoked",
+      sid: "session",
+    });
+    jest
+      .spyOn(SessionServiceMock.prototype, "authenticateAccess")
+      .mockRejectedValueOnce(new Error("Invalid session"));
+    await expect(
+      guard.canActivate(
+        createMockContext(createMockClient({ token: "signed-token" })) as never,
+      ),
+    ).rejects.toThrow("Invalid or expired token");
+    jest.restoreAllMocks();
   });
 
   it("rejects connection with expired token", async () => {
     const client = createMockClient({ token: "expired-token" });
     const context = createMockContext(client);
 
-    (jwtService.verifyAsync as jest.Mock).mockRejectedValue(new Error("Token expired"));
+    (jwtService.verifyAsync as jest.Mock).mockRejectedValue(
+      new Error("Token expired"),
+    );
 
-    await expect(guard.canActivate(context as never)).rejects.toThrow(WsException);
-    await expect(guard.canActivate(context as never)).rejects.toThrow("Invalid or expired token");
+    await expect(guard.canActivate(context as never)).rejects.toThrow(
+      WsException,
+    );
+    await expect(guard.canActivate(context as never)).rejects.toThrow(
+      "Invalid or expired token",
+    );
   });
 });
+class SessionServiceMock implements Pick<SessionService, "authenticateAccess"> {
+  async authenticateAccess(
+    payload: Parameters<SessionService["authenticateAccess"]>[0],
+  ) {
+    return z
+      .object({
+        id: z.string(),
+        email: z.string(),
+        name: z.string(),
+        role: z.enum(["OWNER", "ADMIN", "MEMBER"]),
+      })
+      .parse(payload);
+  }
+}

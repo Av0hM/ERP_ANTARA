@@ -1,0 +1,11 @@
+{
+  "$schema": "./v1-subsystem-map.schema.json",
+  "version": 1,
+  "status": "DRAFT",
+  "inventorySha256": null,
+  "reviewedByOwnerId": null,
+  "reviewedAt": null,
+  "mappings": [],
+  "unresolvedSubsystemIds": [],
+  "notes": "Template only. Every legacy row needs explicit review, including Communications/Ground Station. Phase 1A contains no mapping executor."
+}

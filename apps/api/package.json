@@ -14,7 +14,14 @@
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:migrate:deploy": "prisma migrate deploy",
-    "seed:dummy": "ts-node src/scripts/seed-dummy-users.ts"
+    "seed:dummy": "ts-node src/scripts/seed-dummy-users.ts",
+    "seed:canonical": "ts-node prisma/seed.ts",
+    "preflight:v1": "ts-node src/scripts/preflight-v1.ts",
+    "test:phase1a": "PHASE1A_REQUIRE_DB=true jest --runInBand --config jest.config.js --runTestsByPath src/scripts/__tests__/phase1a.spec.ts src/scripts/__tests__/phase1a.integration.spec.ts",
+    "test:authorization": "jest --runInBand --config jest.config.js --runTestsByPath src/common/authorization/authorization.policy.spec.ts src/common/authorization/authorization.service.spec.ts",
+    "test:authorization:integration": "AUTHORIZATION_REQUIRE_DB=true jest --runInBand --config jest.config.js --runTestsByPath src/common/authorization/authorization.integration.spec.ts",
+    "test:auth:integration": "AUTH_REQUIRE_DB=true jest --runInBand --config jest.config.js --runTestsByPath src/modules/auth/auth.integration.spec.ts",
+    "test:auth": "jest --runInBand --config jest.config.js --runTestsByPath src/modules/auth/auth.service.spec.ts src/modules/auth/google-identity.service.spec.ts src/modules/auth/dummy-credentials.spec.ts src/modules/invitations/invitations.service.spec.ts src/modules/auth/guards/ws-jwt-auth.guard.spec.ts src/modules/auth/refresh-throttle.guard.spec.ts"
   },
   "dependencies": {
     "@nestjs/bullmq": "^12.0.0",
@@ -35,6 +42,7 @@
     "class-transformer": "^0.5.1",
     "class-validator": "^0.14.1",
     "cookie-parser": "^1.4.7",
+    "google-auth-library": "10.5.0",
     "ioredis": "^5.5.0",
     "passport": "^0.7.0",
     "passport-google-oauth20": "^2.0.0",

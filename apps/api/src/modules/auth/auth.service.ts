@@ -1,254 +1,127 @@
-import { Injectable, UnauthorizedException } from "@nestjs/common";
+import {
+  ForbiddenException,
+  Inject,
+  Injectable,
+  UnauthorizedException,
+} from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
-import { JwtService } from "@nestjs/jwt";
+import { PrismaClient } from "@prisma/client";
 import * as bcrypt from "bcryptjs";
-import { AppRole } from "@antara/contracts";
-import { Role as PrismaRole } from "@prisma/client";
-
 import { PrismaService } from "../../common/prisma/prisma.service";
-import { UsersService } from "../users/users.service";
+import {
+  accountAuthSelect,
+  accountCanAuthenticate,
+  lockAccounts,
+  SessionService,
+} from "../../common/sessions/session.service";
 import { LoginDto } from "./dto/login.dto";
 import { LogoutDto } from "./dto/logout.dto";
 import { RefreshSessionDto } from "./dto/refresh-session.dto";
-import { RegisterDto } from "./dto/register.dto";
-import { AuditService } from "../audit/audit.service";
+import { GoogleCallbackDto } from "./dto/google-callback.dto";
 import { dummyLoginAllowed } from "./dummy-credentials";
-
-function toAppRole(role: PrismaRole): AppRole {
-  switch (role) {
-    case PrismaRole.OWNER:
-      return AppRole.OWNER;
-
-    case PrismaRole.ADMIN:
-      return AppRole.ADMIN;
-
-    case PrismaRole.MEMBER:
-      return AppRole.MEMBER;
-  }
-}
-
-type AuthUser = {
-  id: string;
-  email: string;
-  name: string;
-  role: AppRole;
-};
-
-type TokenBundle = {
-  accessToken: string;
-  refreshToken: string;
-  accessTokenExpiresAt: string;
-  refreshTokenExpiresAt: string;
-};
+import { GoogleIdentityService } from "./google-identity.service";
 
 @Injectable()
 export class AuthService {
   constructor(
-    private readonly usersService: UsersService,
-    private readonly prisma: PrismaService,
-    private readonly jwtService: JwtService,
-    private readonly configService: ConfigService,
-    private readonly auditService: AuditService,
+    @Inject(PrismaService) private readonly prisma: PrismaClient,
+    private readonly sessions: SessionService,
+    private readonly config: ConfigService,
+    private readonly google: GoogleIdentityService,
   ) {}
 
-  async register(payload: RegisterDto) {
-    const existing = await this.usersService.findByEmail(payload.email);
-    if (existing) {
-      throw new UnauthorizedException("User already exists");
-    }
-
-    const passwordHash = await bcrypt.hash(payload.password, 12);
-    const user = await this.usersService.create({
-      email: payload.email,
-      name: payload.name,
-      passwordHash,
-      role: payload.role ?? AppRole.MEMBER,
-    });
-
-    return this.createAuthResponse({
-      id: user.id,
-      email: user.email,
-      name: user.name,
-      role: toAppRole(user.role),
-    });
+  register(): never {
+    throw new ForbiddenException("Registration requires an invitation");
   }
 
   async login(payload: LoginDto) {
-    const user = await this.usersService.findByEmail(payload.email.trim().toLowerCase());
-    if (!user?.passwordHash || !dummyLoginAllowed(user)) {
+    const candidate = await this.prisma.user.findUnique({
+      where: { email: payload.email.trim().toLowerCase() },
+      select: { ...accountAuthSelect, passwordHash: true },
+    });
+    if (
+      !candidate?.passwordHash ||
+      !accountCanAuthenticate(candidate) ||
+      !dummyLoginAllowed(candidate) ||
+      !(await bcrypt.compare(payload.password, candidate.passwordHash))
+    ) {
       throw new UnauthorizedException("Invalid credentials");
     }
-
-    const isMatch = await bcrypt.compare(payload.password, user.passwordHash);
-    if (!isMatch) {
-      throw new UnauthorizedException("Invalid credentials");
-    }
-
-    const response = this.createAuthResponse({
-      id: user.id,
-      email: user.email,
-      name: user.name,
-      role: toAppRole(user.role),
-    });
-
-    await this.auditService.log({
-      action: "LOGIN",
-      entityType: "User",
-      entityId: user.id,
-      actorId: user.id,
-      payload: { email: user.email },
-    });
-
-    return response;
-  }
-
-  async googleCallback(payload: { email: string; name: string; avatarUrl?: string }) {
-    const existingUser =
-      await this.usersService.findByEmail(payload.email);
-
-    const user =
-      existingUser ??
-      (await this.usersService.create({
-        email: payload.email,
-        name: payload.name,
-        role: AppRole.MEMBER,
-      }));
-
-    if (payload.avatarUrl && !user.avatarUrl) {
-      await this.prisma.user.update({
-        where: { id: user.id },
-        data: { avatarUrl: payload.avatarUrl },
+    return this.prisma.$transaction(async (tx) => {
+      await lockAccounts(tx, [candidate.id]);
+      const user = await tx.user.findUnique({
+        where: { id: candidate.id },
+        select: { ...accountAuthSelect, passwordHash: true },
       });
-    }
-
-    const response = this.createAuthResponse({
-      id: user.id,
-      email: user.email,
-      name: user.name,
-      role: toAppRole(user.role),
-    });
-
-    await this.auditService.log({
-      action: "LOGIN",
-      entityType: "User",
-      entityId: user.id,
-      actorId: user.id,
-      payload: { email: user.email, provider: "google" },
-    });
-
-    return response;
-  }
-
-  async refreshSession(payload: RefreshSessionDto) {
-    const refreshSecret = this.configService.get<string>("auth.refreshSecret") ?? "dev-refresh-secret";
-    const decoded = await this.jwtService.verifyAsync<{ sub: string; type: string }>(payload.refreshToken, {
-      secret: refreshSecret,
-    });
-
-    if (decoded.type !== "refresh") {
-      throw new UnauthorizedException("Invalid refresh token");
-    }
-
-    const session = await this.prisma.session.findUnique({
-      where: { refreshToken: payload.refreshToken },
-      include: { user: true },
-    });
-
-    if (!session || session.revokedAt || session.expiresAt.getTime() < Date.now()) {
-      throw new UnauthorizedException("Session expired");
-    }
-
-    const user = session.user;
-    const tokens = await this.issueTokens({
-      id: user.id,
-      email: user.email,
-      name: user.name,
-      role: toAppRole(user.role),
-    });
-
-    await this.prisma.session.update({
-      where: { id: session.id },
-      data: {
-        refreshToken: tokens.refreshToken,
-        expiresAt: new Date(tokens.refreshTokenExpiresAt),
-      },
-    });
-
-    return {
-      user: {
-        id: user.id,
-        email: user.email,
-        name: user.name,
-        role: toAppRole(user.role),
-      },
-      ...tokens,
-    };
-  }
-
-  async logout(payload: LogoutDto) {
-    const session = await this.prisma.session.findUnique({
-      where: { refreshToken: payload.refreshToken },
-      include: { user: true },
-    });
-
-    await this.prisma.session.updateMany({
-      where: { refreshToken: payload.refreshToken, revokedAt: null },
-      data: { revokedAt: new Date() },
-    });
-
-    if (session?.user) {
-      await this.auditService.log({
-        action: "LOGOUT",
-        entityType: "User",
-        entityId: session.user.id,
-        actorId: session.user.id,
+      if (
+        !user ||
+        !accountCanAuthenticate(user) ||
+        user.passwordHash !== candidate.passwordHash ||
+        !dummyLoginAllowed(user)
+      )
+        throw new UnauthorizedException("Invalid credentials");
+      const response = await this.sessions.issue(tx, user);
+      await tx.auditLog.create({
+        data: {
+          action: "LOGIN",
+          entityType: "User",
+          entityId: user.id,
+          actorId: user.id,
+          payload: { provider: "credentials" },
+        },
       });
-    }
-
-    return { success: true };
+      return response;
+    });
   }
 
-  private async createAuthResponse(user: AuthUser) {
-    const tokens = await this.issueTokens(user);
-
-    await this.prisma.session.create({
-      data: {
-        userId: user.id,
-        refreshToken: tokens.refreshToken,
-        expiresAt: new Date(tokens.refreshTokenExpiresAt),
-      },
+  async googleCallback(payload: GoogleCallbackDto) {
+    const identity = await this.google.verify(payload.idToken);
+    const allowed =
+      this.config
+        .get<string>("GOOGLE_ALLOWED_EMAILS")
+        ?.split(",")
+        .map((email) => email.trim().toLowerCase())
+        .filter(Boolean) ?? [];
+    if (!allowed.includes(identity.email))
+      throw new UnauthorizedException("Authentication failed");
+    return this.prisma.$transaction(async (tx) => {
+      // Empty update never reactivates, overwrites credentials or changes roles/memberships.
+      const candidate = await tx.user.upsert({
+        where: { email: identity.email },
+        update: {},
+        create: {
+          email: identity.email,
+          name: identity.name,
+          avatarUrl: identity.avatarUrl,
+          role: "MEMBER",
+          isActive: true,
+        },
+        select: { id: true },
+      });
+      await lockAccounts(tx, [candidate.id]);
+      const user = await tx.user.findUnique({
+        where: { id: candidate.id },
+        select: accountAuthSelect,
+      });
+      if (!user || !accountCanAuthenticate(user))
+        throw new UnauthorizedException("Authentication failed");
+      const response = await this.sessions.issue(tx, user);
+      await tx.auditLog.create({
+        data: {
+          action: "LOGIN",
+          entityType: "User",
+          entityId: user.id,
+          actorId: user.id,
+          payload: { provider: "google" },
+        },
+      });
+      return response;
     });
-
-    return {
-      user,
-      ...tokens,
-    };
   }
-
-  private async issueTokens(user: AuthUser): Promise<TokenBundle> {
-    const accessSecret = this.configService.get<string>("auth.accessSecret") ?? "dev-access-secret";
-    const refreshSecret = this.configService.get<string>("auth.refreshSecret") ?? "dev-refresh-secret";
-    const accessTokenExpiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString();
-    const refreshTokenExpiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
-
-    const accessToken = await this.jwtService.signAsync(user, {
-      secret: accessSecret,
-      expiresIn: "15m",
-    });
-
-    const refreshToken = await this.jwtService.signAsync(
-      { sub: user.id, type: "refresh" },
-      {
-        secret: refreshSecret,
-        expiresIn: "7d",
-      },
-    );
-
-    return {
-      accessToken,
-      refreshToken,
-      accessTokenExpiresAt,
-      refreshTokenExpiresAt,
-    };
+  refreshSession(payload: RefreshSessionDto) {
+    return this.sessions.refresh(payload.refreshToken);
+  }
+  logout(payload: LogoutDto) {
+    return this.sessions.logout(payload.refreshToken);
   }
 }

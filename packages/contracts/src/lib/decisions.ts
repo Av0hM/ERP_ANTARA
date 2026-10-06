@@ -1,3 +1,26 @@
+export enum DecisionScope {
+  GLOBAL = "GLOBAL",
+  SUBSYSTEM = "SUBSYSTEM",
+}
+
+export enum DecisionAuthority {
+  OWNER = "OWNER",
+  SUBSYSTEM_ADMIN = "SUBSYSTEM_ADMIN",
+}
+
+/** Explicit decision placement, independent of the actor's compatibility role. */
+export type DecisionPlacement =
+  | {
+      scope: DecisionScope.GLOBAL;
+      authority: DecisionAuthority.OWNER;
+      subsystemId: null;
+    }
+  | {
+      scope: DecisionScope.SUBSYSTEM;
+      authority: DecisionAuthority;
+      subsystemId: string;
+    };
+
 export enum DecisionStatus {
   PROPOSED = "PROPOSED",
   ACCEPTED = "ACCEPTED",
@@ -7,6 +30,9 @@ export enum DecisionStatus {
 }
 
 export interface DecisionRecord {
+  /** Nullable/optional during expand-first rollout; not permission to mutate. */
+  scope?: DecisionScope | null;
+  authority?: DecisionAuthority | null;
   id: string;
   title: string;
   status: DecisionStatus;

@@ -1,3 +1,5 @@
+import { AuthorizationModule } from "../../common/authorization/authorization.module";
+import { SessionModule } from "../../common/sessions/session.module";
 import { Module } from "@nestjs/common";
 import { BullModule } from "@nestjs/bullmq";
 
@@ -10,6 +12,8 @@ import { InvitationEmailProcessor } from "./processors/invitation-email.processo
 @Module({
   imports: [
     PrismaModule,
+    AuthorizationModule,
+    SessionModule,
     AuditModule,
     BullModule.registerQueue({
       name: "invitation-email",

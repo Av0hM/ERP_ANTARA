@@ -1,3 +1,5 @@
+import { SessionModule } from "../../common/sessions/session.module";
+import { WsJwtAuthGuard } from "../auth/guards/ws-jwt-auth.guard";
 import { Module } from "@nestjs/common";
 import { JwtModule } from "@nestjs/jwt";
 
@@ -9,8 +11,13 @@ import { TasksController } from "./tasks.controller";
 import { TasksService } from "./tasks.service";
 
 @Module({
-  imports: [PrismaModule, AuditModule, JwtModule.register({})],
-  providers: [TasksService, TaskCollaborationGateway, TaskEventsService],
+  imports: [SessionModule, PrismaModule, AuditModule, JwtModule.register({})],
+  providers: [
+    WsJwtAuthGuard,
+    TasksService,
+    TaskCollaborationGateway,
+    TaskEventsService,
+  ],
   controllers: [TasksController],
   exports: [TasksService],
 })

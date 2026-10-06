@@ -54,7 +54,9 @@ export class RateLimitingMiddleware implements NestMiddleware {
   }
 
   use(req: Request, res: Response, next: NextFunction) {
-    if (this.config.skip(req)) {
+    // Refresh has credential/session limits and a generous source flood limit in
+    // RefreshThrottleGuard. Do not also impose this shared proxy-IP quota.
+    if ((req.method === "POST" && /^\/api\/auth\/refresh\/?$/i.test(req.path)) || this.config.skip(req)) {
       return next();
     }
 

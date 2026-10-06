@@ -1,6 +1,7 @@
 /** @type {import('jest').Config} */
 module.exports = {
-  moduleFileExtensions: ["js", "json", "ts"],
+  // Prefer authoritative TypeScript over checked-in, stale generated JS siblings.
+  moduleFileExtensions: ["ts", "js", "json"],
   rootDir: ".",
   testEnvironment: "node",
   testRegex: ".*\\.(spec|e2e-spec)\\.ts$",
