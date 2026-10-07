@@ -46,9 +46,9 @@ export class UsersController {
   ) {}
 
   @Get("members")
-  @Roles("OWNER", "ADMIN")
-  listMembers() {
-    return this.usersService.listMembers();
+  @Roles("OWNER", "ADMIN", "MEMBER")
+  listMembers(@Req() req: AuthenticatedRequest) {
+    return this.usersService.listMembers(req.user.id);
   }
 
   @Patch(":id/role")

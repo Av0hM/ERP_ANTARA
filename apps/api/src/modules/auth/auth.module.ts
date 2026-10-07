@@ -19,7 +19,12 @@ import { JwtStrategy } from "./strategies/jwt.strategy";
     PassportModule,
     JwtModule.register({}),
   ],
-  providers: [AuthService, JwtStrategy, GoogleIdentityService, RefreshThrottleGuard],
+  providers: [
+    AuthService,
+    JwtStrategy,
+    GoogleIdentityService,
+    RefreshThrottleGuard,
+  ],
   controllers: [AuthController],
   exports: [AuthService],
 })

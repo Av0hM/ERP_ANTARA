@@ -65,9 +65,15 @@ export function useAnalyticsData() {
     queryKey: ["analytics-bundle", actor?.accessToken],
     queryFn: async () => {
       const analyticsBundle = await fetchAnalyticsBundle(actor!.accessToken);
-      const aiBundle = analyticsBundle.scope === "GLOBAL"
-        ? await fetchAiBundle(actor!.accessToken)
-        : { insights: analyticsBundle.insights, reminders: [], schedule: [], workload: [] };
+      const aiBundle =
+        analyticsBundle.scope === "GLOBAL"
+          ? await fetchAiBundle(actor!.accessToken)
+          : {
+              insights: analyticsBundle.insights,
+              reminders: [],
+              schedule: [],
+              workload: [],
+            };
 
       return { ...analyticsBundle, ...aiBundle };
     },
@@ -102,19 +108,31 @@ export function useNotificationCenter() {
   });
 
   const markRead = useMutation({
-    mutationFn: ({ id, isRead }: { id: string; isRead: boolean }) => updateNotification(id, isRead, actor!.accessToken),
+    mutationFn: ({ id, isRead }: { id: string; isRead: boolean }) =>
+      updateNotification(id, isRead, actor!.accessToken),
     onMutate: async ({ id, isRead }) => {
-      await queryClient.cancelQueries({ queryKey: ["notifications", actor?.accessToken] });
-      const previous = queryClient.getQueryData<NotificationRecord[]>(["notifications", actor?.accessToken]) ?? [];
-      queryClient.setQueryData<NotificationRecord[]>(["notifications", actor?.accessToken], (current = []) =>
-        current.map((item) => (item.id === id ? { ...item, isRead } : item)),
+      await queryClient.cancelQueries({
+        queryKey: ["notifications", actor?.accessToken],
+      });
+      const previous =
+        queryClient.getQueryData<NotificationRecord[]>([
+          "notifications",
+          actor?.accessToken,
+        ]) ?? [];
+      queryClient.setQueryData<NotificationRecord[]>(
+        ["notifications", actor?.accessToken],
+        (current = []) =>
+          current.map((item) => (item.id === id ? { ...item, isRead } : item)),
       );
       return { previous };
     },
     onError: (_error, _vars, context) => {
       addToast("Unable to update notification", "error");
       if (context?.previous) {
-        queryClient.setQueryData(["notifications", actor?.accessToken], context.previous);
+        queryClient.setQueryData(
+          ["notifications", actor?.accessToken],
+          context.previous,
+        );
       }
     },
   });
@@ -122,17 +140,27 @@ export function useNotificationCenter() {
   const deleteMutation = useMutation({
     mutationFn: (id: string) => deleteNotification(id, actor!.accessToken),
     onMutate: async (id) => {
-      await queryClient.cancelQueries({ queryKey: ["notifications", actor?.accessToken] });
-      const previous = queryClient.getQueryData<NotificationRecord[]>(["notifications", actor?.accessToken]) ?? [];
-      queryClient.setQueryData<NotificationRecord[]>(["notifications", actor?.accessToken], (current = []) =>
-        current.filter((item) => item.id !== id),
+      await queryClient.cancelQueries({
+        queryKey: ["notifications", actor?.accessToken],
+      });
+      const previous =
+        queryClient.getQueryData<NotificationRecord[]>([
+          "notifications",
+          actor?.accessToken,
+        ]) ?? [];
+      queryClient.setQueryData<NotificationRecord[]>(
+        ["notifications", actor?.accessToken],
+        (current = []) => current.filter((item) => item.id !== id),
       );
       return { previous };
     },
     onError: (_error, _id, context) => {
       addToast("Unable to delete notification", "error");
       if (context?.previous) {
-        queryClient.setQueryData(["notifications", actor?.accessToken], context.previous);
+        queryClient.setQueryData(
+          ["notifications", actor?.accessToken],
+          context.previous,
+        );
       }
     },
   });
@@ -146,9 +174,17 @@ export function useNotificationCenter() {
       if (!unread.length) {
         return;
       }
-      void Promise.all(unread.map((item) => markRead.mutateAsync({ id: item.id, isRead: true }))).then(() => {
-        addToast("Notifications marked as read", "success");
-      }).catch(() => { /* Individual mutations display their errors. */ });
+      void Promise.all(
+        unread.map((item) =>
+          markRead.mutateAsync({ id: item.id, isRead: true }),
+        ),
+      )
+        .then(() => {
+          addToast("Notifications marked as read", "success");
+        })
+        .catch(() => {
+          /* Individual mutations display their errors. */
+        });
     },
   };
 }
@@ -164,10 +200,18 @@ export function useCalendarData() {
   });
 
   const createEvent = useMutation({
-    mutationFn: (input: { title: string; description?: string; startsAt: string; endsAt: string; subsystemId?: string }) =>
-      createCalendarEvent(input, actor!.accessToken),
+    mutationFn: (input: {
+      title: string;
+      description?: string;
+      startsAt: string;
+      endsAt: string;
+      subsystemId?: string;
+    }) => createCalendarEvent(input, actor!.accessToken),
     onSuccess: (created) => {
-      queryClient.setQueryData<CalendarEventRecord[]>(["calendar-events", actor?.accessToken], (current = []) => [...current, created]);
+      queryClient.setQueryData<CalendarEventRecord[]>(
+        ["calendar-events", actor?.accessToken],
+        (current = []) => [...current, created],
+      );
       addToast("Event created", "success");
     },
     onError: () => {
@@ -199,7 +243,6 @@ export function useWorklogData() {
 
   const create = useMutation({
     mutationFn: (input: {
-      userId: string;
       taskId: string;
       startedAt: string;
       endedAt: string;
@@ -207,18 +250,27 @@ export function useWorklogData() {
       notes?: string;
     }) => createWorklog(input, actor!.accessToken),
     onSuccess: (created) => {
-      queryClient.setQueryData<WorklogRecord[]>(["worklogs", actor?.accessToken], (current = []) => [
-        {
-          id: String((created as { id?: string }).id ?? `worklog-${Date.now()}`),
-          startedAt: (created as { startedAt?: string }).startedAt ?? new Date().toISOString(),
-          endedAt: (created as { endedAt?: string }).endedAt,
-          durationMin: Number((created as { durationMin?: number }).durationMin ?? 0),
-          notes: (created as { notes?: string }).notes,
-          task: { title: "Manual worklog entry" },
-          user: { name: actor!.name },
-        },
-        ...current,
-      ]);
+      queryClient.setQueryData<WorklogRecord[]>(
+        ["worklogs", actor?.accessToken],
+        (current = []) => [
+          {
+            id: String(
+              (created as { id?: string }).id ?? `worklog-${Date.now()}`,
+            ),
+            startedAt:
+              (created as { startedAt?: string }).startedAt ??
+              new Date().toISOString(),
+            endedAt: (created as { endedAt?: string }).endedAt,
+            durationMin: Number(
+              (created as { durationMin?: number }).durationMin ?? 0,
+            ),
+            notes: (created as { notes?: string }).notes,
+            task: { title: "Manual worklog entry" },
+            user: { name: actor!.name },
+          },
+          ...current,
+        ],
+      );
       addToast("Worklog submitted", "success");
     },
     onError: () => {
@@ -237,7 +289,8 @@ export function useWorklogData() {
 export function useAiSummary() {
   const actor = useActorProfile();
   const summary = useMutation({
-    mutationFn: (input: { text: string; context?: string }) => summarizeTechnicalText(input, actor!.accessToken),
+    mutationFn: (input: { text: string; context?: string }) =>
+      summarizeTechnicalText(input, actor!.accessToken),
   });
 
   return {
@@ -268,15 +321,14 @@ export function useAttachmentVault() {
       createAttachment(
         {
           ...input,
-          uploadedById: actor!.id,
         },
         actor!.accessToken,
       ),
     onSuccess: (created) => {
-      queryClient.setQueryData<AttachmentRecord[]>(["attachments", actor?.accessToken], (current = []) => [
-        created,
-        ...current,
-      ]);
+      queryClient.setQueryData<AttachmentRecord[]>(
+        ["attachments", actor?.accessToken],
+        (current = []) => [created, ...current],
+      );
       addToast("File uploaded", "success");
     },
     onError: () => {
@@ -326,7 +378,9 @@ export function useReassignTask() {
     mutationFn: (input: { taskId: string; assignedToId: string | null }) =>
       updateTaskAssignee(input.taskId, input.assignedToId, actor!.accessToken),
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ["tasks", actor?.accessToken] });
+      await queryClient.invalidateQueries({
+        queryKey: ["tasks", actor?.accessToken],
+      });
       addToast("Task reassigned", "success");
     },
     onError: () => {
@@ -348,12 +402,17 @@ export function useScheduleRisk(horizonDays?: number, simulations?: number) {
   const actor = useActorProfile();
   return useQuery<ScheduleRiskResponse>({
     queryKey: ["schedule-risk", horizonDays, simulations, actor?.accessToken],
-    queryFn: () => fetchScheduleRisk(horizonDays, simulations, actor!.accessToken),
+    queryFn: () =>
+      fetchScheduleRisk(horizonDays, simulations, actor!.accessToken),
     enabled: !!actor,
   });
 }
 
-export function useDecisions(params?: { status?: string; subsystemId?: string; authorId?: string }) {
+export function useDecisions(params?: {
+  status?: string;
+  subsystemId?: string;
+  authorId?: string;
+}) {
   const actor = useActorProfile();
   return useQuery<DecisionListResponse>({
     queryKey: ["decisions", params, actor?.accessToken],
@@ -419,7 +478,9 @@ export function useUpdateDecision() {
     }) => updateDecision(id, input, actor!.accessToken),
     onSuccess: async (_, variables) => {
       await queryClient.invalidateQueries({ queryKey: ["decisions"] });
-      await queryClient.invalidateQueries({ queryKey: ["decision", variables.id] });
+      await queryClient.invalidateQueries({
+        queryKey: ["decision", variables.id],
+      });
       addToast("Decision updated", "success");
     },
     onError: () => {
@@ -448,7 +509,8 @@ export function useResourceAllocationBoard(horizonWeeks?: number) {
   const actor = useActorProfile();
   return useQuery<ResourceAllocationBoard>({
     queryKey: ["resource-allocation-board", horizonWeeks, actor?.accessToken],
-    queryFn: () => fetchResourceAllocationBoard(horizonWeeks, actor!.accessToken),
+    queryFn: () =>
+      fetchResourceAllocationBoard(horizonWeeks, actor!.accessToken),
     enabled: !!actor,
   });
 }
@@ -467,10 +529,17 @@ export function useApplyResourceMove() {
   const queryClient = useQueryClient();
   const { addToast } = useToast();
   return useMutation({
-    mutationFn: ({ taskId, assigneeId }: { taskId: string; assigneeId: string }) =>
-      applyResourceMove(taskId, assigneeId, actor!.accessToken),
+    mutationFn: ({
+      taskId,
+      assigneeId,
+    }: {
+      taskId: string;
+      assigneeId: string;
+    }) => applyResourceMove(taskId, assigneeId, actor!.accessToken),
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ["resource-allocation-board"] });
+      await queryClient.invalidateQueries({
+        queryKey: ["resource-allocation-board"],
+      });
       await queryClient.invalidateQueries({ queryKey: ["suggested-moves"] });
       await queryClient.invalidateQueries({ queryKey: ["tasks"] });
       addToast("Task reassigned", "success");

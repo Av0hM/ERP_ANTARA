@@ -1,4 +1,14 @@
-import { Injectable, Logger, OnModuleDestroy, OnModuleInit, UnauthorizedException } from "@nestjs/common";
+import { ForbiddenException } from "@nestjs/common";
+import { canonicalSubsystems } from "@antara/contracts";
+import { CoreAuthorizationService } from "../../common/authorization/core-authorization.service";
+import { administeredSubsystemIds } from "../../common/authorization/authorization.policy";
+import {
+  Injectable,
+  Logger,
+  OnModuleDestroy,
+  OnModuleInit,
+  UnauthorizedException,
+} from "@nestjs/common";
 import { Prisma } from "@prisma/client";
 import { subsystemCatalog, TaskStatus } from "@antara/contracts";
 
@@ -8,33 +18,57 @@ import { PrismaService } from "../../common/prisma/prisma.service";
 export type AnalyticsScope =
   | { kind: "GLOBAL" }
   | { kind: "SUBSYSTEM"; id: string }
+  | { kind: "ADMIN"; ids: string[] }
   | { kind: "PERSONAL"; id: string }
   | { kind: "EMPTY"; id: string };
 const globalScope: AnalyticsScope = { kind: "GLOBAL" };
-const scopeKey = (scope: AnalyticsScope) => scope.kind === "GLOBAL" ? "GLOBAL" : `${scope.kind}:${scope.id}`;
+export const scopeKey = (scope: AnalyticsScope) => {
+  if (scope.kind === "GLOBAL") return "v4a:OWNER_GLOBAL";
+  if (scope.kind === "ADMIN")
+    return `v4a:ADMIN:${JSON.stringify([...new Set(scope.ids)].sort())}`;
+  return `v4a:${scope.kind === "SUBSYSTEM" ? "OWNER_SUBSYSTEM" : scope.kind}:${scope.id}`;
+};
 
 function taskScope(scope: AnalyticsScope): Prisma.TaskWhereInput {
   switch (scope.kind) {
-    case "GLOBAL": return {};
-    case "SUBSYSTEM": return { subsystemId: scope.id };
-    case "PERSONAL": return { assignedToId: scope.id };
-    case "EMPTY": return { id: { in: [] } };
+    case "GLOBAL":
+      return {};
+    case "SUBSYSTEM":
+      return { subsystemId: scope.id };
+    case "ADMIN":
+      return { subsystemId: { in: scope.ids } };
+    case "PERSONAL":
+      return { assignedToId: scope.id };
+    case "EMPTY":
+      return { id: { in: [] } };
   }
 }
 function worklogScope(scope: AnalyticsScope): Prisma.WorkLogWhereInput {
   switch (scope.kind) {
-    case "GLOBAL": return {};
-    case "SUBSYSTEM": return { task: { subsystemId: scope.id } };
-    case "PERSONAL": return { userId: scope.id };
-    case "EMPTY": return { id: { in: [] } };
+    case "GLOBAL":
+      return {};
+    case "SUBSYSTEM":
+      return { task: { subsystemId: scope.id } };
+    case "ADMIN":
+      return { task: { subsystemId: { in: scope.ids } } };
+    case "PERSONAL":
+      return { userId: scope.id };
+    case "EMPTY":
+      return { id: { in: [] } };
   }
 }
 function userScope(scope: AnalyticsScope): Prisma.UserWhereInput {
   switch (scope.kind) {
-    case "GLOBAL": return {};
-    case "SUBSYSTEM": return { subsystemId: scope.id };
-    case "PERSONAL": return { id: scope.id };
-    case "EMPTY": return { id: { in: [] } };
+    case "GLOBAL":
+      return {};
+    case "SUBSYSTEM":
+      return { memberships: { some: { subsystemId: scope.id } } };
+    case "ADMIN":
+      return { memberships: { some: { subsystemId: { in: scope.ids } } } };
+    case "PERSONAL":
+      return { id: scope.id };
+    case "EMPTY":
+      return { id: { in: [] } };
   }
 }
 
@@ -47,7 +81,12 @@ type AnalyticsOverview = {
 
 type HeatmapCell = { day: string; intensity: number };
 type VelocityPoint = { label: string; value: number };
-type SubsystemBreakdown = { name: string; velocity: number; risk: number; completion: number };
+type SubsystemBreakdown = {
+  name: string;
+  velocity: number;
+  risk: number;
+  completion: number;
+};
 
 @Injectable()
 export class AnalyticsService implements OnModuleInit, OnModuleDestroy {
@@ -59,12 +98,15 @@ export class AnalyticsService implements OnModuleInit, OnModuleDestroy {
   constructor(
     private readonly prisma: PrismaService,
     private readonly cache: RedisCacheService,
+    private readonly core: CoreAuthorizationService,
   ) {}
 
   async onModuleInit() {
     await this.refreshAnalyticsSnapshot();
     this.snapshotTimer = setInterval(() => {
-      void this.refreshAnalyticsSnapshot().catch(() => this.logger.error("Analytics snapshot refresh failed"));
+      void this.refreshAnalyticsSnapshot().catch(() =>
+        this.logger.error("Analytics snapshot refresh failed"),
+      );
     }, this.refreshIntervalMs);
     this.snapshotTimer.unref?.();
   }
@@ -75,19 +117,47 @@ export class AnalyticsService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
-  async resolveScope(userId: string): Promise<AnalyticsScope> {
-    const user = await this.prisma.user.findUnique({ where: { id: userId } });
-    if (!user || !user.isActive || user.deletedAt) throw new UnauthorizedException();
-    if (user.role === "OWNER") return globalScope;
-    if (user.role === "ADMIN") return user.subsystemId
-      ? { kind: "SUBSYSTEM", id: user.subsystemId }
-      : { kind: "EMPTY", id: user.id };
-    return { kind: "PERSONAL", id: user.id };
+  async resolveScope(
+    userId: string,
+    selectedSubsystemId?: string,
+  ): Promise<AnalyticsScope> {
+    const actor = await this.core.actor(userId);
+    if (actor.roleInconsistency === "MEMBER_WITH_ADMIN_MEMBERSHIP")
+      return { kind: "EMPTY", id: userId };
+    if (selectedSubsystemId) {
+      const subsystem = await this.prisma.subsystem.findFirst({
+        where: {
+          id: selectedSubsystemId,
+          key: { in: canonicalSubsystems.map((s) => s.key) },
+        },
+        select: { id: true },
+      });
+      if (!subsystem) throw new ForbiddenException("Analytics scope denied");
+      if (actor.globalAuthority) return { kind: "SUBSYSTEM", id: subsystem.id };
+      const admin = administeredSubsystemIds(actor);
+      if (admin.kind !== "SCOPED" || !admin.ids.includes(subsystem.id))
+        throw new ForbiddenException("Analytics scope denied");
+      return { kind: "ADMIN", ids: [subsystem.id] };
+    }
+    if (actor.globalAuthority) return globalScope;
+    if (actor.role === "ADMIN") {
+      const admin = administeredSubsystemIds(actor);
+      return admin.kind === "SCOPED" && admin.ids.length
+        ? { kind: "ADMIN", ids: [...admin.ids] }
+        : { kind: "EMPTY", id: userId };
+    }
+    return { kind: "PERSONAL", id: userId };
   }
 
-  getOwnerOverview() { return this.getOverview(globalScope); }
-  getSubsystemOverview(subsystemId: string) { return this.getOverview({ kind: "SUBSYSTEM", id: subsystemId }); }
-  getPersonalOverview(userId: string) { return this.getOverview({ kind: "PERSONAL", id: userId }); }
+  getOwnerOverview() {
+    return this.getOverview(globalScope);
+  }
+  getSubsystemOverview(subsystemId: string) {
+    return this.getOverview({ kind: "SUBSYSTEM", id: subsystemId });
+  }
+  getPersonalOverview(userId: string) {
+    return this.getOverview({ kind: "PERSONAL", id: userId });
+  }
 
   async getOverview(scope: AnalyticsScope): Promise<AnalyticsOverview> {
     const cacheKey = `analytics:overview:${scopeKey(scope)}`;
@@ -98,7 +168,9 @@ export class AnalyticsService implements OnModuleInit, OnModuleDestroy {
     return overview;
   }
 
-  async getVelocityTrend(scope: AnalyticsScope = globalScope): Promise<VelocityPoint[]> {
+  async getVelocityTrend(
+    scope: AnalyticsScope = globalScope,
+  ): Promise<VelocityPoint[]> {
     const cacheKey = `analytics:velocity:${scopeKey(scope)}`;
     const cached = await this.cache.getJson<VelocityPoint[]>(cacheKey);
     if (cached) {
@@ -123,7 +195,9 @@ export class AnalyticsService implements OnModuleInit, OnModuleDestroy {
     return series;
   }
 
-  async getHeatmap(scope: AnalyticsScope = globalScope): Promise<HeatmapCell[]> {
+  async getHeatmap(
+    scope: AnalyticsScope = globalScope,
+  ): Promise<HeatmapCell[]> {
     const cacheKey = `analytics:heatmap:${scopeKey(scope)}`;
     const cached = await this.cache.getJson<HeatmapCell[]>(cacheKey);
     if (cached) {
@@ -147,7 +221,10 @@ export class AnalyticsService implements OnModuleInit, OnModuleDestroy {
     const tally = weekdays.map((day) => ({ day, intensity: 0 }));
     for (const worklog of worklogs) {
       const index = worklog.startedAt.getDay();
-      tally[index]!.intensity += Math.max(1, Math.round(worklog.durationMin / 60));
+      tally[index]!.intensity += Math.max(
+        1,
+        Math.round(worklog.durationMin / 60),
+      );
     }
 
     const heatmap = tally.slice(1).concat(tally[0] ? [tally[0]] : []);
@@ -161,7 +238,9 @@ export class AnalyticsService implements OnModuleInit, OnModuleDestroy {
     return result;
   }
 
-  async getSubsystemBreakdown(scope: AnalyticsScope = globalScope): Promise<SubsystemBreakdown[]> {
+  async getSubsystemBreakdown(
+    scope: AnalyticsScope = globalScope,
+  ): Promise<SubsystemBreakdown[]> {
     const cacheKey = `analytics:subsystems:${scopeKey(scope)}`;
     const cached = await this.cache.getJson<SubsystemBreakdown[]>(cacheKey);
     if (cached) {
@@ -179,18 +258,36 @@ export class AnalyticsService implements OnModuleInit, OnModuleDestroy {
       },
     });
 
-    const names = scope.kind === "GLOBAL" ? subsystemCatalog : [...new Set(tasks.map((task) => task.subsystem.name))];
+    const names =
+      scope.kind === "GLOBAL"
+        ? subsystemCatalog
+        : [...new Set(tasks.map((task) => task.subsystem.name))];
     const subsystems = names.map((name) => {
       const relevant = tasks.filter((task) => task.subsystem.name === name);
-      const completed = relevant.filter((task) => task.status === TaskStatus.COMPLETED).length;
-      const overdue = relevant.filter((task) => task.status === TaskStatus.OVERDUE || task.deadline < new Date()).length;
-      const active = relevant.filter((task) => task.status !== TaskStatus.COMPLETED).length;
-      const totalHours = relevant.reduce((sum, task) => sum + Number(task.estimatedHours ?? 0), 0);
+      const completed = relevant.filter(
+        (task) => task.status === TaskStatus.COMPLETED,
+      ).length;
+      const overdue = relevant.filter(
+        (task) =>
+          task.status === TaskStatus.OVERDUE || task.deadline < new Date(),
+      ).length;
+      const active = relevant.filter(
+        (task) => task.status !== TaskStatus.COMPLETED,
+      ).length;
+      const totalHours = relevant.reduce(
+        (sum, task) => sum + Number(task.estimatedHours ?? 0),
+        0,
+      );
       return {
         name,
         velocity: Math.min(99, Math.round(55 + completed * 6 + active * 2)),
-        risk: Math.min(99, Math.round(20 + overdue * 12 + active * 3 + totalHours / 2)),
-        completion: relevant.length ? Math.round((completed / relevant.length) * 100) : 0,
+        risk: Math.min(
+          99,
+          Math.round(20 + overdue * 12 + active * 3 + totalHours / 2),
+        ),
+        completion: relevant.length
+          ? Math.round((completed / relevant.length) * 100)
+          : 0,
       };
     });
 
@@ -200,21 +297,42 @@ export class AnalyticsService implements OnModuleInit, OnModuleDestroy {
   }
 
   async getBundle(scope: AnalyticsScope = globalScope) {
-    const [overview, velocity, heatmap, subsystems, insights] = await Promise.all([
-      this.getOverview(scope),
-      this.getVelocityTrend(scope),
-      this.getHeatmap(scope),
-      this.getSubsystemBreakdown(scope),
-      scope.kind === "SUBSYSTEM" || scope.kind === "PERSONAL"
-        ? this.prisma.aIInsight.findMany({
-            where: scope.kind === "SUBSYSTEM" ? { subsystemId: scope.id } : { actorId: scope.id },
-            take: 10,
-            orderBy: { createdAt: "desc" },
-            select: { id: true, title: true, summary: true, severity: true, recommendation: true },
-          })
-        : Promise.resolve([]),
-    ]);
-    return { overview, velocity, heatmap, subsystems, insights, scope: scope.kind };
+    const [overview, velocity, heatmap, subsystems, insights] =
+      await Promise.all([
+        this.getOverview(scope),
+        this.getVelocityTrend(scope),
+        this.getHeatmap(scope),
+        this.getSubsystemBreakdown(scope),
+        scope.kind === "SUBSYSTEM" ||
+        scope.kind === "ADMIN" ||
+        scope.kind === "PERSONAL"
+          ? this.prisma.aIInsight.findMany({
+              where:
+                scope.kind === "SUBSYSTEM"
+                  ? { subsystemId: scope.id }
+                  : scope.kind === "ADMIN"
+                    ? { subsystemId: { in: scope.ids } }
+                    : { actorId: scope.id },
+              take: 10,
+              orderBy: { createdAt: "desc" },
+              select: {
+                id: true,
+                title: true,
+                summary: true,
+                severity: true,
+                recommendation: true,
+              },
+            })
+          : Promise.resolve([]),
+      ]);
+    return {
+      overview,
+      velocity,
+      heatmap,
+      subsystems,
+      insights,
+      scope: scope.kind === "ADMIN" ? "SUBSYSTEM" : scope.kind,
+    };
   }
 
   async refreshAnalyticsSnapshot() {
@@ -222,33 +340,47 @@ export class AnalyticsService implements OnModuleInit, OnModuleDestroy {
     this.refreshing = true;
     try {
       const users = await this.prisma.user.findMany({
-        where: { isActive: true, deletedAt: null, role: { in: ["ADMIN", "MEMBER"] } },
-        select: { id: true, role: true, subsystemId: true },
+        where: {
+          isActive: true,
+          deletedAt: null,
+          role: { in: ["ADMIN", "MEMBER"] },
+        },
+        select: { id: true },
       });
       const scopes = new Map<string, AnalyticsScope>([["GLOBAL", globalScope]]);
       for (const user of users) {
-        const scope: AnalyticsScope | null = user.role === "MEMBER"
-          ? { kind: "PERSONAL", id: user.id }
-          : user.subsystemId ? { kind: "SUBSYSTEM", id: user.subsystemId } : null;
-        if (scope) scopes.set(scopeKey(scope), scope);
+        const scope = await this.resolveScope(user.id);
+        if (scope.kind !== "EMPTY") scopes.set(scopeKey(scope), scope);
       }
-      for (const scope of scopes.values()) await this.refreshScopeSnapshot(scope);
+      for (const scope of scopes.values())
+        await this.refreshScopeSnapshot(scope);
     } finally {
       this.refreshing = false;
     }
   }
 
   private async refreshScopeSnapshot(scope: AnalyticsScope) {
-    const [overview, velocity, heatmap, subsystems, completedTasks] = await Promise.all([
-      this.computeOverview(scope),
-      this.getVelocityTrend(scope),
-      this.getHeatmap(scope),
-      this.getSubsystemBreakdown(scope),
-      this.prisma.task.findMany({
-        where: { ...taskScope(scope), deletedAt: null, isArchived: false, status: "COMPLETED" },
-        select: { worklogs: { where: worklogScope(scope), select: { durationMin: true } } },
-      }),
-    ]);
+    const [overview, velocity, heatmap, subsystems, completedTasks] =
+      await Promise.all([
+        this.computeOverview(scope),
+        this.getVelocityTrend(scope),
+        this.getHeatmap(scope),
+        this.getSubsystemBreakdown(scope),
+        this.prisma.task.findMany({
+          where: {
+            ...taskScope(scope),
+            deletedAt: null,
+            isArchived: false,
+            status: "COMPLETED",
+          },
+          select: {
+            worklogs: {
+              where: worklogScope(scope),
+              select: { durationMin: true },
+            },
+          },
+        }),
+      ]);
     const periodEnd = new Date();
     const periodStart = new Date(periodEnd);
     periodStart.setUTCHours(0, 0, 0, 0);
@@ -257,12 +389,24 @@ export class AnalyticsService implements OnModuleInit, OnModuleDestroy {
     // Serialize each scope/day across API instances without changing the schema.
     await this.prisma.$transaction(async (tx) => {
       await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${key + periodStart.toISOString()}))::text`;
-      const existing = await tx.analyticsSnapshot.findFirst({ where: { scope: key, periodStart } });
+      const existing = await tx.analyticsSnapshot.findFirst({
+        where: { scope: key, periodStart },
+      });
       const data = {
         periodEnd,
         tasksCompleted: completedTasks.length,
         avgCompletionHours: completedTasks.length
-          ? completedTasks.reduce((sum, task) => sum + task.worklogs.reduce((minutes, log) => minutes + log.durationMin, 0), 0) / 60 / completedTasks.length
+          ? completedTasks.reduce(
+              (sum, task) =>
+                sum +
+                task.worklogs.reduce(
+                  (minutes, log) => minutes + log.durationMin,
+                  0,
+                ),
+              0,
+            ) /
+            60 /
+            completedTasks.length
           : 0,
         overduePercentage: overview.overdueRate,
         velocityScore: overview.subsystemVelocity,
@@ -271,13 +415,17 @@ export class AnalyticsService implements OnModuleInit, OnModuleDestroy {
       if (existing) {
         await tx.analyticsSnapshot.update({ where: { id: existing.id }, data });
       } else {
-        await tx.analyticsSnapshot.create({ data: { scope: key, periodStart, ...data } });
+        await tx.analyticsSnapshot.create({
+          data: { scope: key, periodStart, ...data },
+        });
       }
     });
     await this.cache.del(`analytics:velocity:${key}`);
   }
 
-  private async computeOverview(scope: AnalyticsScope = globalScope): Promise<AnalyticsOverview> {
+  private async computeOverview(
+    scope: AnalyticsScope = globalScope,
+  ): Promise<AnalyticsOverview> {
     const [tasks, worklogs, users] = await Promise.all([
       this.prisma.task.findMany({
         where: {
@@ -314,26 +462,52 @@ export class AnalyticsService implements OnModuleInit, OnModuleDestroy {
     ]);
 
     if (scope.kind !== "GLOBAL" && !tasks.length && !worklogs.length) {
-      return { productivityIndex: 0, subsystemVelocity: 0, overdueRate: 0, clubHealth: 0 };
+      return {
+        productivityIndex: 0,
+        subsystemVelocity: 0,
+        overdueRate: 0,
+        clubHealth: 0,
+      };
     }
     const total = tasks.length || 1;
-    const completed = tasks.filter((task) => task.status === TaskStatus.COMPLETED).length;
-    const overdue = tasks.filter((task) => task.status === TaskStatus.OVERDUE || task.deadline < new Date()).length;
-    const active = tasks.filter((task) => task.status !== TaskStatus.COMPLETED).length;
-    const velocity = Math.min(99, Math.round((completed / total) * 100 + active * 1.5));
-    const productivity = Math.min(99, Math.round(60 + worklogs.reduce((sum, item) => sum + item.durationMin, 0) / 60 + completed * 3));
+    const completed = tasks.filter(
+      (task) => task.status === TaskStatus.COMPLETED,
+    ).length;
+    const overdue = tasks.filter(
+      (task) =>
+        task.status === TaskStatus.OVERDUE || task.deadline < new Date(),
+    ).length;
+    const active = tasks.filter(
+      (task) => task.status !== TaskStatus.COMPLETED,
+    ).length;
+    const velocity = Math.min(
+      99,
+      Math.round((completed / total) * 100 + active * 1.5),
+    );
+    const productivity = Math.min(
+      99,
+      Math.round(
+        60 +
+          worklogs.reduce((sum, item) => sum + item.durationMin, 0) / 60 +
+          completed * 3,
+      ),
+    );
     const overdueRate = Number(((overdue / total) * 100).toFixed(1));
     const workloadHealth = users.length
-      ? Math.round(users.reduce((sum, user) => sum + user.availabilityScore, 0) / users.length)
+      ? Math.round(
+          users.reduce((sum, user) => sum + user.availabilityScore, 0) /
+            users.length,
+        )
       : 75;
 
     return {
       productivityIndex: productivity,
       subsystemVelocity: velocity,
       overdueRate,
-      clubHealth: Math.min(99, Math.round((productivity + workloadHealth + (100 - overdueRate)) / 3)),
+      clubHealth: Math.min(
+        99,
+        Math.round((productivity + workloadHealth + (100 - overdueRate)) / 3),
+      ),
     };
   }
-
 }
-

@@ -11,16 +11,22 @@ export function withOwnerQuorum<T>(
   prisma: PrismaClient,
   operation: (tx: Prisma.TransactionClient) => Promise<T>,
 ): Promise<T> {
-  return prisma.$transaction(async tx => {
-    // Stable application namespace ("ANTR", 1); held until commit/rollback.
-    await tx.$queryRaw`SELECT pg_advisory_xact_lock(1095652434, 1)::text`;
-    const result = await operation(tx);
-    const remaining = await tx.user.count({ where: { role: "OWNER", isActive: true, deletedAt: null } });
-    if (remaining === 0) throw new ConflictException({
-      statusCode: 409,
-      code: "LAST_ACTIVE_OWNER",
-      message: "At least one active, non-deleted OWNER must remain",
-    });
-    return result;
-  }, { isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted });
+  return prisma.$transaction(
+    async (tx) => {
+      // Stable application namespace ("ANTR", 1); held until commit/rollback.
+      await tx.$queryRaw`SELECT pg_advisory_xact_lock(1095652434, 1)::text`;
+      const result = await operation(tx);
+      const remaining = await tx.user.count({
+        where: { role: "OWNER", isActive: true, deletedAt: null },
+      });
+      if (remaining === 0)
+        throw new ConflictException({
+          statusCode: 409,
+          code: "LAST_ACTIVE_OWNER",
+          message: "At least one active, non-deleted OWNER must remain",
+        });
+      return result;
+    },
+    { isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted },
+  );
 }

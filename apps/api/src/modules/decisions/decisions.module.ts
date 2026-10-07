@@ -1,3 +1,4 @@
+import { AuthorizationModule } from "../../common/authorization/authorization.module";
 import { Module } from "@nestjs/common";
 
 import { PrismaModule } from "../../common/prisma/prisma.module";
@@ -6,7 +7,7 @@ import { DecisionsController } from "./decisions.controller";
 import { DecisionsService } from "./decisions.service";
 
 @Module({
-  imports: [PrismaModule, AuditModule],
+  imports: [AuthorizationModule, PrismaModule, AuditModule],
   controllers: [DecisionsController],
   providers: [DecisionsService],
   exports: [DecisionsService],

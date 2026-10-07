@@ -6,11 +6,25 @@ import { TaskStatus } from "@antara/contracts";
 import { io, Socket } from "socket.io-client";
 
 import { useToast } from "@/components/ui/toast";
-import { addTaskComment, createTask, fetchActivityFeed, fetchTasks, updateTaskStatus } from "@/lib/task-api";
-import { ActivityFeedRecord, CreateTaskInput, PresenceRecord, TaskRecord, TypingRecord } from "@/lib/task-types";
+import {
+  addTaskComment,
+  createTask,
+  fetchActivityFeed,
+  fetchTasks,
+  updateTaskStatus,
+} from "@/lib/task-api";
+import {
+  ActivityFeedRecord,
+  CreateTaskInput,
+  PresenceRecord,
+  TaskRecord,
+  TypingRecord,
+} from "@/lib/task-types";
 import { useActorProfile } from "./use-actor-profile";
 
-const socketBaseUrl = process.env.NEXT_PUBLIC_API_URL?.replace(/\/api$/, "") ?? "http://localhost:4000";
+const socketBaseUrl =
+  process.env.NEXT_PUBLIC_API_URL?.replace(/\/api$/, "") ??
+  "http://localhost:4000";
 
 export function useTaskControl(initialTasks: TaskRecord[]) {
   const queryClient = useQueryClient();
@@ -64,44 +78,74 @@ export function useTaskControl(initialTasks: TaskRecord[]) {
         typingTimer = setTimeout(() => setTyping(null), 2200);
       });
 
-      socket.on("task.updated", (payload: { task: Partial<TaskRecord> & { id: string; status?: TaskStatus } }) => {
-        queryClient.setQueryData<TaskRecord[]>(["tasks", actor?.accessToken], (current = []) =>
-          current.map((task) =>
-            task.id === payload.task.id
-              ? {
-                  ...task,
-                  ...(payload.task.status ? { status: payload.task.status } : {}),
-                }
-              : task,
-          ),
-        );
+      socket.on("tasks.invalidate", () => {
+        void queryClient.invalidateQueries({
+          queryKey: ["tasks", actor.accessToken],
+        });
+        void queryClient.invalidateQueries({
+          queryKey: ["task-activity", actor.accessToken],
+        });
       });
 
-      socket.on("task.comment.added", (payload: { taskId?: string; task?: { id: string }; id: string; content: string; createdAt: string; author?: { name: string } }) => {
-        const taskId = payload.taskId ?? payload.task?.id;
-        if (!taskId) {
-          return;
-        }
+      socket.on(
+        "task.updated",
+        (payload: {
+          task: Partial<TaskRecord> & { id: string; status?: TaskStatus };
+        }) => {
+          queryClient.setQueryData<TaskRecord[]>(
+            ["tasks", actor?.accessToken],
+            (current = []) =>
+              current.map((task) =>
+                task.id === payload.task.id
+                  ? {
+                      ...task,
+                      ...(payload.task.status
+                        ? { status: payload.task.status }
+                        : {}),
+                    }
+                  : task,
+              ),
+          );
+        },
+      );
 
-        queryClient.setQueryData<TaskRecord[]>(["tasks", actor?.accessToken], (current = []) =>
-          current.map((task) =>
-            task.id === taskId
-              ? {
-                  ...task,
-                  comments: [
-                    ...task.comments,
-                    {
-                      id: payload.id,
-                      content: payload.content,
-                      createdAt: payload.createdAt,
-                      authorName: payload.author?.name ?? "Operator",
-                    },
-                  ],
-                }
-              : task,
-          ),
-        );
-      });
+      socket.on(
+        "task.comment.added",
+        (payload: {
+          taskId?: string;
+          task?: { id: string };
+          id: string;
+          content: string;
+          createdAt: string;
+          author?: { name: string };
+        }) => {
+          const taskId = payload.taskId ?? payload.task?.id;
+          if (!taskId) {
+            return;
+          }
+
+          queryClient.setQueryData<TaskRecord[]>(
+            ["tasks", actor?.accessToken],
+            (current = []) =>
+              current.map((task) =>
+                task.id === taskId
+                  ? {
+                      ...task,
+                      comments: [
+                        ...task.comments,
+                        {
+                          id: payload.id,
+                          content: payload.content,
+                          createdAt: payload.createdAt,
+                          authorName: payload.author?.name ?? "Operator",
+                        },
+                      ],
+                    }
+                  : task,
+              ),
+          );
+        },
+      );
     } catch {
       return undefined;
     }
@@ -116,28 +160,53 @@ export function useTaskControl(initialTasks: TaskRecord[]) {
   }, [actor?.id, actor?.accessToken, queryClient]);
 
   const statusMutation = useMutation({
-    mutationFn: (input: { taskId: string; status: TaskStatus }) => updateTaskStatus(input, actor!.accessToken),
+    mutationFn: (input: { taskId: string; status: TaskStatus }) =>
+      updateTaskStatus(input, actor!.accessToken),
     onMutate: async ({ taskId, status }) => {
-      await queryClient.cancelQueries({ queryKey: ["tasks", actor?.accessToken] });
-      const previous = queryClient.getQueryData<TaskRecord[]>(["tasks", actor?.accessToken]) ?? [];
-      queryClient.setQueryData<TaskRecord[]>(["tasks", actor?.accessToken], (current = []) =>
-        current.map((task) => (task.id === taskId ? { ...task, status } : task)),
+      await queryClient.cancelQueries({
+        queryKey: ["tasks", actor?.accessToken],
+      });
+      const previous =
+        queryClient.getQueryData<TaskRecord[]>(["tasks", actor?.accessToken]) ??
+        [];
+      queryClient.setQueryData<TaskRecord[]>(
+        ["tasks", actor?.accessToken],
+        (current = []) =>
+          current.map((task) =>
+            task.id === taskId ? { ...task, status } : task,
+          ),
       );
       return { previous };
     },
     onError: (error, _variables, context) => {
-      addToast(error.message.includes("403") ? "You do not have permission to perform this action." : "Unable to save changes. Please try again.", "error");
+      addToast(
+        error.message.includes("403")
+          ? "You do not have permission to perform this action."
+          : "Unable to save changes. Please try again.",
+        "error",
+      );
       if (context?.previous) {
-        queryClient.setQueryData(["tasks", actor?.accessToken], context.previous);
+        queryClient.setQueryData(
+          ["tasks", actor?.accessToken],
+          context.previous,
+        );
       }
     },
   });
 
   const commentMutation = useMutation({
-    mutationFn: (input: { taskId: string; authorId: string; content: string }) => addTaskComment(input, actor!.accessToken),
+    mutationFn: (input: {
+      taskId: string;
+      authorId: string;
+      content: string;
+    }) => addTaskComment(input, actor!.accessToken),
     onMutate: async (variables) => {
-      await queryClient.cancelQueries({ queryKey: ["tasks", actor?.accessToken] });
-      const previous = queryClient.getQueryData<TaskRecord[]>(["tasks", actor?.accessToken]) ?? [];
+      await queryClient.cancelQueries({
+        queryKey: ["tasks", actor?.accessToken],
+      });
+      const previous =
+        queryClient.getQueryData<TaskRecord[]>(["tasks", actor?.accessToken]) ??
+        [];
       const optimisticComment = {
         id: `optimistic-${Date.now()}`,
         content: variables.content,
@@ -145,44 +214,66 @@ export function useTaskControl(initialTasks: TaskRecord[]) {
         authorName: actor!.name,
       };
 
-      queryClient.setQueryData<TaskRecord[]>(["tasks", actor?.accessToken], (current = []) =>
-        current.map((task) =>
-          task.id === variables.taskId
-            ? {
-                ...task,
-                comments: [...task.comments, optimisticComment],
-              }
-            : task,
-        ),
+      queryClient.setQueryData<TaskRecord[]>(
+        ["tasks", actor?.accessToken],
+        (current = []) =>
+          current.map((task) =>
+            task.id === variables.taskId
+              ? {
+                  ...task,
+                  comments: [...task.comments, optimisticComment],
+                }
+              : task,
+          ),
       );
 
       return { previous };
     },
     onError: (error, _variables, context) => {
-      addToast(error.message.includes("403") ? "You do not have permission to perform this action." : "Unable to save changes. Please try again.", "error");
+      addToast(
+        error.message.includes("403")
+          ? "You do not have permission to perform this action."
+          : "Unable to save changes. Please try again.",
+        "error",
+      );
       if (context?.previous) {
-        queryClient.setQueryData(["tasks", actor?.accessToken], context.previous);
+        queryClient.setQueryData(
+          ["tasks", actor?.accessToken],
+          context.previous,
+        );
       }
     },
     onSuccess: (comment, variables) => {
-      queryClient.setQueryData<TaskRecord[]>(["tasks", actor?.accessToken], (current = []) =>
-        current.map((task) =>
-          task.id === variables.taskId
-            ? {
-                ...task,
-                comments: [...task.comments.filter((entry) => !entry.id.startsWith("optimistic-")), comment],
-              }
-            : task,
-        ),
+      queryClient.setQueryData<TaskRecord[]>(
+        ["tasks", actor?.accessToken],
+        (current = []) =>
+          current.map((task) =>
+            task.id === variables.taskId
+              ? {
+                  ...task,
+                  comments: [
+                    ...task.comments.filter(
+                      (entry) => !entry.id.startsWith("optimistic-"),
+                    ),
+                    comment,
+                  ],
+                }
+              : task,
+          ),
       );
     },
   });
 
   const createTaskMutation = useMutation({
-    mutationFn: (input: CreateTaskInput) => createTask(input, actor!.id, actor!.accessToken),
+    mutationFn: (input: CreateTaskInput) =>
+      createTask(input, actor!.id, actor!.accessToken),
     onMutate: async (variables) => {
-      await queryClient.cancelQueries({ queryKey: ["tasks", actor?.accessToken] });
-      const previous = queryClient.getQueryData<TaskRecord[]>(["tasks", actor?.accessToken]) ?? [];
+      await queryClient.cancelQueries({
+        queryKey: ["tasks", actor?.accessToken],
+      });
+      const previous =
+        queryClient.getQueryData<TaskRecord[]>(["tasks", actor?.accessToken]) ??
+        [];
       const optimisticTask: TaskRecord = {
         id: `optimistic-task-${Date.now()}`,
         title: variables.title,
@@ -194,37 +285,59 @@ export function useTaskControl(initialTasks: TaskRecord[]) {
         estimatedHours: variables.estimatedHours,
         dependencyCount: 0,
         tags: variables.tags,
-        deadline: new Date(variables.deadline).toLocaleDateString("en-US", { month: "short", day: "numeric" }),
+        deadline: new Date(variables.deadline).toLocaleDateString("en-US", {
+          month: "short",
+          day: "numeric",
+        }),
         assignedToId: variables.assignedToId,
         assignedById: actor!.id,
         subsystemId: variables.subsystemId,
         comments: [],
       };
 
-      queryClient.setQueryData<TaskRecord[]>(["tasks", actor?.accessToken], (current = []) => [optimisticTask, ...current]);
+      queryClient.setQueryData<TaskRecord[]>(
+        ["tasks", actor?.accessToken],
+        (current = []) => [optimisticTask, ...current],
+      );
       return { previous };
     },
     onError: (error, _variables, context) => {
-      addToast(error.message.includes("403") ? "You do not have permission to perform this action." : "Unable to save changes. Please try again.", "error");
+      addToast(
+        error.message.includes("403")
+          ? "You do not have permission to perform this action."
+          : "Unable to save changes. Please try again.",
+        "error",
+      );
       if (context?.previous) {
-        queryClient.setQueryData(["tasks", actor?.accessToken], context.previous);
+        queryClient.setQueryData(
+          ["tasks", actor?.accessToken],
+          context.previous,
+        );
       }
     },
     onSuccess: (task) => {
-      queryClient.setQueryData<TaskRecord[]>(["tasks", actor?.accessToken], (current = []) => [
-        task,
-        ...current.filter((entry) => !entry.id.startsWith("optimistic-task-")),
-      ]);
-      queryClient.setQueryData<ActivityFeedRecord[]>(["task-activity", actor?.accessToken], (current = []) => [
-        {
-          id: `created-${task.id}`,
-          type: "task",
-          title: `New task created: ${task.title}`,
-          description: `${task.subsystem} task added to the mission board.`,
-          timestamp: new Date().toISOString(),
-        },
-        ...current,
-      ]);
+      queryClient.setQueryData<TaskRecord[]>(
+        ["tasks", actor?.accessToken],
+        (current = []) => [
+          task,
+          ...current.filter(
+            (entry) => !entry.id.startsWith("optimistic-task-"),
+          ),
+        ],
+      );
+      queryClient.setQueryData<ActivityFeedRecord[]>(
+        ["task-activity", actor?.accessToken],
+        (current = []) => [
+          {
+            id: `created-${task.id}`,
+            type: "task",
+            title: `New task created: ${task.title}`,
+            description: `${task.subsystem} task added to the mission board.`,
+            timestamp: new Date().toISOString(),
+          },
+          ...current,
+        ],
+      );
     },
   });
 
@@ -234,7 +347,8 @@ export function useTaskControl(initialTasks: TaskRecord[]) {
   const summary = useMemo(
     () => ({
       total: tasks.length,
-      inProgress: tasks.filter((task) => task.status === TaskStatus.IN_PROGRESS).length,
+      inProgress: tasks.filter((task) => task.status === TaskStatus.IN_PROGRESS)
+        .length,
       collaborators: new Set(tasks.map((task) => task.assigneeName)).size,
     }),
     [tasks],
@@ -246,8 +360,10 @@ export function useTaskControl(initialTasks: TaskRecord[]) {
     presence,
     typing,
     summary,
-    updateStatus: (taskId: string, status: TaskStatus) => statusMutation.mutate({ taskId, status }),
-    createTask: (input: CreateTaskInput) => createTaskMutation.mutateAsync(input),
+    updateStatus: (taskId: string, status: TaskStatus) =>
+      statusMutation.mutate({ taskId, status }),
+    createTask: (input: CreateTaskInput) =>
+      createTaskMutation.mutateAsync(input),
     addComment: (taskId: string, content: string) =>
       commentMutation.mutate({
         taskId,

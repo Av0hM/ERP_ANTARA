@@ -1,8 +1,16 @@
 import { TaskCard, TaskStatus } from "@antara/contracts";
 
-import { ActivityFeedRecord, CommentMutationInput, CreateTaskInput, StatusMutationInput, TaskCommentRecord, TaskRecord } from "./task-types";
+import {
+  ActivityFeedRecord,
+  CommentMutationInput,
+  CreateTaskInput,
+  StatusMutationInput,
+  TaskCommentRecord,
+  TaskRecord,
+} from "./task-types";
 
 type ApiTask = {
+  permissions?: { canManage: boolean; canUpdateStatus: boolean };
   id: string;
   title: string;
   description: string;
@@ -26,11 +34,15 @@ type ApiTask = {
   }>;
 };
 
-const baseUrl = process.env.NEXT_PUBLIC_API_URL ?? process.env.API_URL ?? "http://localhost:4000/api";
+const baseUrl =
+  process.env.NEXT_PUBLIC_API_URL ??
+  process.env.API_URL ??
+  "http://localhost:4000/api";
 
 function mapTask(task: ApiTask): TaskRecord {
   return {
     id: task.id,
+    permissions: task.permissions,
     title: task.title,
     description: task.description,
     priority: task.priority,
@@ -41,22 +53,27 @@ function mapTask(task: ApiTask): TaskRecord {
     estimatedHours: Number(task.estimatedHours ?? 0),
     dependencyCount: task.dependencyIds?.length ?? 0,
     tags: task.tags ?? [],
-    deadline: new Date(task.deadline).toLocaleDateString("en-US", { month: "short", day: "numeric" }),
+    deadline: new Date(task.deadline).toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+    }),
     assignedToId: task.assignedTo?.id ?? task.assignedToId ?? undefined,
     assignedById: task.assignedBy?.id ?? task.assignedById ?? undefined,
     subsystemId: task.subsystem?.id ?? task.subsystemId,
-    comments: (task.comments ?? []).map(
-      (comment): TaskCommentRecord => ({
-        id: comment.id,
-        content: comment.content,
-        createdAt: comment.createdAt,
-        authorName: comment.author?.name ?? "Mission Member",
-      }),
-    ),
+    comments: (task.comments ?? []).map((comment): TaskCommentRecord => ({
+      id: comment.id,
+      content: comment.content,
+      createdAt: comment.createdAt,
+      authorName: comment.author?.name ?? "Mission Member",
+    })),
   };
 }
 
-async function request<T>(path: string, init?: RequestInit, accessToken?: string): Promise<T> {
+async function request<T>(
+  path: string,
+  init?: RequestInit,
+  accessToken?: string,
+): Promise<T> {
   const response = await fetch(`${baseUrl}${path}`, {
     ...init,
     headers: {
@@ -82,9 +99,15 @@ export async function fetchTasks(accessToken?: string): Promise<TaskRecord[]> {
   }
 }
 
-export async function fetchActivityFeed(accessToken?: string): Promise<ActivityFeedRecord[]> {
+export async function fetchActivityFeed(
+  accessToken?: string,
+): Promise<ActivityFeedRecord[]> {
   try {
-    return await request<ActivityFeedRecord[]>("/tasks/activity", undefined, accessToken);
+    return await request<ActivityFeedRecord[]>(
+      "/tasks/activity",
+      undefined,
+      accessToken,
+    );
   } catch {
     return [];
   }
@@ -113,7 +136,10 @@ export async function updateTaskStatus(
   }
 }
 
-export async function addTaskComment(input: CommentMutationInput, accessToken?: string): Promise<TaskCommentRecord> {
+export async function addTaskComment(
+  input: CommentMutationInput,
+  accessToken?: string,
+): Promise<TaskCommentRecord> {
   try {
     const comment = await request<{
       id: string;
@@ -125,7 +151,6 @@ export async function addTaskComment(input: CommentMutationInput, accessToken?: 
       {
         method: "POST",
         body: JSON.stringify({
-          authorId: input.authorId,
           content: input.content,
         }),
       },
@@ -143,7 +168,11 @@ export async function addTaskComment(input: CommentMutationInput, accessToken?: 
   }
 }
 
-export async function createTask(input: CreateTaskInput, actorId: string, accessToken?: string): Promise<TaskRecord> {
+export async function createTask(
+  input: CreateTaskInput,
+  actorId: string,
+  accessToken?: string,
+): Promise<TaskRecord> {
   try {
     const task = await request<ApiTask>(
       "/tasks",
@@ -155,7 +184,6 @@ export async function createTask(input: CreateTaskInput, actorId: string, access
           priority: input.priority,
           status: "TODO",
           subsystemId: input.subsystemId,
-          assignedById: actorId,
           assignedToId: input.assignedToId,
           estimatedHours: input.estimatedHours,
           deadline: input.deadline,
@@ -172,7 +200,11 @@ export async function createTask(input: CreateTaskInput, actorId: string, access
   }
 }
 
-export async function updateTaskAssignee(taskId: string, assignedToId: string | null, accessToken?: string) {
+export async function updateTaskAssignee(
+  taskId: string,
+  assignedToId: string | null,
+  accessToken?: string,
+) {
   return request<ApiTask>(
     `/tasks/${taskId}/assign`,
     {

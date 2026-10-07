@@ -10,8 +10,18 @@ interface MeetingAgenda {
   description: string;
   blockers: Array<{ taskId: string; title: string; subsystem: string }>;
   decisionsNeeded: Array<{ taskId: string; title: string; question: string }>;
-  upcomingDeadlines: Array<{ taskId: string; title: string; deadline: Date; subsystem: string }>;
-  actionItems: Array<{ taskId: string; title: string; assignee: string; action: string }>;
+  upcomingDeadlines: Array<{
+    taskId: string;
+    title: string;
+    deadline: Date;
+    subsystem: string;
+  }>;
+  actionItems: Array<{
+    taskId: string;
+    title: string;
+    assignee: string;
+    action: string;
+  }>;
 }
 
 interface SubsystemSyncConfig {
@@ -26,38 +36,91 @@ interface SubsystemSyncConfig {
 @Injectable()
 export class MeetingAutomationService implements OnModuleInit {
   private readonly syncConfigs: SubsystemSyncConfig[] = [
-    { subsystemId: "software", subsystemName: "Software", preferredDay: 1, preferredTime: "10:00", durationMinutes: 60, frequency: "weekly" },
-    { subsystemId: "avionics", subsystemName: "Avionics", preferredDay: 1, preferredTime: "14:00", durationMinutes: 60, frequency: "weekly" },
-    { subsystemId: "structures", subsystemName: "Structures", preferredDay: 2, preferredTime: "10:00", durationMinutes: 45, frequency: "weekly" },
-    { subsystemId: "payload", subsystemName: "Payload", preferredDay: 2, preferredTime: "14:00", durationMinutes: 60, frequency: "weekly" },
-    { subsystemId: "communications", subsystemName: "Communications", preferredDay: 3, preferredTime: "10:00", durationMinutes: 45, frequency: "biweekly" },
-    { subsystemId: "thermal", subsystemName: "Thermal", preferredDay: 3, preferredTime: "14:00", durationMinutes: 45, frequency: "biweekly" },
-    { subsystemId: "ground-station", subsystemName: "Ground Station", preferredDay: 4, preferredTime: "10:00", durationMinutes: 60, frequency: "weekly" },
+    {
+      subsystemId: "software",
+      subsystemName: "Software",
+      preferredDay: 1,
+      preferredTime: "10:00",
+      durationMinutes: 60,
+      frequency: "weekly",
+    },
+    {
+      subsystemId: "avionics",
+      subsystemName: "Avionics",
+      preferredDay: 1,
+      preferredTime: "14:00",
+      durationMinutes: 60,
+      frequency: "weekly",
+    },
+    {
+      subsystemId: "structures",
+      subsystemName: "Structures",
+      preferredDay: 2,
+      preferredTime: "10:00",
+      durationMinutes: 45,
+      frequency: "weekly",
+    },
+    {
+      subsystemId: "payload",
+      subsystemName: "Payload",
+      preferredDay: 2,
+      preferredTime: "14:00",
+      durationMinutes: 60,
+      frequency: "weekly",
+    },
+    {
+      subsystemId: "communications",
+      subsystemName: "Communications",
+      preferredDay: 3,
+      preferredTime: "10:00",
+      durationMinutes: 45,
+      frequency: "biweekly",
+    },
+    {
+      subsystemId: "thermal",
+      subsystemName: "Thermal",
+      preferredDay: 3,
+      preferredTime: "14:00",
+      durationMinutes: 45,
+      frequency: "biweekly",
+    },
+    {
+      subsystemId: "ground-station",
+      subsystemName: "Ground Station",
+      preferredDay: 4,
+      preferredTime: "10:00",
+      durationMinutes: 60,
+      frequency: "weekly",
+    },
   ];
 
   constructor(
     private readonly prisma: PrismaService,
     private readonly calendarService: CalendarService,
     private readonly tasksService: TasksService,
-  ) { }
+  ) {}
 
   async onModuleInit() {
     // Could schedule automatic sync here
   }
 
-  async generateSubsystemSyncEvents(horizonWeeks = 4): Promise<Array<{
-    subsystemId: string;
-    subsystemName: string;
-    events: Array<{
-      title: string;
-      description: string;
-      startsAt: Date;
-      endsAt: Date;
-      agenda: MeetingAgenda;
-    }>;
-  }>> {
+  async generateSubsystemSyncEvents(horizonWeeks = 4): Promise<
+    Array<{
+      subsystemId: string;
+      subsystemName: string;
+      events: Array<{
+        title: string;
+        description: string;
+        startsAt: Date;
+        endsAt: Date;
+        agenda: MeetingAgenda;
+      }>;
+    }>
+  > {
     const now = new Date();
-    const horizon = new Date(now.getTime() + horizonWeeks * 7 * 24 * 60 * 60 * 1000);
+    const horizon = new Date(
+      now.getTime() + horizonWeeks * 7 * 24 * 60 * 60 * 1000,
+    );
 
     const results = [];
 
@@ -67,7 +130,12 @@ export class MeetingAutomationService implements OnModuleInit {
       });
       if (!subsystem) continue;
 
-      const events = await this.generateSyncEventsForSubsystem(config, subsystem, now, horizon);
+      const events = await this.generateSyncEventsForSubsystem(
+        config,
+        subsystem,
+        now,
+        horizon,
+      );
       results.push({
         subsystemId: config.subsystemId,
         subsystemName: config.subsystemName,
@@ -79,7 +147,14 @@ export class MeetingAutomationService implements OnModuleInit {
   }
 
   private async generateSyncEventsForSubsystem(
-    config: { subsystemId: string; subsystemName: string; preferredDay: number; preferredTime: string; durationMinutes: number; frequency: "weekly" | "biweekly" },
+    config: {
+      subsystemId: string;
+      subsystemName: string;
+      preferredDay: number;
+      preferredTime: string;
+      durationMinutes: number;
+      frequency: "weekly" | "biweekly";
+    },
     subsystem: { id: string; name: string; color: string },
     now: Date,
     horizon: Date,
@@ -103,7 +178,10 @@ export class MeetingAutomationService implements OnModuleInit {
       endsAt.setMinutes(endsAt.getMinutes() + (config.durationMinutes ?? 60));
 
       // Generate agenda for this sync
-      const agenda = await this.generateMeetingAgenda(config.subsystemId, startsAt);
+      const agenda = await this.generateMeetingAgenda(
+        config.subsystemId,
+        startsAt,
+      );
 
       events.push({
         title: `${config.subsystemName} Sync`,
@@ -121,7 +199,10 @@ export class MeetingAutomationService implements OnModuleInit {
     return events;
   }
 
-  async generateMeetingAgenda(subsystemId: string, meetingDate: Date): Promise<MeetingAgenda> {
+  async generateMeetingAgenda(
+    subsystemId: string,
+    meetingDate: Date,
+  ): Promise<MeetingAgenda> {
     const now = new Date();
     const weekAhead = new Date(meetingDate.getTime() + 7 * 24 * 60 * 60 * 1000);
 
@@ -211,7 +292,11 @@ export class MeetingAutomationService implements OnModuleInit {
     };
   }
 
-  async createSyncCalendarEvents(subsystemId: string, horizonWeeks = 4, actorId: string) {
+  async createSyncCalendarEvents(
+    subsystemId: string,
+    horizonWeeks = 4,
+    actorId: string,
+  ) {
     const results = await this.generateSubsystemSyncEvents(4);
     const subsystemResult = results.find((r) => r.subsystemId === subsystemId);
 
@@ -221,7 +306,7 @@ export class MeetingAutomationService implements OnModuleInit {
 
     const created: Array<{ id: string; title: string }> = [];
     for (const event of subsystemResult.events) {
-      try {
+      {
         const createdEvent = await this.calendarService.create({
           title: event.title,
           description: event.agenda.description,
@@ -230,8 +315,6 @@ export class MeetingAutomationService implements OnModuleInit {
           subsystemId,
         });
         created.push(createdEvent);
-      } catch (error) {
-        console.error(`Failed to create sync event:`, error);
       }
     }
 

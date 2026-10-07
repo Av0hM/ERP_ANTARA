@@ -1,11 +1,12 @@
+import { CoreAuthorizationService } from "./core-authorization.service";
 import { Module } from "@nestjs/common";
 import { PrismaModule } from "../prisma/prisma.module";
 import { AuthorizationService } from "./authorization.service";
 
-/** Deliberately not global and not imported by existing feature/root modules in Phase 1B. */
+/** Explicit imports only; Phase 4A activates selected core surfaces. */
 @Module({
   imports: [PrismaModule],
-  providers: [AuthorizationService],
-  exports: [AuthorizationService],
+  providers: [AuthorizationService, CoreAuthorizationService],
+  exports: [AuthorizationService, CoreAuthorizationService],
 })
 export class AuthorizationModule {}

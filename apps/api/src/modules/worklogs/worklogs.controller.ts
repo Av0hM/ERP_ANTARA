@@ -1,4 +1,13 @@
-import { Body, Controller, Get, Param, Patch, Post, UseGuards } from "@nestjs/common";
+import { CurrentUser } from "../../common/decorators/current-user.decorator";
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  Patch,
+  Post,
+  UseGuards,
+} from "@nestjs/common";
 
 import { Roles } from "../../common/decorators/roles.decorator";
 import { RolesGuard } from "../../common/guards/roles.guard";
@@ -27,19 +36,29 @@ export class WorklogsController {
 
   @Post()
   @Roles("OWNER", "ADMIN", "MEMBER")
-  create(@Body() payload: CreateWorklogDto) {
-    return this.worklogsService.create(payload);
+  create(
+    @Body() payload: CreateWorklogDto,
+    @CurrentUser() actor: { id: string },
+  ) {
+    return this.worklogsService.create(payload, actor.id);
   }
 
   @Post("start")
   @Roles("OWNER", "ADMIN", "MEMBER")
-  start(@Body() payload: StartWorklogSessionDto) {
-    return this.worklogsService.startSession(payload);
+  start(
+    @Body() payload: StartWorklogSessionDto,
+    @CurrentUser() actor: { id: string },
+  ) {
+    return this.worklogsService.startSession(payload, actor.id);
   }
 
   @Patch(":id/stop")
   @Roles("OWNER", "ADMIN", "MEMBER")
-  stop(@Param("id") id: string, @Body() payload: StopWorklogSessionDto) {
-    return this.worklogsService.stopSession(id, payload);
+  stop(
+    @Param("id") id: string,
+    @Body() payload: StopWorklogSessionDto,
+    @CurrentUser() actor: { id: string },
+  ) {
+    return this.worklogsService.stopSession(id, payload, actor.id);
   }
 }

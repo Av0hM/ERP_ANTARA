@@ -1,268 +1,152 @@
-import { z } from "zod";
-import { SessionService } from "../../../common/sessions/session.service";
-import { WsException } from "@nestjs/websockets";
-import { JwtService } from "@nestjs/jwt";
+import { Test } from "@nestjs/testing";
 import { ConfigService } from "@nestjs/config";
-import { TaskCollaborationGateway } from "./task-collaboration.gateway";
+import { JwtService } from "@nestjs/jwt";
+import { SessionService } from "../../../common/sessions/session.service";
+import { CoreAuthorizationService } from "../../../common/authorization/core-authorization.service";
+import { buildActorContext } from "../../../common/authorization/authorization.policy";
+import {
+  AuthenticatedSocket,
+  TaskCollaborationGateway,
+} from "./task-collaboration.gateway";
 
-describe("TaskCollaborationGateway (unit)", () => {
+describe("Scoped task collaboration", () => {
+  const jwt = { verifyAsync: jest.fn() };
+  const sessions = { authenticateAccess: jest.fn() };
+  const core = {
+    actor: jest.fn(),
+    task: jest.fn(),
+    canReceiveTaskEvent: jest.fn(),
+  };
   let gateway: TaskCollaborationGateway;
-  let mockJwtService: Partial<JwtService>;
-  let mockConfigService: Partial<ConfigService>;
-  let mockClient: any;
-
-  beforeEach(() => {
-    mockJwtService = {
-      verifyAsync: jest.fn(),
-    };
-    mockConfigService = {
-      get: jest.fn((key: string) => {
-        if (key === "auth.accessSecret") return "dev-access-secret";
-        return undefined;
-      }),
-    };
-
-    gateway = new TaskCollaborationGateway(
-      mockJwtService as JwtService,
-      mockConfigService as ConfigService,
-      new SessionServiceMock(),
-    );
-
-    mockClient = {
-      handshake: { auth: {}, query: {} },
-      user: undefined,
-      disconnect: jest.fn(),
+  function client(id: string, token = id) {
+    return {
+      id,
+      handshake: { auth: { token } },
       emit: jest.fn(),
-      on: jest.fn(),
-    };
+      disconnect: jest.fn(),
+    } satisfies AuthenticatedSocket;
+  }
+  beforeEach(async () => {
+    jest.resetAllMocks();
+    jwt.verifyAsync.mockImplementation(async (token: string) => ({
+      id: token,
+    }));
+    sessions.authenticateAccess.mockImplementation(
+      async ({ id }: { id: string }) => ({
+        id,
+        name: id,
+        email: `${id}@fixture.invalid`,
+        role: "MEMBER",
+      }),
+    );
+    core.actor.mockImplementation(async (id: string) =>
+      buildActorContext(id, {
+        id,
+        role: "MEMBER",
+        isActive: true,
+        deletedAt: null,
+        memberships: [{ subsystemId: "adcs", accessLevel: "MEMBER" }],
+      }),
+    );
+    core.canReceiveTaskEvent.mockResolvedValue(true);
+    const module = await Test.createTestingModule({
+      providers: [
+        TaskCollaborationGateway,
+        { provide: JwtService, useValue: jwt },
+        { provide: ConfigService, useValue: new ConfigService() },
+        { provide: SessionService, useValue: sessions },
+        { provide: CoreAuthorizationService, useValue: core },
+      ],
+    }).compile();
+    gateway = module.get(TaskCollaborationGateway);
   });
-
-  describe("handleConnection", () => {
-    it("should disconnect client with no token", async () => {
-      mockClient.handshake.auth = {};
-      mockClient.handshake.query = {};
-
-      await gateway.handleConnection(mockClient);
-
-      expect(mockClient.emit).toHaveBeenCalledWith("error", expect.any(Error));
-      expect(mockClient.disconnect).toHaveBeenCalledWith(true);
-    });
-
-    it("should disconnect client with invalid token", async () => {
-      mockClient.handshake.auth = { token: "invalid-token" };
-      (mockJwtService.verifyAsync as jest.Mock).mockRejectedValue(
-        new Error("Invalid token"),
-      );
-
-      await gateway.handleConnection(mockClient);
-
-      expect(mockClient.emit).toHaveBeenCalledWith("error", expect.any(Error));
-      expect(mockClient.disconnect).toHaveBeenCalledWith(true);
-    });
-
-    it("should disconnect client with expired token", async () => {
-      mockClient.handshake.auth = { token: "expired-token" };
-      (mockJwtService.verifyAsync as jest.Mock).mockRejectedValue(
-        new Error("Token expired"),
-      );
-
-      await gateway.handleConnection(mockClient);
-
-      expect(mockClient.emit).toHaveBeenCalledWith("error", expect.any(Error));
-      expect(mockClient.disconnect).toHaveBeenCalledWith(true);
-    });
-
-    it("should connect client with valid token", async () => {
-      mockClient.handshake.auth = { token: "valid-token" };
-      mockClient.id = "socket-1";
-      (mockJwtService.verifyAsync as jest.Mock).mockResolvedValue({
-        id: "user-1",
-        email: "test@example.com",
-        name: "Test User",
-        role: "MEMBER",
-      });
-
-      await gateway.handleConnection(mockClient);
-
-      expect(mockClient.user).toEqual({
-        id: "user-1",
-        email: "test@example.com",
-        name: "Test User",
-        role: "MEMBER",
-      });
-      expect(mockClient.emit).toHaveBeenCalledWith(
-        "presence.connected",
-        expect.objectContaining({
-          socketId: "socket-1",
-          onlineCount: 1,
-          userId: "user-1",
-          userName: "Test User",
-        }),
-      );
-      expect(mockClient.disconnect).not.toHaveBeenCalled();
-    });
-
-    it("should extract token from handshake.query if not in auth", async () => {
-      mockClient.handshake.auth = {};
-      mockClient.handshake.query = { token: "valid-token" };
-      (mockJwtService.verifyAsync as jest.Mock).mockResolvedValue({
-        id: "user-1",
-        email: "test@example.com",
-        name: "Test User",
-        role: "MEMBER",
-      });
-
-      await gateway.handleConnection(mockClient);
-
-      expect(mockClient.user).toEqual({
-        id: "user-1",
-        email: "test@example.com",
-        name: "Test User",
-        role: "MEMBER",
-      });
+  it("rejects missing token", async () => {
+    const socket = client("a", "");
+    await gateway.handleConnection(socket);
+    expect(socket.disconnect).toHaveBeenCalledWith(true);
+  });
+  it.each(["invalid", "expired"])("rejects %s token", async () => {
+    jwt.verifyAsync.mockRejectedValueOnce(new Error("invalid"));
+    const socket = client("a");
+    await gateway.handleConnection(socket);
+    expect(socket.disconnect).toHaveBeenCalledWith(true);
+  });
+  it("checks backend session when connecting", async () => {
+    const socket = client("a");
+    await gateway.handleConnection(socket);
+    expect(sessions.authenticateAccess).toHaveBeenCalledWith({ id: "a" });
+    expect(socket.emit).toHaveBeenCalledWith(
+      "presence.connected",
+      expect.objectContaining({ userId: "a" }),
+    );
+  });
+  it("does not broadcast another account's presence", async () => {
+    const a = client("a");
+    const b = client("b");
+    await gateway.handleConnection(a);
+    await gateway.handleConnection(b);
+    expect(b.emit).toHaveBeenCalledWith("presence.snapshot", [
+      { userId: "b", socketId: "b", name: "b" },
+    ]);
+  });
+  it("disconnect removes event recipient", async () => {
+    const socket = client("a");
+    await gateway.handleConnection(socket);
+    gateway.handleDisconnect(socket);
+    socket.emit.mockClear();
+    await gateway.invalidateTask("t");
+    expect(socket.emit).not.toHaveBeenCalled();
+  });
+  it("join acknowledges authenticated actor", async () => {
+    const socket = client("a");
+    await gateway.handleConnection(socket);
+    expect(gateway.joinPresence(socket)).toEqual({ ok: true });
+  });
+  it("join rejects missing actor", () => {
+    expect(gateway.joinPresence(client("a"))).toEqual({
+      ok: false,
+      error: "Unauthenticated",
     });
   });
-
-  describe("handleDisconnect", () => {
-    it("should remove user from onlineUsers on disconnect", async () => {
-      // First connect a user
-      mockClient.handshake.auth = { token: "valid-token" };
-      mockClient.id = "socket-1";
-      (mockJwtService.verifyAsync as jest.Mock).mockResolvedValue({
-        id: "user-1",
-        email: "test@example.com",
-        name: "Test User",
-        role: "MEMBER",
-      });
-
-      await gateway.handleConnection(mockClient);
-
-      // Verify user is in onlineUsers
-      const presence = (gateway as any).serializePresence();
-      expect(presence).toHaveLength(1);
-      expect(presence[0]).toEqual({
-        userId: "user-1",
-        socketId: "socket-1",
-        name: "Test User",
-      });
-
-      // Now disconnect
-      await gateway.handleDisconnect(mockClient);
-
-      // Verify user is removed
-      const presenceAfter = (gateway as any).serializePresence();
-      expect(presenceAfter).toHaveLength(0);
-    });
+  it("typing checks sender and every recipient", async () => {
+    const a = client("a");
+    const b = client("b");
+    await gateway.handleConnection(a);
+    await gateway.handleConnection(b);
+    a.emit.mockClear();
+    b.emit.mockClear();
+    core.canReceiveTaskEvent.mockImplementation(
+      async (actor: { userId: string }) => actor.userId === "a",
+    );
+    await gateway.handleTyping(a, { taskId: "t" });
+    expect(core.task).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: "a" }),
+      "t",
+      "read",
+    );
+    expect(a.emit).toHaveBeenCalledWith(
+      "discussion.typing",
+      expect.objectContaining({ taskId: "t" }),
+    );
+    expect(b.emit).not.toHaveBeenCalled();
   });
-
-  describe("joinPresence", () => {
-    it("should return ok for authenticated user", async () => {
-      mockClient.handshake.auth = { token: "valid-token" };
-      mockClient.id = "socket-1";
-      (mockJwtService.verifyAsync as jest.Mock).mockResolvedValue({
-        id: "user-1",
-        email: "test@example.com",
-        name: "Test User",
-        role: "MEMBER",
-      });
-
-      await gateway.handleConnection(mockClient);
-
-      const result = await gateway.joinPresence(mockClient);
-
-      expect(result).toEqual({ ok: true });
-    });
-
-    it("should return error for unauthenticated user", async () => {
-      mockClient.user = undefined;
-      mockClient.id = "socket-1";
-
-      const result = await gateway.joinPresence(mockClient);
-
-      expect(result).toEqual({ ok: false, error: "Unauthenticated" });
-    });
+  it("revoked session gets no invalidation or protected payload", async () => {
+    const socket = client("a");
+    await gateway.handleConnection(socket);
+    socket.emit.mockClear();
+    sessions.authenticateAccess.mockRejectedValue(new Error("revoked"));
+    await gateway.invalidateTask("t");
+    expect(socket.emit).not.toHaveBeenCalled();
   });
-
-  describe("handleTyping", () => {
-    it("should broadcast typing indicator to all clients", async () => {
-      // Connect first user (typer)
-      const typerClient = { ...mockClient, id: "socket-1", emit: jest.fn() };
-      typerClient.handshake.auth = { token: "valid-token" };
-      (mockJwtService.verifyAsync as jest.Mock).mockResolvedValue({
-        id: "user-1",
-        email: "test@example.com",
-        name: "User One",
-        role: "MEMBER",
-      });
-      await gateway.handleConnection(typerClient);
-
-      // Connect second user (observer)
-      const observerClient = { ...mockClient, id: "socket-2", emit: jest.fn() };
-      observerClient.handshake.auth = { token: "valid-token-2" };
-      (mockJwtService.verifyAsync as jest.Mock).mockResolvedValue({
-        id: "user-2",
-        email: "test2@example.com",
-        name: "User Two",
-        role: "MEMBER",
-      });
-      await gateway.handleConnection(observerClient);
-
-      // Mock server emit
-      const mockServer = { emit: jest.fn() };
-      (gateway as any).server = mockServer;
-
-      // Trigger typing event
-      gateway.handleTyping(typerClient, { taskId: "task-123" });
-
-      // Verify server emitted typing event to all clients
-      expect(mockServer.emit).toHaveBeenCalledWith("discussion.typing", {
-        taskId: "task-123",
-        userName: "User One",
-        userId: "user-1",
-      });
-    });
-  });
-
-  describe("serializePresence", () => {
-    it("should return empty array when no users connected", () => {
-      const presence = (gateway as any).serializePresence();
-      expect(presence).toEqual([]);
-    });
-
-    it("should return correct presence data for connected users", async () => {
-      mockClient.handshake.auth = { token: "valid-token" };
-      mockClient.id = "socket-1";
-      (mockJwtService.verifyAsync as jest.Mock).mockResolvedValue({
-        id: "user-1",
-        email: "test@example.com",
-        name: "Test User",
-        role: "MEMBER",
-      });
-
-      await gateway.handleConnection(mockClient);
-
-      const presence = (gateway as any).serializePresence();
-      expect(presence).toEqual([
-        {
-          userId: "user-1",
-          socketId: "socket-1",
-          name: "Test User",
-        },
-      ]);
-    });
+  it("membership removal takes effect at next delivery", async () => {
+    const socket = client("a");
+    await gateway.handleConnection(socket);
+    socket.emit.mockClear();
+    await gateway.invalidateTask("t");
+    expect(socket.emit).toHaveBeenCalledWith("tasks.invalidate", {});
+    socket.emit.mockClear();
+    core.canReceiveTaskEvent.mockResolvedValue(false);
+    await gateway.invalidateTask("t");
+    expect(socket.emit).not.toHaveBeenCalled();
   });
 });
-class SessionServiceMock implements Pick<SessionService, "authenticateAccess"> {
-  async authenticateAccess(
-    payload: Parameters<SessionService["authenticateAccess"]>[0],
-  ) {
-    return z
-      .object({
-        id: z.string(),
-        email: z.string(),
-        name: z.string(),
-        role: z.enum(["OWNER", "ADMIN", "MEMBER"]),
-      })
-      .parse(payload);
-  }
-}

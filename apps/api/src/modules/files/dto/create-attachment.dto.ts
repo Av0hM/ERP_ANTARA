@@ -1,4 +1,11 @@
-import { IsArray, IsBase64, IsInt, IsOptional, IsString, Min } from "class-validator";
+import {
+  IsArray,
+  IsBase64,
+  IsInt,
+  IsOptional,
+  IsString,
+  Min,
+} from "class-validator";
 
 export class CreateAttachmentDto {
   @IsString()
@@ -14,10 +21,6 @@ export class CreateAttachmentDto {
   @IsOptional()
   @IsString()
   taskId?: string;
-
-  @IsOptional()
-  @IsString()
-  uploadedById?: string;
 
   @IsOptional()
   @IsArray()

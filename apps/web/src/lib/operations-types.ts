@@ -1,6 +1,17 @@
-import { DashboardMetric, InsightCard, TrendPoint, DecisionRecord, DecisionStatus, DecisionListResponse } from "@antara/contracts";
+import {
+  DashboardMetric,
+  InsightCard,
+  TrendPoint,
+  DecisionRecord,
+  DecisionStatus,
+  DecisionListResponse,
+} from "@antara/contracts";
 
-export type { DecisionRecord, DecisionStatus, DecisionListResponse } from "@antara/contracts";
+export type {
+  DecisionRecord,
+  DecisionStatus,
+  DecisionListResponse,
+} from "@antara/contracts";
 
 export type NotificationRecord = {
   id: string;
@@ -49,6 +60,7 @@ export type HeatmapCell = {
 };
 
 export type SubsystemRecord = {
+  canManage?: boolean;
   id: string;
   name: string;
   slug: string;
@@ -89,7 +101,12 @@ export type AiWorkloadSuggestion = {
 export type DashboardBundle = {
   scope: "GLOBAL" | "SUBSYSTEM" | "PERSONAL" | "EMPTY";
   metrics: DashboardMetric[];
-  activity: Array<{ id: string; title: string; description: string; timestamp: string }>;
+  activity: Array<{
+    id: string;
+    title: string;
+    description: string;
+    timestamp: string;
+  }>;
   insights: InsightCard[];
   notifications: NotificationRecord[];
   velocity: TrendPoint[];
@@ -97,7 +114,13 @@ export type DashboardBundle = {
 
 export type AnalyticsBundle = {
   scope: DashboardBundle["scope"];
-  insights: Array<{ id: string; title: string; summary: string; severity: string; recommendation: string }>;
+  insights: Array<{
+    id: string;
+    title: string;
+    summary: string;
+    severity: string;
+    recommendation: string;
+  }>;
   overview: {
     productivityIndex: number;
     subsystemVelocity: number;
@@ -296,4 +319,3 @@ export type ResourceAllocationSuggestedMove = {
   toUserName: string;
   reason: string;
 };
-

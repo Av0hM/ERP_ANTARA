@@ -1,4 +1,12 @@
-import { Injectable } from "@nestjs/common";
+import { Prisma } from "@prisma/client";
+import { CoreAuthorizationService } from "../../common/authorization/core-authorization.service";
+import { ActorContext } from "../../common/authorization/authorization.types";
+import {
+  canManageSubsystem,
+  canReadSubsystem,
+} from "../../common/authorization/authorization.policy";
+import { safeUserSelect } from "../../common/prisma/safe-user.select";
+import { ForbiddenException, Injectable } from "@nestjs/common";
 import { TaskPriority, TaskStatus } from "@antara/contracts";
 
 import { PrismaService } from "../../common/prisma/prisma.service";
@@ -30,46 +38,83 @@ interface DependencyGraphResponse {
   criticalPath: string[];
 }
 
+const taskInclude = {
+  assignedTo: { select: safeUserSelect },
+  assignedBy: { select: safeUserSelect },
+  subsystem: true,
+  comments: {
+    include: { author: { select: safeUserSelect } },
+    orderBy: { createdAt: "asc" },
+  },
+} satisfies Prisma.TaskInclude;
+
 @Injectable()
 export class TasksService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly taskEvents: TaskEventsService,
     private readonly auditService: AuditService,
+    private readonly core: CoreAuthorizationService,
   ) {}
 
-  findAll() {
-    return this.prisma.task.findMany({
+  private async redactDependencies<
+    T extends {
+      dependencyIds: string[];
+      subsystemId: string;
+      assignedToId: string | null;
+    },
+  >(task: T, actor: ActorContext, tx: Prisma.TransactionClient = this.prisma) {
+    return {
+      ...task,
+      permissions: {
+        canManage: canManageSubsystem(actor, task.subsystemId),
+        canUpdateStatus:
+          canManageSubsystem(actor, task.subsystemId) ||
+          (task.assignedToId === actor.userId &&
+            canReadSubsystem(actor, task.subsystemId)),
+      },
+      dependencyIds: await this.core.visibleTaskIds(
+        actor,
+        task.dependencyIds,
+        tx,
+      ),
+    };
+  }
+
+  async findAll(actorId: string) {
+    const actor = await this.core.actor(actorId);
+    const tasks = await this.prisma.task.findMany({
       where: {
+        ...this.core.taskWhere(actor),
         deletedAt: null,
         isArchived: false,
       },
-      include: {
-        assignedTo: true,
-        assignedBy: true,
-        subsystem: true,
-        comments: {
-          include: {
-            author: true,
-          },
-          orderBy: { createdAt: "asc" },
-        },
-      },
+      include: taskInclude,
       orderBy: [{ deadline: "asc" }, { priority: "desc" }],
       take: 100,
     });
+    return Promise.all(
+      tasks.map((task) => this.redactDependencies(task, actor)),
+    );
   }
 
-  async getActivityFeed() {
+  async getActivityFeed(actorId: string) {
+    const actor = await this.core.actor(actorId);
     const comments = await this.prisma.taskComment.findMany({
+      where: {
+        task: {
+          ...this.core.taskWhere(actor),
+          deletedAt: null,
+          isArchived: false,
+        },
+      },
       take: 12,
       orderBy: { createdAt: "desc" },
       include: {
-        author: true,
-        task: true,
+        author: { select: safeUserSelect },
+        task: { select: { title: true } },
       },
     });
-
     return comments.map((comment) => ({
       id: comment.id,
       type: "comment",
@@ -80,163 +125,138 @@ export class TasksService {
   }
 
   async create(payload: CreateTaskDto, actorId: string) {
-    const data = {
-      title: payload.title,
-      description: payload.description,
-      priority: payload.priority,
-      status: payload.status ?? TaskStatus.TODO,
-      estimatedHours: payload.estimatedHours,
-      deadline: new Date(payload.deadline),
-      tags: payload.tags ?? [],
-      dependencyIds: payload.dependencyIds ?? [],
-      subsystemId: payload.subsystemId,
-      assignedById: payload.assignedById,
-      assignedToId: payload.assignedToId,
-    };
-
-    const task = await this.prisma.task.create({
-      data,
-      include: {
-        assignedTo: true,
-        subsystem: true,
-      },
-    });
-
-    this.taskEvents.emitTaskUpdated({
-      type: "created",
-      task,
-    });
-
-    await this.auditService.log({
-      action: "CREATE",
-      entityType: "Task",
-      entityId: task.id,
-      actorId,
-      payload: { title: task.title, status: task.status },
-    });
-
-    return task;
-  }
-
-  async updateStatus(taskId: string, payload: UpdateTaskStatusDto, actorId: string) {
-    const oldTask = await this.prisma.task.findUnique({ where: { id: taskId } });
-
-    const task = await this.prisma.task.update({
-      where: { id: taskId },
-      data: {
-        status: payload.status,
-      },
-      include: {
-        assignedTo: true,
-        subsystem: true,
-      },
-    });
-
-    this.taskEvents.emitTaskUpdated({
-      type: "status_changed",
-      task,
-    });
-
-    await this.auditService.log({
-      action: "STATUS_CHANGE",
-      entityType: "Task",
-      entityId: taskId,
-      actorId,
-      payload: { oldStatus: oldTask?.status, newStatus: task.status },
-    });
-
-    return task;
-  }
-
-  async reassign(taskId: string, assignedToId: string | null, actorId: string) {
-    const oldTask = await this.prisma.task.findUnique({ where: { id: taskId } });
-
-    const task = await this.prisma.task.update({
-      where: { id: taskId },
-      data: {
-        assignedToId,
-      },
-      include: {
-        assignedTo: true,
-        assignedBy: true,
-        subsystem: true,
-        comments: {
-          include: {
-            author: true,
-          },
-          orderBy: { createdAt: "asc" },
+    const task = await this.core.withActor(actorId, async (tx, actor) => {
+      if (!canManageSubsystem(actor, payload.subsystemId))
+        throw new ForbiddenException("Task creation denied");
+      const dependencies = [...new Set(payload.dependencyIds ?? [])];
+      if (
+        (await this.core.visibleTaskIds(actor, dependencies, tx)).length !==
+        dependencies.length
+      )
+        throw new ForbiddenException("Dependency access denied");
+      const task = await tx.task.create({
+        data: {
+          title: payload.title,
+          description: payload.description,
+          priority: payload.priority,
+          status: payload.status ?? TaskStatus.TODO,
+          estimatedHours: payload.estimatedHours,
+          deadline: new Date(payload.deadline),
+          tags: payload.tags ?? [],
+          dependencyIds: dependencies,
+          subsystemId: payload.subsystemId,
+          assignedById: actorId,
+          assignedToId: payload.assignedToId,
         },
-      },
+        include: taskInclude,
+      });
+      await tx.auditLog.create({
+        data: {
+          action: "CREATE",
+          entityType: "Task",
+          entityId: task.id,
+          actorId,
+          payload: { title: task.title },
+        },
+      });
+      return this.redactDependencies(task, actor, tx);
     });
-
-    this.taskEvents.emitTaskUpdated({
-      type: "reassigned",
-      task,
-    });
-
-    await this.auditService.log({
-      action: "REASSIGN",
-      entityType: "Task",
-      entityId: taskId,
-      actorId,
-      payload: { oldAssigneeId: oldTask?.assignedToId, newAssigneeId: assignedToId },
-    });
-
+    this.taskEvents.emitTaskUpdated({ type: "created", task });
     return task;
   }
 
-  async addComment(taskId: string, payload: CreateTaskCommentDto, actorId: string) {
-    const comment = await this.prisma.taskComment.create({
-      data: {
-        taskId,
-        authorId: payload.authorId,
-        content: payload.content,
-      },
-      include: {
-        author: true,
-        task: true,
-      },
+  private async mutate(
+    taskId: string,
+    actorId: string,
+    action: "manage" | "status",
+    data: Prisma.TaskUncheckedUpdateInput,
+    auditAction: string,
+  ) {
+    const task = await this.core.withActor(actorId, async (tx, actor) => {
+      await this.core.lockTasks(tx, [taskId]);
+      await this.core.task(actor, taskId, action, tx);
+      const task = await tx.task.update({
+        where: { id: taskId },
+        data,
+        include: taskInclude,
+      });
+      await tx.auditLog.create({
+        data: {
+          action: auditAction,
+          entityType: "Task",
+          entityId: taskId,
+          actorId,
+        },
+      });
+      return this.redactDependencies(task, actor, tx);
     });
-
-    this.taskEvents.emitCommentAdded(comment);
-
-    await this.auditService.log({
-      action: "COMMENT_ADD",
-      entityType: "TaskComment",
-      entityId: comment.id,
-      actorId,
-      payload: { taskId, content: payload.content },
-    });
-
-    return comment;
+    this.taskEvents.emitTaskUpdated({ type: auditAction, task });
+    return task;
   }
 
-  async delete(taskId: string, actorId: string) {
-    const task = await this.prisma.task.findUnique({ where: { id: taskId } });
-
-    if (!task) {
-      return { deleted: false };
-    }
-
-    await this.prisma.task.update({
-      where: { id: taskId },
-      data: { deletedAt: new Date(), isArchived: true },
-    });
-
-    await this.auditService.log({
-      action: "DELETE",
-      entityType: "Task",
-      entityId: taskId,
+  updateStatus(taskId: string, payload: UpdateTaskStatusDto, actorId: string) {
+    return this.mutate(
+      taskId,
       actorId,
-      payload: { title: task.title },
-    });
-
+      "status",
+      { status: payload.status },
+      "STATUS_CHANGE",
+    );
+  }
+  reassign(taskId: string, assignedToId: string | null, actorId: string) {
+    return this.mutate(taskId, actorId, "manage", { assignedToId }, "REASSIGN");
+  }
+  async delete(taskId: string, actorId: string) {
+    await this.mutate(
+      taskId,
+      actorId,
+      "manage",
+      { deletedAt: new Date(), isArchived: true },
+      "DELETE",
+    );
     return { deleted: true };
   }
 
-  async getDependencyGraph(subsystemId?: string): Promise<DependencyGraphResponse> {
+  async addComment(
+    taskId: string,
+    payload: CreateTaskCommentDto,
+    actorId: string,
+  ) {
+    const comment = await this.core.withActor(actorId, async (tx, actor) => {
+      await this.core.lockTasks(tx, [taskId]);
+      await this.core.task(actor, taskId, "read", tx);
+      const comment = await tx.taskComment.create({
+        data: { taskId, authorId: actorId, content: payload.content },
+        include: {
+          author: { select: safeUserSelect },
+          task: { select: { id: true, title: true } },
+        },
+      });
+      await tx.auditLog.create({
+        data: {
+          action: "COMMENT_ADD",
+          entityType: "TaskComment",
+          entityId: comment.id,
+          actorId,
+          payload: { taskId },
+        },
+      });
+      return comment;
+    });
+    this.taskEvents.emitCommentAdded(comment);
+    return comment;
+  }
+
+  async getDependencyGraph(
+    actorId: string,
+    subsystemId?: string,
+  ): Promise<DependencyGraphResponse> {
+    const actor = await this.core.actor(actorId);
+    if (subsystemId && !canReadSubsystem(actor, subsystemId))
+      throw new ForbiddenException("Subsystem access denied");
     const tasks = await this.prisma.task.findMany({
       where: {
+        ...this.core.taskWhere(actor),
         deletedAt: null,
         isArchived: false,
         ...(subsystemId && { subsystemId }),
@@ -247,6 +267,10 @@ export class TasksService {
       },
       orderBy: [{ deadline: "asc" }, { priority: "desc" }],
     });
+
+    const visible = new Set(tasks.map((task) => task.id));
+    for (const task of tasks)
+      task.dependencyIds = task.dependencyIds.filter((id) => visible.has(id));
 
     const taskMap = new Map(tasks.map((t) => [t.id, t]));
     const adj = new Map<string, string[]>();
@@ -292,13 +316,11 @@ export class TasksService {
       console.warn("Dependency cycle detected in task graph");
     }
 
-    const normalizedCriticalPathTasks = tasks.map(
-      (task) => ({
-        id: task.id,
-        dependencyIds: task.dependencyIds,
-        estimatedHours: Number(task.estimatedHours ?? 0),
-      }),
-    );
+    const normalizedCriticalPathTasks = tasks.map((task) => ({
+      id: task.id,
+      dependencyIds: task.dependencyIds,
+      estimatedHours: Number(task.estimatedHours ?? 0),
+    }));
 
     const criticalPath = this.computeCriticalPath(
       normalizedCriticalPathTasks,
@@ -368,7 +390,10 @@ export class TasksService {
       }
 
       const hours = Number(task.estimatedHours ?? 0);
-      const result = { length: maxDep.length + hours, path: [...maxDep.path, nodeId] };
+      const result = {
+        length: maxDep.length + hours,
+        path: [...maxDep.path, nodeId],
+      };
       memo.set(nodeId, result);
       return result;
     };
@@ -384,4 +409,3 @@ export class TasksService {
     return longest.path;
   }
 }
-

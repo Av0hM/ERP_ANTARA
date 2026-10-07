@@ -43,28 +43,38 @@ export function WorklogWorkspace() {
   }, [isRunning]);
 
   const totalMinutes = useMemo(
-    () => Math.max(1, Number(durationHours || 0) * 60 + Number(durationMinutes || 0)),
+    () =>
+      Math.max(
+        1,
+        Number(durationHours || 0) * 60 + Number(durationMinutes || 0),
+      ),
     [durationHours, durationMinutes],
   );
 
-  const formatClock = (seconds: number) => new Date(seconds * 1000).toISOString().slice(14, 19);
-  const formatDuration = (minutes: number) => (minutes >= 60 ? `${Math.floor(minutes / 60)}h ${minutes % 60}m` : `${minutes}m`);
+  const formatClock = (seconds: number) =>
+    new Date(seconds * 1000).toISOString().slice(14, 19);
+  const formatDuration = (minutes: number) =>
+    minutes >= 60
+      ? `${Math.floor(minutes / 60)}h ${minutes % 60}m`
+      : `${minutes}m`;
 
-  const submitLog = async (durationMinutesValue: number, startedAtIso?: string) => {
+  const submitLog = async (
+    durationMinutesValue: number,
+    startedAtIso?: string,
+  ) => {
     if (!taskId) {
       return;
     }
 
-    await createWorklog(
-      {
-        userId: actor.id,
-        taskId,
-        startedAt: startedAtIso ?? new Date(Date.now() - durationMinutesValue * 60 * 1000).toISOString(),
-        endedAt: new Date().toISOString(),
-        durationMin: durationMinutesValue,
-        notes,
-      },
-    );
+    await createWorklog({
+      taskId,
+      startedAt:
+        startedAtIso ??
+        new Date(Date.now() - durationMinutesValue * 60 * 1000).toISOString(),
+      endedAt: new Date().toISOString(),
+      durationMin: durationMinutesValue,
+      notes,
+    });
     setNotes("");
     setIsRunning(false);
     setStartedAt(null);
@@ -75,25 +85,43 @@ export function WorklogWorkspace() {
     <div className="space-y-6">
       <section className="grid gap-4 md:grid-cols-3">
         <div className="card-dark rounded-[1.25rem] p-5">
-          <p className="text-xs uppercase tracking-[0.2em] text-muted">Total Minutes</p>
-          <p className="mt-3 text-3xl font-semibold">{summary?.totalMinutes ?? 0}</p>
+          <p className="text-xs uppercase tracking-[0.2em] text-muted">
+            Total Minutes
+          </p>
+          <p className="mt-3 text-3xl font-semibold">
+            {summary?.totalMinutes ?? 0}
+          </p>
         </div>
         <div className="card-dark rounded-[1.25rem] p-5">
-          <p className="text-xs uppercase tracking-[0.2em] text-muted">Sessions</p>
-          <p className="mt-3 text-3xl font-semibold">{summary?.totalSessions ?? 0}</p>
+          <p className="text-xs uppercase tracking-[0.2em] text-muted">
+            Sessions
+          </p>
+          <p className="mt-3 text-3xl font-semibold">
+            {summary?.totalSessions ?? 0}
+          </p>
         </div>
         <div className="card-dark rounded-[1.25rem] p-5">
-          <p className="text-xs uppercase tracking-[0.2em] text-muted">Average Session</p>
-          <p className="mt-3 text-3xl font-semibold">{summary?.avgSessionMinutes ?? 0}m</p>
+          <p className="text-xs uppercase tracking-[0.2em] text-muted">
+            Average Session
+          </p>
+          <p className="mt-3 text-3xl font-semibold">
+            {summary?.avgSessionMinutes ?? 0}m
+          </p>
         </div>
       </section>
 
       <section className="grid gap-6 xl:grid-cols-[0.9fr_1.4fr]">
         <div className="card-dark rounded-[1.25rem] p-6">
-          <p className="text-xs uppercase tracking-[0.28em] text-saffron">Live Timer</p>
+          <p className="text-xs uppercase tracking-[0.28em] text-saffron">
+            Live Timer
+          </p>
           <div className="mt-4 card-dark rounded-[1.25rem] p-5 text-center">
-            <p className="font-mono text-5xl font-semibold tracking-[0.2em]">{formatClock(elapsedSeconds)}</p>
-            <p className="mt-2 text-xs uppercase tracking-[0.2em] text-muted">{isRunning ? "Running" : "Idle"}</p>
+            <p className="font-mono text-5xl font-semibold tracking-[0.2em]">
+              {formatClock(elapsedSeconds)}
+            </p>
+            <p className="mt-2 text-xs uppercase tracking-[0.2em] text-muted">
+              {isRunning ? "Running" : "Idle"}
+            </p>
           </div>
           <div className="mt-4 flex gap-3">
             {!isRunning ? (
@@ -116,7 +144,12 @@ export function WorklogWorkspace() {
             ) : (
               <Button
                 className="flex-1 gap-2"
-                onClick={() => void submitLog(Math.max(1, Math.round(elapsedSeconds / 60)), startedAt?.toISOString())}
+                onClick={() =>
+                  void submitLog(
+                    Math.max(1, Math.round(elapsedSeconds / 60)),
+                    startedAt?.toISOString(),
+                  )
+                }
                 disabled={isCreating}
               >
                 <Square className="size-4" />
@@ -124,11 +157,15 @@ export function WorklogWorkspace() {
               </Button>
             )}
           </div>
-          {!taskId ? <p className="mt-2 text-xs text-muted">Select a task first</p> : null}
+          {!taskId ? (
+            <p className="mt-2 text-xs text-muted">Select a task first</p>
+          ) : null}
         </div>
 
         <div className="card-dark rounded-[1.25rem] p-6">
-          <p className="text-xs uppercase tracking-[0.28em] text-saffron">Manual Log</p>
+          <p className="text-xs uppercase tracking-[0.28em] text-saffron">
+            Manual Log
+          </p>
           <div className="mt-4 space-y-3">
             <label className="block">
               <span className="mb-2 block text-sm text-muted">Task</span>
@@ -151,7 +188,9 @@ export function WorklogWorkspace() {
               <span className="mb-2 block text-sm text-muted">Duration</span>
               <div className="grid grid-cols-2 gap-3">
                 <label className="block">
-                  <span className="mb-2 block text-xs uppercase tracking-[0.18em] text-muted">Hours</span>
+                  <span className="mb-2 block text-xs uppercase tracking-[0.18em] text-muted">
+                    Hours
+                  </span>
                   <input
                     value={durationHours}
                     onChange={(event) => setDurationHours(event.target.value)}
@@ -162,7 +201,9 @@ export function WorklogWorkspace() {
                   />
                 </label>
                 <label className="block">
-                  <span className="mb-2 block text-xs uppercase tracking-[0.18em] text-muted">Minutes</span>
+                  <span className="mb-2 block text-xs uppercase tracking-[0.18em] text-muted">
+                    Minutes
+                  </span>
                   <input
                     value={durationMinutes}
                     onChange={(event) => setDurationMinutes(event.target.value)}
@@ -192,13 +233,22 @@ export function WorklogWorkspace() {
         </div>
 
         <div className="card-dark rounded-[1.25rem] p-6 xl:col-span-2">
-          <p className="text-xs uppercase tracking-[0.28em] text-saffron">Recent Sessions</p>
+          <p className="text-xs uppercase tracking-[0.28em] text-saffron">
+            Recent Sessions
+          </p>
           <div className="mt-4 space-y-3">
             {logs.map((log) => (
-              <div key={log.id} className="rounded-xl border border-steel/30 bg-white/5 p-4">
+              <div
+                key={log.id}
+                className="rounded-xl border border-steel/30 bg-white/5 p-4"
+              >
                 <div className="flex items-center justify-between gap-3">
-                  <p className="font-medium">{log.task?.title ?? "Unlinked Task"}</p>
-                  <span className="text-xs text-saffron">{formatDuration(log.durationMin)}</span>
+                  <p className="font-medium">
+                    {log.task?.title ?? "Unlinked Task"}
+                  </p>
+                  <span className="text-xs text-saffron">
+                    {formatDuration(log.durationMin)}
+                  </span>
                 </div>
                 <p className="mt-2 text-sm text-muted">{log.notes}</p>
                 <div className="mt-3 flex items-center justify-between text-xs text-muted">

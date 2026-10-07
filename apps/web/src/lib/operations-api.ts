@@ -1,4 +1,8 @@
-import { DashboardMetric, InsightSeverity, TrendPoint } from "@antara/contracts";
+import {
+  DashboardMetric,
+  InsightSeverity,
+  TrendPoint,
+} from "@antara/contracts";
 
 import {
   AiBundle,
@@ -24,9 +28,16 @@ import {
   WorklogSummary,
 } from "./operations-types";
 
-const baseUrl = process.env.NEXT_PUBLIC_API_URL ?? process.env.API_URL ?? "http://localhost:4000/api";
+const baseUrl =
+  process.env.NEXT_PUBLIC_API_URL ??
+  process.env.API_URL ??
+  "http://localhost:4000/api";
 
-async function request<T>(path: string, init?: RequestInit, accessToken?: string): Promise<T> {
+async function request<T>(
+  path: string,
+  init?: RequestInit,
+  accessToken?: string,
+): Promise<T> {
   const response = await fetch(`${baseUrl}${path}`, {
     ...init,
     headers: {
@@ -41,15 +52,25 @@ async function request<T>(path: string, init?: RequestInit, accessToken?: string
   return response.json() as Promise<T>;
 }
 
-export async function fetchNotifications(accessToken?: string): Promise<NotificationRecord[]> {
+export async function fetchNotifications(
+  accessToken?: string,
+): Promise<NotificationRecord[]> {
   try {
-    return await request<NotificationRecord[]>("/notifications", undefined, accessToken);
+    return await request<NotificationRecord[]>(
+      "/notifications",
+      undefined,
+      accessToken,
+    );
   } catch {
     return [];
   }
 }
 
-export async function updateNotification(id: string, isRead: boolean, accessToken?: string) {
+export async function updateNotification(
+  id: string,
+  isRead: boolean,
+  accessToken?: string,
+) {
   return request(
     `/notifications/${id}`,
     {
@@ -70,9 +91,15 @@ export async function deleteNotification(id: string, accessToken?: string) {
   );
 }
 
-export async function fetchCalendarEvents(accessToken?: string): Promise<CalendarEventRecord[]> {
+export async function fetchCalendarEvents(
+  accessToken?: string,
+): Promise<CalendarEventRecord[]> {
   try {
-    return await request<CalendarEventRecord[]>("/calendar/events", undefined, accessToken);
+    return await request<CalendarEventRecord[]>(
+      "/calendar/events",
+      undefined,
+      accessToken,
+    );
   } catch (error) {
     throw error;
   }
@@ -102,7 +129,9 @@ export async function createCalendarEvent(
   }
 }
 
-export async function fetchWorklogs(accessToken?: string): Promise<WorklogRecord[]> {
+export async function fetchWorklogs(
+  accessToken?: string,
+): Promise<WorklogRecord[]> {
   try {
     return await request<WorklogRecord[]>("/worklogs", undefined, accessToken);
   } catch (error) {
@@ -110,9 +139,15 @@ export async function fetchWorklogs(accessToken?: string): Promise<WorklogRecord
   }
 }
 
-export async function fetchWorklogSummary(accessToken?: string): Promise<WorklogSummary> {
+export async function fetchWorklogSummary(
+  accessToken?: string,
+): Promise<WorklogSummary> {
   try {
-    return await request<WorklogSummary>("/worklogs/summary", undefined, accessToken);
+    return await request<WorklogSummary>(
+      "/worklogs/summary",
+      undefined,
+      accessToken,
+    );
   } catch (error) {
     throw error;
   }
@@ -120,7 +155,6 @@ export async function fetchWorklogSummary(accessToken?: string): Promise<Worklog
 
 export async function createWorklog(
   input: {
-    userId: string;
     taskId: string;
     startedAt: string;
     endedAt: string;
@@ -156,25 +190,43 @@ export async function fetchAnalyticsOverview(accessToken?: string) {
   }
 }
 
-export async function fetchAnalyticsVelocity(accessToken?: string): Promise<TrendPoint[]> {
+export async function fetchAnalyticsVelocity(
+  accessToken?: string,
+): Promise<TrendPoint[]> {
   try {
-    return await request<TrendPoint[]>("/analytics/velocity", undefined, accessToken);
+    return await request<TrendPoint[]>(
+      "/analytics/velocity",
+      undefined,
+      accessToken,
+    );
   } catch {
     return [];
   }
 }
 
-export async function fetchAnalyticsHeatmap(accessToken?: string): Promise<HeatmapCell[]> {
+export async function fetchAnalyticsHeatmap(
+  accessToken?: string,
+): Promise<HeatmapCell[]> {
   try {
-    return await request<HeatmapCell[]>("/analytics/heatmap", undefined, accessToken);
+    return await request<HeatmapCell[]>(
+      "/analytics/heatmap",
+      undefined,
+      accessToken,
+    );
   } catch {
     return [];
   }
 }
 
-export async function fetchSubsystemBreakdown(accessToken?: string): Promise<SubsystemBreakdownRecord[]> {
+export async function fetchSubsystemBreakdown(
+  accessToken?: string,
+): Promise<SubsystemBreakdownRecord[]> {
   try {
-    return await request<SubsystemBreakdownRecord[]>("/analytics/subsystems", undefined, accessToken);
+    return await request<SubsystemBreakdownRecord[]>(
+      "/analytics/subsystems",
+      undefined,
+      accessToken,
+    );
   } catch {
     return [];
   }
@@ -182,15 +234,22 @@ export async function fetchSubsystemBreakdown(accessToken?: string): Promise<Sub
 
 export async function fetchAiInsights(accessToken?: string) {
   try {
-    const raw = await request<Array<{ id: string; title: string; summary: string; severity: string; recommendation?: string; subsystem?: string }>>(
-      "/ai/insights",
-      undefined,
-      accessToken,
-    );
+    const raw = await request<
+      Array<{
+        id: string;
+        title: string;
+        summary: string;
+        severity: string;
+        recommendation?: string;
+        subsystem?: string;
+      }>
+    >("/ai/insights", undefined, accessToken);
     return raw.map((item) => ({
       id: item.id,
       title: item.title,
-      summary: item.recommendation ? `${item.summary} ${item.recommendation}` : item.summary,
+      summary: item.recommendation
+        ? `${item.summary} ${item.recommendation}`
+        : item.summary,
       severity: item.severity as InsightSeverity,
       subsystem: item.subsystem ?? "AI Orchestrator",
     }));
@@ -199,7 +258,9 @@ export async function fetchAiInsights(accessToken?: string) {
   }
 }
 
-export async function fetchAiReminders(accessToken?: string): Promise<AiReminder[]> {
+export async function fetchAiReminders(
+  accessToken?: string,
+): Promise<AiReminder[]> {
   try {
     return await request<AiReminder[]>("/ai/reminders", undefined, accessToken);
   } catch {
@@ -207,17 +268,29 @@ export async function fetchAiReminders(accessToken?: string): Promise<AiReminder
   }
 }
 
-export async function fetchAiSchedule(accessToken?: string): Promise<AiScheduleRecommendation[]> {
+export async function fetchAiSchedule(
+  accessToken?: string,
+): Promise<AiScheduleRecommendation[]> {
   try {
-    return await request<AiScheduleRecommendation[]>("/ai/schedule", undefined, accessToken);
+    return await request<AiScheduleRecommendation[]>(
+      "/ai/schedule",
+      undefined,
+      accessToken,
+    );
   } catch {
     return [];
   }
 }
 
-export async function fetchAiWorkload(accessToken?: string): Promise<AiWorkloadSuggestion[]> {
+export async function fetchAiWorkload(
+  accessToken?: string,
+): Promise<AiWorkloadSuggestion[]> {
   try {
-    return await request<AiWorkloadSuggestion[]>("/ai/workload", undefined, accessToken);
+    return await request<AiWorkloadSuggestion[]>(
+      "/ai/workload",
+      undefined,
+      accessToken,
+    );
   } catch {
     return [];
   }
@@ -241,9 +314,15 @@ export async function summarizeTechnicalText(
   }
 }
 
-export async function fetchAttachments(accessToken?: string): Promise<AttachmentRecord[]> {
+export async function fetchAttachments(
+  accessToken?: string,
+): Promise<AttachmentRecord[]> {
   try {
-    return await request<AttachmentRecord[]>("/files/attachments", undefined, accessToken);
+    return await request<AttachmentRecord[]>(
+      "/files/attachments",
+      undefined,
+      accessToken,
+    );
   } catch (error) {
     throw error;
   }
@@ -255,7 +334,6 @@ export async function createAttachment(
     mimeType: string;
     sizeBytes: number;
     taskId?: string;
-    uploadedById?: string;
     tags?: string[];
     contentBase64?: string;
   },
@@ -275,7 +353,11 @@ export async function createAttachment(
   }
 }
 
-export async function updateTaskAssignee(taskId: string, assignedToId: string | null, accessToken?: string) {
+export async function updateTaskAssignee(
+  taskId: string,
+  assignedToId: string | null,
+  accessToken?: string,
+) {
   return request(
     `/tasks/${taskId}/assign`,
     {
@@ -286,9 +368,15 @@ export async function updateTaskAssignee(taskId: string, assignedToId: string | 
   );
 }
 
-export async function fetchAnalyticsBundle(accessToken?: string): Promise<AnalyticsBundle> {
+export async function fetchAnalyticsBundle(
+  accessToken?: string,
+): Promise<AnalyticsBundle> {
   try {
-    return await request<AnalyticsBundle>("/analytics/bundle", undefined, accessToken);
+    return await request<AnalyticsBundle>(
+      "/analytics/bundle",
+      undefined,
+      accessToken,
+    );
   } catch (error) {
     throw error;
   }
@@ -302,51 +390,102 @@ export async function fetchAiBundle(accessToken?: string): Promise<AiBundle> {
   }
 }
 
-export async function fetchSubsystems(accessToken?: string): Promise<SubsystemRecord[]> {
+export async function fetchSubsystems(
+  accessToken?: string,
+): Promise<SubsystemRecord[]> {
   try {
-    return await request<SubsystemRecord[]>("/subsystems", undefined, accessToken);
+    return await request<SubsystemRecord[]>(
+      "/subsystems",
+      undefined,
+      accessToken,
+    );
   } catch (error) {
     throw error;
   }
 }
 
-export async function fetchMembers(
-  accessToken?: string,
-): Promise<Array<{ id: string; name: string; email: string; role: string; subsystem?: { name: string } | null }>> {
+export async function fetchMembers(accessToken?: string): Promise<
+  Array<{
+    id: string;
+    name: string;
+    email?: string;
+    role?: string;
+    subsystem?: { name: string } | null;
+  }>
+> {
   try {
-    return await request<Array<{ id: string; name: string; email: string; role: string; subsystem?: { name: string } | null }>>(
-      "/users/members",
-      undefined,
-      accessToken,
-    );
+    return await request<
+      Array<{
+        id: string;
+        name: string;
+        email?: string;
+        role?: string;
+        subsystem?: { name: string } | null;
+      }>
+    >("/users/members", undefined, accessToken);
   } catch {
     return [];
   }
 }
 
-export async function fetchDashboardBundle(accessToken?: string): Promise<DashboardBundle> {
+export async function fetchDashboardBundle(
+  accessToken?: string,
+): Promise<DashboardBundle> {
   const [analytics, notifications] = await Promise.all([
     fetchAnalyticsBundle(accessToken),
     fetchNotifications(accessToken),
   ]);
   const { overview, velocity, scope } = analytics;
-  const insights = scope === "GLOBAL" ? await fetchAiInsights(accessToken) : analytics.insights.map((item) => ({
-    ...item, severity: item.severity as InsightSeverity, subsystem: scope === "SUBSYSTEM" ? "Your subsystem" : "Your work",
-  }));
-  const scopeLabel = scope === "GLOBAL" ? "Club-wide" : scope === "SUBSYSTEM" ? "Your subsystem" : "Your work";
+  const insights =
+    scope === "GLOBAL"
+      ? await fetchAiInsights(accessToken)
+      : analytics.insights.map((item) => ({
+          ...item,
+          severity: item.severity as InsightSeverity,
+          subsystem: scope === "SUBSYSTEM" ? "Your subsystem" : "Your work",
+        }));
+  const scopeLabel =
+    scope === "GLOBAL"
+      ? "Club-wide"
+      : scope === "SUBSYSTEM"
+        ? "Your subsystem"
+        : "Your work";
 
   const metrics: DashboardMetric[] = [
-    { label: "Productivity Index", value: `${overview.productivityIndex}`, delta: scopeLabel, direction: "up" },
-    { label: "Subsystem Velocity", value: `${overview.subsystemVelocity}%`, delta: "Trend improving", direction: "up" },
-    { label: "Overdue Rate", value: `${overview.overdueRate}%`, delta: "Keep below 10%", direction: "down" },
-    { label: scope === "GLOBAL" ? "Club Health" : "Workload Health", value: `${overview.clubHealth}`, delta: "AI composite", direction: "flat" },
+    {
+      label: "Productivity Index",
+      value: `${overview.productivityIndex}`,
+      delta: scopeLabel,
+      direction: "up",
+    },
+    {
+      label: "Subsystem Velocity",
+      value: `${overview.subsystemVelocity}%`,
+      delta: "Trend improving",
+      direction: "up",
+    },
+    {
+      label: "Overdue Rate",
+      value: `${overview.overdueRate}%`,
+      delta: "Keep below 10%",
+      direction: "down",
+    },
+    {
+      label: scope === "GLOBAL" ? "Club Health" : "Workload Health",
+      value: `${overview.clubHealth}`,
+      delta: "AI composite",
+      direction: "flat",
+    },
   ];
 
-  const hasRealData = scope !== "EMPTY" && (
-    metrics.some((metric) => Number(metric.value.replace(/[^0-9.]/g, "")) > 0) ||
-    velocity.length > 0 ||
-    insights.length > 0 ||
-    notifications.length > 0);
+  const hasRealData =
+    scope !== "EMPTY" &&
+    (metrics.some(
+      (metric) => Number(metric.value.replace(/[^0-9.]/g, "")) > 0,
+    ) ||
+      velocity.length > 0 ||
+      insights.length > 0 ||
+      notifications.length > 0);
 
   return hasRealData
     ? {
@@ -372,7 +511,11 @@ export async function fetchSubsystemHealth(
   accessToken?: string,
 ): Promise<SubsystemHealthResponse> {
   try {
-    return await request<SubsystemHealthResponse>(`/subsystems/${slug}/health`, undefined, accessToken);
+    return await request<SubsystemHealthResponse>(
+      `/subsystems/${slug}/health`,
+      undefined,
+      accessToken,
+    );
   } catch (error) {
     throw error;
   }
@@ -387,7 +530,11 @@ export async function fetchScheduleRisk(
     const params = new URLSearchParams();
     if (horizonDays) params.set("horizonDays", String(horizonDays));
     if (simulations) params.set("simulations", String(simulations));
-    return await request<ScheduleRiskResponse>(`/ai/schedule-risk?${params.toString()}`, undefined, accessToken);
+    return await request<ScheduleRiskResponse>(
+      `/ai/schedule-risk?${params.toString()}`,
+      undefined,
+      accessToken,
+    );
   } catch (error) {
     throw error;
   }
@@ -400,9 +547,14 @@ export async function fetchDecisions(
   try {
     const searchParams = new URLSearchParams();
     if (params?.status) searchParams.set("status", params.status);
-    if (params?.subsystemId) searchParams.set("subsystemId", params.subsystemId);
+    if (params?.subsystemId)
+      searchParams.set("subsystemId", params.subsystemId);
     if (params?.authorId) searchParams.set("authorId", params.authorId);
-    return await request<DecisionListResponse>(`/decisions?${searchParams.toString()}`, undefined, accessToken);
+    return await request<DecisionListResponse>(
+      `/decisions?${searchParams.toString()}`,
+      undefined,
+      accessToken,
+    );
   } catch (error) {
     throw error;
   }
@@ -413,7 +565,11 @@ export async function fetchDecision(
   accessToken?: string,
 ): Promise<DecisionRecord> {
   try {
-    return await request<DecisionRecord>(`/decisions/${id}`, undefined, accessToken);
+    return await request<DecisionRecord>(
+      `/decisions/${id}`,
+      undefined,
+      accessToken,
+    );
   } catch (error) {
     throw error;
   }
@@ -498,7 +654,11 @@ export async function fetchResourceAllocationBoard(
   try {
     const params = new URLSearchParams();
     if (horizonWeeks) params.set("horizonWeeks", String(horizonWeeks));
-    return await request<ResourceAllocationBoard>(`/resources/allocation-board?${params.toString()}`, undefined, accessToken);
+    return await request<ResourceAllocationBoard>(
+      `/resources/allocation-board?${params.toString()}`,
+      undefined,
+      accessToken,
+    );
   } catch (error) {
     throw error;
   }
@@ -508,7 +668,11 @@ export async function fetchSuggestedMoves(
   accessToken?: string,
 ): Promise<ResourceAllocationSuggestedMove[]> {
   try {
-    return await request<ResourceAllocationSuggestedMove[]>(`/resources/suggested-moves`, undefined, accessToken);
+    return await request<ResourceAllocationSuggestedMove[]>(
+      `/resources/suggested-moves`,
+      undefined,
+      accessToken,
+    );
   } catch (error) {
     throw error;
   }

@@ -1,3 +1,5 @@
+import { CoreAuthorizationService } from "../../../common/authorization/core-authorization.service";
+import { canReadSubsystem } from "../../../common/authorization/authorization.policy";
 import { Inject } from "@nestjs/common";
 import { UseGuards } from "@nestjs/common";
 import { WsJwtAuthGuard } from "../../auth/guards/ws-jwt-auth.guard";
@@ -16,8 +18,15 @@ import { JwtService } from "@nestjs/jwt";
 import { ConfigService } from "@nestjs/config";
 import { WsException } from "@nestjs/websockets";
 
-interface AuthenticatedSocket extends Socket {
-  user: { id: string; email: string; name: string; role: string };
+export interface AuthenticatedSocket {
+  id: string;
+  handshake: {
+    auth?: Record<string, unknown>;
+    query?: Record<string, unknown>;
+  };
+  user?: { id: string; email: string; name: string; role: string };
+  emit(event: string, payload: unknown): unknown;
+  disconnect(close?: boolean): unknown;
 }
 
 @UseGuards(WsJwtAuthGuard)
@@ -38,6 +47,8 @@ export class TaskCollaborationGateway
   @WebSocketServer()
   server?: Server;
 
+  private readonly clients = new Map<string, AuthenticatedSocket>();
+
   private readonly onlineUsers = new Map<
     string,
     { socketId: string; name: string }
@@ -48,6 +59,7 @@ export class TaskCollaborationGateway
     private readonly configService: ConfigService,
     @Inject(SessionService)
     private readonly sessions: Pick<SessionService, "authenticateAccess">,
+    private readonly core: CoreAuthorizationService,
   ) {}
 
   private serializePresence() {
@@ -88,6 +100,7 @@ export class TaskCollaborationGateway
       return;
     }
 
+    this.clients.set(client.id, client);
     this.onlineUsers.set(user.id, {
       socketId: client.id,
       name: user.name,
@@ -95,31 +108,42 @@ export class TaskCollaborationGateway
 
     client.emit("presence.connected", {
       socketId: client.id,
-      onlineCount: this.onlineUsers.size,
+      onlineCount: 1,
       userId: user.id,
       userName: user.name,
     });
 
-    this.server?.emit("presence.snapshot", this.serializePresence());
+    client.emit(
+      "presence.snapshot",
+      this.serializePresence().filter(
+        (presence) => presence.userId === client.user?.id,
+      ),
+    );
   }
 
   private extractToken(client: AuthenticatedSocket): string | null {
-    if (client.handshake.auth?.token) {
-      return client.handshake.auth.token as string;
+    if (typeof client.handshake.auth?.token === "string") {
+      return client.handshake.auth.token;
     }
-    if (client.handshake.query?.token) {
-      return client.handshake.query.token as string;
+    if (typeof client.handshake.query?.token === "string") {
+      return client.handshake.query.token;
     }
     return null;
   }
 
   handleDisconnect(client: AuthenticatedSocket) {
+    this.clients.delete(client.id);
     const user = client.user;
     if (user?.id) {
       this.onlineUsers.delete(user.id);
     }
 
-    this.server?.emit("presence.snapshot", this.serializePresence());
+    client.emit(
+      "presence.snapshot",
+      this.serializePresence().filter(
+        (presence) => presence.userId === client.user?.id,
+      ),
+    );
   }
 
   @SubscribeMessage("presence.join")
@@ -134,12 +158,17 @@ export class TaskCollaborationGateway
       name: user.name,
     });
 
-    this.server?.emit("presence.snapshot", this.serializePresence());
+    client.emit(
+      "presence.snapshot",
+      this.serializePresence().filter(
+        (presence) => presence.userId === client.user?.id,
+      ),
+    );
     return { ok: true };
   }
 
   @SubscribeMessage("discussion.typing")
-  handleTyping(
+  async handleTyping(
     @ConnectedSocket() client: AuthenticatedSocket,
     @MessageBody() payload: { taskId: string },
   ) {
@@ -148,10 +177,38 @@ export class TaskCollaborationGateway
       return;
     }
 
-    this.server?.emit("discussion.typing", {
+    const actor = await this.core.actor(user.id);
+    await this.core.task(actor, payload.taskId, "read");
+    await this.deliver(payload.taskId, "discussion.typing", {
       taskId: payload.taskId,
       userName: user.name,
       userId: user.id,
     });
+  }
+  async invalidateTask(taskId: string) {
+    // No task/comment payload travels over a stale socket subscription.
+    await this.deliver(taskId, "tasks.invalidate", {});
+  }
+
+  private async deliver(taskId: string, event: string, payload: unknown) {
+    for (const client of this.clients.values()) {
+      try {
+        const token = this.extractToken(client);
+        if (!token) continue;
+        const claims = await this.jwtService.verifyAsync<
+          Record<string, unknown>
+        >(token, {
+          secret:
+            this.configService.get<string>("auth.accessSecret") ??
+            "dev-access-secret",
+        });
+        const user = await this.sessions.authenticateAccess(claims);
+        const actor = await this.core.actor(user.id);
+        if (await this.core.canReceiveTaskEvent(actor, taskId))
+          client.emit(event, payload);
+      } catch {
+        // Invalid/revoked/unavailable recipients receive no protected event.
+      }
+    }
   }
 }

@@ -12,20 +12,32 @@ import { Button } from "@/components/ui/button";
 import { canManageOperations } from "@/lib/permissions";
 import { cn } from "@/lib/utils";
 
-const statusOptions = ["ALL", "PROPOSED", "ACCEPTED", "REJECTED", "SUPERSEDED", "DEFERRED"] as const;
+const statusOptions = [
+  "ALL",
+  "PROPOSED",
+  "ACCEPTED",
+  "REJECTED",
+  "SUPERSEDED",
+  "DEFERRED",
+] as const;
 type StatusFilter = (typeof statusOptions)[number];
 
 export default function DecisionsPage() {
   const actor = useActorProfile();
   const { data: subsystemData = [] } = useSubsystemCatalog();
   const { data, isLoading, refetch } = useDecisions();
+  const manageableSubsystems = subsystemData.filter(
+    (subsystem) => subsystem.canManage,
+  );
+  const canCreate = actor?.role === "OWNER" || manageableSubsystems.length > 0;
   const createMutation = useCreateDecision();
 
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("ALL");
   const [subsystemFilter, setSubsystemFilter] = useState<string>("ALL");
   const [searchQuery, setSearchQuery] = useState("");
   const [showCreateDialog, setShowCreateDialog] = useState(false);
-  const [selectedDecision, setSelectedDecision] = useState<DecisionRecord | null>(null);
+  const [selectedDecision, setSelectedDecision] =
+    useState<DecisionRecord | null>(null);
   const [formData, setFormData] = useState({
     title: "",
     context: "",
@@ -38,15 +50,18 @@ export default function DecisionsPage() {
     status: "PROPOSED",
   });
 
-  const filteredDecisions = data?.decisions.filter((d: DecisionRecord) => {
-    const matchesStatus = statusFilter === "ALL" || d.status === statusFilter;
-    const matchesSubsystem = subsystemFilter === "ALL" || d.subsystemId === subsystemFilter;
-    const matchesQuery = searchQuery.length === 0 ||
-      d.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      d.context.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      d.decision.toLowerCase().includes(searchQuery.toLowerCase());
-    return matchesStatus && matchesSubsystem && matchesQuery;
-  }) ?? [];
+  const filteredDecisions =
+    data?.decisions.filter((d: DecisionRecord) => {
+      const matchesStatus = statusFilter === "ALL" || d.status === statusFilter;
+      const matchesSubsystem =
+        subsystemFilter === "ALL" || d.subsystemId === subsystemFilter;
+      const matchesQuery =
+        searchQuery.length === 0 ||
+        d.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        d.context.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        d.decision.toLowerCase().includes(searchQuery.toLowerCase());
+      return matchesStatus && matchesSubsystem && matchesQuery;
+    }) ?? [];
 
   const handleCreateSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -56,10 +71,16 @@ export default function DecisionsPage() {
         context: formData.context,
         decision: formData.decision,
         rationale: formData.rationale,
-        alternatives: formData.alternatives.split("\n").map((a) => a.trim()).filter(Boolean),
+        alternatives: formData.alternatives
+          .split("\n")
+          .map((a) => a.trim())
+          .filter(Boolean),
         consequences: formData.consequences || undefined,
         subsystemId: formData.subsystemId || undefined,
-        relatedTaskIds: formData.relatedTaskIds.split("\n").map((a) => a.trim()).filter(Boolean),
+        relatedTaskIds: formData.relatedTaskIds
+          .split("\n")
+          .map((a) => a.trim())
+          .filter(Boolean),
       });
       setShowCreateDialog(false);
       setFormData({
@@ -90,20 +111,29 @@ export default function DecisionsPage() {
       <section className="section-dark grid-texture-dark rounded-[2rem] p-6 md:p-8">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
-            <p className="text-xs uppercase tracking-[0.28em] text-saffron">Institutional Memory</p>
+            <p className="text-xs uppercase tracking-[0.28em] text-saffron">
+              Institutional Memory
+            </p>
             <h1 className="mt-2 text-3xl font-semibold">Decision Log (ADR)</h1>
             <p className="mt-2 max-w-2xl text-sm text-muted">
-              Architectural Decision Records for the team. Track context, rationale, and consequences so next year's leads inherit why, not just what.
+              Architectural Decision Records for the team. Track context,
+              rationale, and consequences so next year's leads inherit why, not
+              just what.
             </p>
           </div>
-          {canManageOperations(actor?.role) && <Button
-            className="gap-2 shrink-0"
-            onClick={() => setShowCreateDialog(true)}
-            disabled={createMutation.isPending}
-          >
-            <Plus className="size-4" />
-            New Decision
-          </Button>}
+          {canCreate && (
+            <Button
+              className="gap-2 shrink-0"
+              onClick={() => setShowCreateDialog(true)}
+              disabled={
+                createMutation.isPending ||
+                (actor?.role !== "OWNER" && !formData.subsystemId)
+              }
+            >
+              <Plus className="size-4" />
+              New Decision
+            </Button>
+          )}
         </div>
       </section>
 
@@ -126,7 +156,11 @@ export default function DecisionsPage() {
             className="select-field"
           >
             {statusOptions.map((option) => (
-              <option key={option} value={option} className="bg-panel text-text">
+              <option
+                key={option}
+                value={option}
+                className="bg-panel text-text"
+              >
                 {option}
               </option>
             ))}
@@ -137,9 +171,15 @@ export default function DecisionsPage() {
             onChange={(e) => setSubsystemFilter(e.target.value)}
             className="select-field"
           >
-            <option value="ALL" className="bg-panel text-text">All Subsystems</option>
+            <option value="ALL" className="bg-panel text-text">
+              All Subsystems
+            </option>
             {subsystemData.map((subsystem) => (
-              <option key={subsystem.id} value={subsystem.id} className="bg-panel text-text">
+              <option
+                key={subsystem.id}
+                value={subsystem.id}
+                className="bg-panel text-text"
+              >
                 {subsystem.name}
               </option>
             ))}
@@ -153,13 +193,20 @@ export default function DecisionsPage() {
         isLoading={isLoading}
       />
 
-      {showCreateDialog && canManageOperations(actor?.role) && (
+      {showCreateDialog && canCreate && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
           <div className="glass-modal rounded-[1.6rem] w-full max-w-3xl max-h-[90vh] overflow-y-auto">
             <div className="section-light grid-texture-light rounded-[1.6rem] p-6 space-y-6">
               <div className="flex items-center justify-between">
-                <h2 className="text-xl font-semibold text-admin-ink">New Decision Record</h2>
-                <Button variant="ghost" size="sm" surface="light" onClick={() => setShowCreateDialog(false)}>
+                <h2 className="text-xl font-semibold text-admin-ink">
+                  New Decision Record
+                </h2>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  surface="light"
+                  onClick={() => setShowCreateDialog(false)}
+                >
                   <X className="size-4" />
                 </Button>
               </div>
@@ -169,7 +216,9 @@ export default function DecisionsPage() {
                   <input
                     type="text"
                     value={formData.title}
-                    onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                    onChange={(e) =>
+                      setFormData({ ...formData, title: e.target.value })
+                    }
                     placeholder="e.g., Switch from REST to gRPC for inter-service communication"
                     className="input-field-light"
                     required
@@ -180,12 +229,28 @@ export default function DecisionsPage() {
                     <label className="label-field-light">Subsystem</label>
                     <select
                       value={formData.subsystemId}
-                      onChange={(e) => setFormData({ ...formData, subsystemId: e.target.value })}
+                      onChange={(e) =>
+                        setFormData({
+                          ...formData,
+                          subsystemId: e.target.value,
+                        })
+                      }
                       className="select-field-light"
                     >
-                      <option value="" className="bg-paper-highlight text-admin-ink">None</option>
-                      {subsystemData.map((s) => (
-                        <option key={s.id} value={s.id} className="bg-paper-highlight text-admin-ink">
+                      <option
+                        value=""
+                        className="bg-paper-highlight text-admin-ink"
+                      >
+                        {actor?.role === "OWNER"
+                          ? "Global"
+                          : "Select a subsystem"}
+                      </option>
+                      {manageableSubsystems.map((s) => (
+                        <option
+                          key={s.id}
+                          value={s.id}
+                          className="bg-paper-highlight text-admin-ink"
+                        >
                           {s.name}
                         </option>
                       ))}
@@ -195,13 +260,35 @@ export default function DecisionsPage() {
                     <label className="label-field-light">Status</label>
                     <select
                       value={formData.status || "PROPOSED"}
-                      onChange={(e) => setFormData({ ...formData, status: e.target.value })}
+                      onChange={(e) =>
+                        setFormData({ ...formData, status: e.target.value })
+                      }
                       className="select-field-light"
                     >
-                      <option value="PROPOSED" className="bg-paper-highlight text-admin-ink">Proposed</option>
-                      <option value="ACCEPTED" className="bg-paper-highlight text-admin-ink">Accepted</option>
-                      <option value="REJECTED" className="bg-paper-highlight text-admin-ink">Rejected</option>
-                      <option value="DEFERRED" className="bg-paper-highlight text-admin-ink">Deferred</option>
+                      <option
+                        value="PROPOSED"
+                        className="bg-paper-highlight text-admin-ink"
+                      >
+                        Proposed
+                      </option>
+                      <option
+                        value="ACCEPTED"
+                        className="bg-paper-highlight text-admin-ink"
+                      >
+                        Accepted
+                      </option>
+                      <option
+                        value="REJECTED"
+                        className="bg-paper-highlight text-admin-ink"
+                      >
+                        Rejected
+                      </option>
+                      <option
+                        value="DEFERRED"
+                        className="bg-paper-highlight text-admin-ink"
+                      >
+                        Deferred
+                      </option>
                     </select>
                   </div>
                 </div>
@@ -210,7 +297,9 @@ export default function DecisionsPage() {
                   <label className="label-field-light">Context</label>
                   <textarea
                     value={formData.context}
-                    onChange={(e) => setFormData({ ...formData, context: e.target.value })}
+                    onChange={(e) =>
+                      setFormData({ ...formData, context: e.target.value })
+                    }
                     placeholder="What is the problem or situation that led to this decision?"
                     rows={3}
                     className="input-field-light resize-none"
@@ -222,7 +311,9 @@ export default function DecisionsPage() {
                   <label className="label-field-light">Decision</label>
                   <textarea
                     value={formData.decision}
-                    onChange={(e) => setFormData({ ...formData, decision: e.target.value })}
+                    onChange={(e) =>
+                      setFormData({ ...formData, decision: e.target.value })
+                    }
                     placeholder="What was decided?"
                     rows={3}
                     className="input-field-light resize-none"
@@ -234,7 +325,9 @@ export default function DecisionsPage() {
                   <label className="label-field-light">Rationale</label>
                   <textarea
                     value={formData.rationale}
-                    onChange={(e) => setFormData({ ...formData, rationale: e.target.value })}
+                    onChange={(e) =>
+                      setFormData({ ...formData, rationale: e.target.value })
+                    }
                     placeholder="Why was this decision made? What evidence supports it?"
                     rows={3}
                     className="input-field-light resize-none"
@@ -243,10 +336,14 @@ export default function DecisionsPage() {
                 </div>
 
                 <div className="space-y-2">
-                  <label className="label-field-light">Alternatives Considered (one per line)</label>
+                  <label className="label-field-light">
+                    Alternatives Considered (one per line)
+                  </label>
                   <textarea
                     value={formData.alternatives}
-                    onChange={(e) => setFormData({ ...formData, alternatives: e.target.value })}
+                    onChange={(e) =>
+                      setFormData({ ...formData, alternatives: e.target.value })
+                    }
                     placeholder="Option A: ...\nOption B: ..."
                     rows={3}
                     className="input-field-light resize-none font-mono text-sm"
@@ -254,10 +351,14 @@ export default function DecisionsPage() {
                 </div>
 
                 <div className="space-y-2">
-                  <label className="label-field-light">Consequences (optional)</label>
+                  <label className="label-field-light">
+                    Consequences (optional)
+                  </label>
                   <textarea
                     value={formData.consequences}
-                    onChange={(e) => setFormData({ ...formData, consequences: e.target.value })}
+                    onChange={(e) =>
+                      setFormData({ ...formData, consequences: e.target.value })
+                    }
                     placeholder="What are the implications? Positive and negative."
                     rows={2}
                     className="input-field-light resize-none"
@@ -265,10 +366,17 @@ export default function DecisionsPage() {
                 </div>
 
                 <div className="space-y-2">
-                  <label className="label-field-light">Related Task IDs (one per line, optional)</label>
+                  <label className="label-field-light">
+                    Related Task IDs (one per line, optional)
+                  </label>
                   <textarea
                     value={formData.relatedTaskIds}
-                    onChange={(e) => setFormData({ ...formData, relatedTaskIds: e.target.value })}
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        relatedTaskIds: e.target.value,
+                      })
+                    }
                     placeholder="task-abc123\ntask-def456"
                     rows={2}
                     className="input-field-light resize-none font-mono text-sm"
@@ -276,11 +384,23 @@ export default function DecisionsPage() {
                 </div>
 
                 <div className="flex justify-end gap-3 pt-4 border-t border-steel/20">
-                  <Button variant="outline" surface="light" onClick={() => setShowCreateDialog(false)}>
+                  <Button
+                    variant="outline"
+                    surface="light"
+                    onClick={() => setShowCreateDialog(false)}
+                  >
                     Cancel
                   </Button>
-                  <Button onClick={handleCreateSubmit} disabled={createMutation.isPending}>
-                    {createMutation.isPending ? "Creating..." : "Create Decision"}
+                  <Button
+                    onClick={handleCreateSubmit}
+                    disabled={
+                      createMutation.isPending ||
+                      (actor?.role !== "OWNER" && !formData.subsystemId)
+                    }
+                  >
+                    {createMutation.isPending
+                      ? "Creating..."
+                      : "Create Decision"}
                   </Button>
                 </div>
               </form>
@@ -294,26 +414,37 @@ export default function DecisionsPage() {
           <div className="glass-modal rounded-[1.6rem] w-full max-w-3xl max-h-[90vh] overflow-y-auto">
             <div className="section-light grid-texture-light rounded-[1.6rem] p-6 space-y-6">
               <div className="flex items-center justify-between">
-                <h2 className="text-xl font-semibold text-admin-ink">{selectedDecision.title}</h2>
-                <Button variant="ghost" size="sm" surface="light" onClick={() => setSelectedDecision(null)}>
+                <h2 className="text-xl font-semibold text-admin-ink">
+                  {selectedDecision.title}
+                </h2>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  surface="light"
+                  onClick={() => setSelectedDecision(null)}
+                >
                   <X className="size-4" />
                 </Button>
               </div>
               <div className="space-y-6">
                 <div className="flex items-center gap-3">
-                  <span className={cn(
-                    "text-xs font-medium px-2 py-1 rounded-full",
-                    (() => {
-                      const config: Record<DecisionStatus, string> = {
-                        PROPOSED: "text-ice bg-ice/10",
-                        ACCEPTED: "text-emerald-400 bg-emerald-400/10",
-                        REJECTED: "text-red-400 bg-red-400/10",
-                        SUPERSEDED: "text-saffron bg-saffron/10",
-                        DEFERRED: "text-muted bg-white/10",
-                      };
-                      return config[selectedDecision.status as DecisionStatus];
-                    })()
-                  )}>
+                  <span
+                    className={cn(
+                      "text-xs font-medium px-2 py-1 rounded-full",
+                      (() => {
+                        const config: Record<DecisionStatus, string> = {
+                          PROPOSED: "text-ice bg-ice/10",
+                          ACCEPTED: "text-emerald-400 bg-emerald-400/10",
+                          REJECTED: "text-red-400 bg-red-400/10",
+                          SUPERSEDED: "text-saffron bg-saffron/10",
+                          DEFERRED: "text-muted bg-white/10",
+                        };
+                        return config[
+                          selectedDecision.status as DecisionStatus
+                        ];
+                      })(),
+                    )}
+                  >
                     {selectedDecision.status}
                   </span>
                   {selectedDecision.subsystem && (
@@ -325,44 +456,77 @@ export default function DecisionsPage() {
 
                 <div className="space-y-4">
                   <div>
-                    <p className="text-xs uppercase tracking-[0.18em] text-secondary-ink mb-1">Context</p>
-                    <p className="text-sm text-admin-ink">{selectedDecision.context}</p>
+                    <p className="text-xs uppercase tracking-[0.18em] text-secondary-ink mb-1">
+                      Context
+                    </p>
+                    <p className="text-sm text-admin-ink">
+                      {selectedDecision.context}
+                    </p>
                   </div>
                   <div>
-                    <p className="text-xs uppercase tracking-[0.18em] text-secondary-ink mb-1">Decision</p>
-                    <p className="text-sm text-admin-ink">{selectedDecision.decision}</p>
+                    <p className="text-xs uppercase tracking-[0.18em] text-secondary-ink mb-1">
+                      Decision
+                    </p>
+                    <p className="text-sm text-admin-ink">
+                      {selectedDecision.decision}
+                    </p>
                   </div>
                   <div>
-                    <p className="text-xs uppercase tracking-[0.18em] text-secondary-ink mb-1">Rationale</p>
-                    <p className="text-sm text-admin-ink">{selectedDecision.rationale}</p>
+                    <p className="text-xs uppercase tracking-[0.18em] text-secondary-ink mb-1">
+                      Rationale
+                    </p>
+                    <p className="text-sm text-admin-ink">
+                      {selectedDecision.rationale}
+                    </p>
                   </div>
                   {selectedDecision.alternatives.length > 0 && (
                     <div>
-                      <p className="text-xs uppercase tracking-[0.18em] text-secondary-ink mb-2">Alternatives Considered</p>
+                      <p className="text-xs uppercase tracking-[0.18em] text-secondary-ink mb-2">
+                        Alternatives Considered
+                      </p>
                       <ul className="space-y-1 ml-4 list-disc text-sm text-admin-ink">
-                        {selectedDecision.alternatives.map((alt: string, i: number) => (
-                          <li key={i}>{alt}</li>
-                        ))}
+                        {selectedDecision.alternatives.map(
+                          (alt: string, i: number) => (
+                            <li key={i}>{alt}</li>
+                          ),
+                        )}
                       </ul>
                     </div>
                   )}
                   {selectedDecision.consequences && (
                     <div>
-                      <p className="text-xs uppercase tracking-[0.18em] text-secondary-ink mb-1">Consequences</p>
-                      <p className="text-sm text-admin-ink">{selectedDecision.consequences}</p>
+                      <p className="text-xs uppercase tracking-[0.18em] text-secondary-ink mb-1">
+                        Consequences
+                      </p>
+                      <p className="text-sm text-admin-ink">
+                        {selectedDecision.consequences}
+                      </p>
                     </div>
                   )}
                   <div className="flex items-center gap-4 text-xs text-secondary-ink pt-4 border-t border-steel/20">
                     <span>By {selectedDecision.author.name}</span>
-                    <span>{new Date(selectedDecision.createdAt).toLocaleDateString()}</span>
+                    <span>
+                      {new Date(
+                        selectedDecision.createdAt,
+                      ).toLocaleDateString()}
+                    </span>
                     {selectedDecision.decidedAt && (
-                      <span>Decided: {new Date(selectedDecision.decidedAt).toLocaleDateString()}</span>
+                      <span>
+                        Decided:{" "}
+                        {new Date(
+                          selectedDecision.decidedAt,
+                        ).toLocaleDateString()}
+                      </span>
                     )}
                   </div>
                 </div>
               </div>
               <div className="pt-4 border-t border-steel/20 flex justify-end">
-                <Button variant="outline" surface="light" onClick={() => setSelectedDecision(null)}>
+                <Button
+                  variant="outline"
+                  surface="light"
+                  onClick={() => setSelectedDecision(null)}
+                >
                   Close
                 </Button>
               </div>

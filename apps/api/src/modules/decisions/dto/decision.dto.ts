@@ -1,6 +1,21 @@
-import { IsString, IsOptional, IsArray, IsEnum, IsUUID } from "class-validator";
+import { DecisionScope, DecisionAuthority } from "@prisma/client";
+import {
+  IsString,
+  IsOptional,
+  IsArray,
+  IsEnum,
+  MinLength,
+} from "class-validator";
 
 export class CreateDecisionDto {
+  @IsOptional()
+  @IsEnum(DecisionScope)
+  scope?: DecisionScope;
+
+  @IsOptional()
+  @IsEnum(DecisionAuthority)
+  authority?: DecisionAuthority;
+
   @IsString()
   title!: string;
 
@@ -23,7 +38,8 @@ export class CreateDecisionDto {
   consequences?: string;
 
   @IsOptional()
-  @IsUUID()
+  @IsString()
+  @MinLength(1)
   subsystemId?: string;
 
   @IsOptional()
@@ -63,7 +79,8 @@ export class UpdateDecisionDto {
   status?: "PROPOSED" | "ACCEPTED" | "REJECTED" | "SUPERSEDED" | "DEFERRED";
 
   @IsOptional()
-  @IsUUID()
+  @IsString()
+  @MinLength(1)
   supersededById?: string;
 }
 
@@ -73,10 +90,12 @@ export class DecisionQueryDto {
   status?: "PROPOSED" | "ACCEPTED" | "REJECTED" | "SUPERSEDED" | "DEFERRED";
 
   @IsOptional()
-  @IsUUID()
+  @IsString()
+  @MinLength(1)
   subsystemId?: string;
 
   @IsOptional()
-  @IsUUID()
+  @IsString()
+  @MinLength(1)
   authorId?: string;
 }

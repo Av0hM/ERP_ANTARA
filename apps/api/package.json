@@ -21,7 +21,10 @@
     "test:authorization": "jest --runInBand --config jest.config.js --runTestsByPath src/common/authorization/authorization.policy.spec.ts src/common/authorization/authorization.service.spec.ts",
     "test:authorization:integration": "AUTHORIZATION_REQUIRE_DB=true jest --runInBand --config jest.config.js --runTestsByPath src/common/authorization/authorization.integration.spec.ts",
     "test:auth:integration": "AUTH_REQUIRE_DB=true jest --runInBand --config jest.config.js --runTestsByPath src/modules/auth/auth.integration.spec.ts",
-    "test:auth": "jest --runInBand --config jest.config.js --runTestsByPath src/modules/auth/auth.service.spec.ts src/modules/auth/google-identity.service.spec.ts src/modules/auth/dummy-credentials.spec.ts src/modules/invitations/invitations.service.spec.ts src/modules/auth/guards/ws-jwt-auth.guard.spec.ts src/modules/auth/refresh-throttle.guard.spec.ts"
+    "test:auth": "jest --runInBand --config jest.config.js --runTestsByPath src/modules/auth/auth.service.spec.ts src/modules/auth/google-identity.service.spec.ts src/modules/auth/dummy-credentials.spec.ts src/modules/invitations/invitations.service.spec.ts src/modules/auth/guards/ws-jwt-auth.guard.spec.ts src/modules/auth/refresh-throttle.guard.spec.ts",
+    "test:privacy": "jest --runInBand --config jest.config.js --runTestsByPath src/common/privacy/privacy.spec.ts src/modules/tasks/tasks.service.spec.ts",
+    "test:privacy:integration": "PRIVACY_REQUIRE_DB=true jest --runInBand --config jest.config.js --runTestsByPath src/common/privacy/privacy.integration.spec.ts",
+    "test:core:integration": "CORE_REQUIRE_DB=true jest --runInBand --config jest.config.js --runTestsByPath src/common/authorization/core.integration.spec.ts"
   },
   "dependencies": {
     "@nestjs/bullmq": "^12.0.0",

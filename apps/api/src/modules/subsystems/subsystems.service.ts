@@ -1,3 +1,11 @@
+import { ForbiddenException, NotFoundException } from "@nestjs/common";
+import { canonicalSubsystems } from "@antara/contracts";
+import { CoreAuthorizationService } from "../../common/authorization/core-authorization.service";
+import { AuthorizationService } from "../../common/authorization/authorization.service";
+import {
+  canManageSubsystem,
+  canReadSubsystem,
+} from "../../common/authorization/authorization.policy";
 import { Injectable } from "@nestjs/common";
 import { TaskPriority, TaskStatus } from "@prisma/client";
 
@@ -57,15 +65,26 @@ interface SubsystemHealthResponse {
 
 @Injectable()
 export class SubsystemsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly core: CoreAuthorizationService,
+    private readonly authorization: AuthorizationService,
+  ) {}
 
-  async list() {
+  async list(actorId: string) {
+    const actor = await this.core.actor(actorId);
     const subsystems = (await this.prisma.subsystem.findMany({
+      where: {
+        AND: [
+          this.authorization.subsystemWhere(actor, "read"),
+          { key: { in: canonicalSubsystems.map((s) => s.key) } },
+        ],
+      },
       orderBy: { name: "asc" },
       include: {
         _count: {
           select: {
-            users: true,
+            memberships: true,
             tasks: true,
             events: true,
             insights: true,
@@ -78,34 +97,50 @@ export class SubsystemsService {
       slug: string;
       description: string;
       color: string;
-      _count: { users: number; tasks: number; events: number; insights: number };
+      _count: {
+        memberships: number;
+        tasks: number;
+        events: number;
+        insights: number;
+      };
     }>;
 
     return subsystems.map((subsystem) => ({
       id: subsystem.id,
+      canManage: canManageSubsystem(actor, subsystem.id),
       name: subsystem.name,
       slug: subsystem.slug,
       description: subsystem.description,
       color: subsystem.color,
       taskCount: subsystem._count.tasks,
-      memberCount: subsystem._count.users,
+      memberCount: subsystem._count.memberships,
       eventCount: subsystem._count.events,
       insightCount: subsystem._count.insights,
     }));
   }
 
-  async getHealth(slug: string): Promise<SubsystemHealthResponse> {
+  async getHealth(
+    slug: string,
+    actorId: string,
+  ): Promise<SubsystemHealthResponse> {
+    const actor = await this.core.actor(actorId);
     const subsystem = await this.prisma.subsystem.findUnique({
       where: { slug },
       include: {
-        users: { select: { id: true, name: true, availabilityScore: true } },
+        memberships: {
+          select: {
+            user: { select: { id: true, name: true, availabilityScore: true } },
+          },
+        },
       },
     });
 
     if (!subsystem) {
-      throw new Error(`Subsystem not found: ${slug}`);
+      throw new NotFoundException(`Subsystem not found: ${slug}`);
     }
 
+    if (!canReadSubsystem(actor, subsystem.id))
+      throw new ForbiddenException("Subsystem access denied");
     const now = new Date();
     const soon = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
 
@@ -117,13 +152,16 @@ export class SubsystemsService {
           isArchived: false,
         },
         include: {
-          assignedTo: { select: { id: true, name: true, availabilityScore: true } },
+          assignedTo: {
+            select: { id: true, name: true, availabilityScore: true },
+          },
           subsystem: { select: { name: true, slug: true } },
         },
         orderBy: [{ deadline: "asc" }, { priority: "desc" }],
       }),
       this.prisma.task.findMany({
         where: {
+          ...this.core.taskWhere(actor),
           deletedAt: null,
           isArchived: false,
         },
@@ -134,7 +172,9 @@ export class SubsystemsService {
       this.prisma.workLog.findMany({
         where: {
           task: { subsystemId: subsystem.id },
-          startedAt: { gte: new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000) },
+          startedAt: {
+            gte: new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000),
+          },
         },
         include: {
           user: { select: { name: true } },
@@ -162,35 +202,41 @@ export class SubsystemsService {
     const completedTasks = tasks.filter(
       (task) => task.status === TaskStatus.COMPLETED,
     );
-    const overdueTasks = activeTasks.filter(
-      (task) => task.deadline < now,
-    );
+    const overdueTasks = activeTasks.filter((task) => task.deadline < now);
     const blockedTasks = activeTasks.filter(
       (task) => task.status === TaskStatus.BLOCKED,
     );
     const upcomingTasks = activeTasks
-      .filter(
-        (task) =>
-          task.deadline >= now &&
-          task.deadline <= soon,
-      )
-      .sort(
-        (a, b) =>
-          a.deadline.getTime() - b.deadline.getTime(),
-      )
+      .filter((task) => task.deadline >= now && task.deadline <= soon)
+      .sort((a, b) => a.deadline.getTime() - b.deadline.getTime())
       .slice(0, 10);
 
-    const completionRate = tasks.length > 0 ? Math.round((completedTasks.length / tasks.length) * 100) : 0;
+    const completionRate =
+      tasks.length > 0
+        ? Math.round((completedTasks.length / tasks.length) * 100)
+        : 0;
     const overdueCount = overdueTasks.length;
     const blockedCount = blockedTasks.length;
     const activeTaskCount = activeTasks.length;
 
-    const velocity = Math.min(99, Math.round(55 + completedTasks.length * 6 + activeTaskCount * 2));
+    const velocity = Math.min(
+      99,
+      Math.round(55 + completedTasks.length * 6 + activeTaskCount * 2),
+    );
     const totalHours = tasks.reduce(
       (sum, task) => sum + Number(task.estimatedHours ?? 0),
       0,
     );
-    const riskScore = Math.min(99, Math.round(20 + overdueCount * 12 + blockedCount * 10 + activeTaskCount * 3 + totalHours / 2));
+    const riskScore = Math.min(
+      99,
+      Math.round(
+        20 +
+          overdueCount * 12 +
+          blockedCount * 10 +
+          activeTaskCount * 3 +
+          totalHours / 2,
+      ),
+    );
 
     const incomingBlockers: BlockingRelation[] = [];
     const outgoingBlockers: BlockingRelation[] = [];
@@ -230,8 +276,10 @@ export class SubsystemsService {
       }
     }
 
-    const workload: WorkloadEntry[] = subsystem.users.map((user) => {
-      const userActiveTasks = activeTasks.filter((t) => t.assignedToId === user.id).length;
+    const workload: WorkloadEntry[] = subsystem.memberships.map(({ user }) => {
+      const userActiveTasks = activeTasks.filter(
+        (t) => t.assignedToId === user.id,
+      ).length;
       return {
         memberId: user.id,
         name: user.name,
@@ -251,7 +299,12 @@ export class SubsystemsService {
         timestamp: c.createdAt.toISOString(),
         summary: `${c.author?.name ?? "Member"} commented on "${c.task?.title ?? "task"}"`,
       })),
-    ].sort((a: { timestamp: string }, b: { timestamp: string }) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()).slice(0, 10);
+    ]
+      .sort(
+        (a: { timestamp: string }, b: { timestamp: string }) =>
+          new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime(),
+      )
+      .slice(0, 10);
 
     return {
       subsystem: {
@@ -259,7 +312,7 @@ export class SubsystemsService {
         name: subsystem.name,
         slug: subsystem.slug,
         color: subsystem.color,
-        memberCount: subsystem.users.length,
+        memberCount: subsystem.memberships.length,
       },
       metrics: {
         velocity,
@@ -282,4 +335,3 @@ export class SubsystemsService {
     };
   }
 }
-

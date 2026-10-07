@@ -1,9 +1,12 @@
-import { IsDateString, IsInt, IsOptional, IsString, Min } from "class-validator";
+import {
+  IsDateString,
+  IsInt,
+  IsOptional,
+  IsString,
+  Min,
+} from "class-validator";
 
 export class CreateWorklogDto {
-  @IsString()
-  userId!: string;
-
   @IsString()
   taskId!: string;
 
@@ -22,4 +25,3 @@ export class CreateWorklogDto {
   @IsOptional()
   notes?: string;
 }
-

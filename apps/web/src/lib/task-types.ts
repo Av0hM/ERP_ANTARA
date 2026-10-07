@@ -8,6 +8,7 @@ export type TaskCommentRecord = {
 };
 
 export type TaskRecord = TaskCard & {
+  permissions?: { canManage: boolean; canUpdateStatus: boolean };
   assignedToId?: string;
   assignedById?: string;
   subsystemId?: string;
@@ -55,4 +56,3 @@ export type CreateTaskInput = {
   tags: string[];
   assignedToId?: string;
 };
-

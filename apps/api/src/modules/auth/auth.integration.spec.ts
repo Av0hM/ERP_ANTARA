@@ -1,3 +1,4 @@
+import { CoreAuthorizationService } from "../../common/authorization/core-authorization.service";
 import { withOwnerQuorum } from "../users/owner-quorum";
 import { RateLimitingMiddleware } from "../../common/middleware/rate-limiting.middleware";
 import { execFileSync } from "node:child_process";
@@ -231,6 +232,7 @@ integration("Phase 2 authentication: isolated PostgreSQL", () => {
           useValue: new UsersService(
             db as PrismaService,
             new AuditService(db as PrismaService),
+            new CoreAuthorizationService(db as PrismaService, authorization),
           ),
         },
       ],
@@ -1042,108 +1044,272 @@ integration("Phase 2 authentication: isolated PostgreSQL", () => {
       await user(id);
       for (let j = 0; j < 5; j++) {
         const session = await login(id);
-        const response = await post("/auth/refresh", { refreshToken: session.refreshToken });
+        const response = await post("/auth/refresh", {
+          refreshToken: session.refreshToken,
+        });
         expect(response.status).toBe(201);
       }
     }
   }, 30000);
   it("HTTP refresh throttles repeated use of one actual credential", async () => {
     const session = await login("member");
-    expect((await post("/auth/refresh", { refreshToken: session.refreshToken })).status).toBe(201);
-    for (let i = 1; i < 20; i++) expect((await post("/auth/refresh", { refreshToken: session.refreshToken })).status).toBe(401);
-    const limited = await post("/auth/refresh", { refreshToken: session.refreshToken });
+    expect(
+      (await post("/auth/refresh", { refreshToken: session.refreshToken }))
+        .status,
+    ).toBe(201);
+    for (let i = 1; i < 20; i++)
+      expect(
+        (await post("/auth/refresh", { refreshToken: session.refreshToken }))
+          .status,
+      ).toBe(401);
+    const limited = await post("/auth/refresh", {
+      refreshToken: session.refreshToken,
+    });
     expect(limited.status).toBe(429);
     expect(await limited.text()).not.toContain(session.refreshToken);
   });
-  it.each(["/auth/login", "/auth/google-callback", "/invitations/accept"])("HTTP %s retains its small IP bucket", async route => {
-    const statuses: number[] = [];
-    // Missing fields deliberately avoid provider access/password hashing, but still consume attempts.
-    for (let i = 0; i < 21; i++) statuses.push((await post(route, {})).status);
-    expect(statuses).toContain(400);
-    expect(statuses[20]).toBe(429);
-  });
+  it.each(["/auth/login", "/auth/google-callback", "/invitations/accept"])(
+    "HTTP %s retains its small IP bucket",
+    async (route) => {
+      const statuses: number[] = [];
+      // Missing fields deliberately avoid provider access/password hashing, but still consume attempts.
+      for (let i = 0; i < 21; i++)
+        statuses.push((await post(route, {})).status);
+      expect(statuses).toContain(400);
+      expect(statuses[20]).toBe(429);
+    },
+  );
 
   describe("Last active OWNER quorum", () => {
     let originalOwners: { id: string }[];
     let sole: string;
-    const activeOwners = { role: "OWNER", isActive: true, deletedAt: null } as const;
+    const activeOwners = {
+      role: "OWNER",
+      isActive: true,
+      deletedAt: null,
+    } as const;
     beforeEach(async () => {
       // Test-only fixture isolation in the disposable schema; never release/backfill state.
-      originalOwners = await db.user.findMany({ where: { role: "OWNER" }, select: { id: true } });
-      await db.user.updateMany({ where: { role: "OWNER" }, data: { role: "MEMBER" } });
+      originalOwners = await db.user.findMany({
+        where: { role: "OWNER" },
+        select: { id: true },
+      });
+      await db.user.updateMany({
+        where: { role: "OWNER" },
+        data: { role: "MEMBER" },
+      });
       sole = `quorum-${counter++}`;
       await user(sole, "OWNER");
     });
     afterEach(async () => {
-      await db.user.updateMany({ where: { role: "OWNER" }, data: { role: "MEMBER" } });
-      await db.user.updateMany({ where: { id: { in: originalOwners.map(u => u.id) } }, data: { role: "OWNER" } });
+      await db.user.updateMany({
+        where: { role: "OWNER" },
+        data: { role: "MEMBER" },
+      });
+      await db.user.updateMany({
+        where: { id: { in: originalOwners.map((u) => u.id) } },
+        data: { role: "OWNER" },
+      });
     });
     async function second() {
       const id = `quorum-${counter++}`;
       await user(id, "OWNER");
       return id;
     }
-    it.each(["demote", "deactivate"])("sole OWNER cannot %s self and all session/audit/account changes roll back", async operation => {
-      const session = await login(sole);
-      const before = await db.user.findUniqueOrThrow({ where: { id: sole } });
-      const sessionBefore = await db.session.findMany({ where: { userId: sole } });
-      const auditBefore = await db.auditLog.findMany({ where: { actorId: sole } });
-      const attempt = operation === "demote" ? lifecycle.updateRole(sole, "MEMBER", sole) : lifecycle.setActive(sole, false, sole);
-      await expect(attempt).rejects.toMatchObject({ status: 409, response: { code: "LAST_ACTIVE_OWNER" } });
-      expect(await db.user.findUniqueOrThrow({ where: { id: sole } })).toEqual(before);
-      expect(await db.session.findMany({ where: { userId: sole } })).toEqual(sessionBefore);
-      expect(await db.auditLog.findMany({ where: { actorId: sole } })).toEqual(auditBefore);
-      await expect(sessions.refresh(session.refreshToken)).resolves.toHaveProperty("accessToken");
-    });
-    it.each(["demotion", "soft deletion", "deactivation"])("internal helper cannot remove final authority through %s", async operation => {
-      await expect(withOwnerQuorum(db, async tx => {
-        await tx.user.update({ where: { id: sole }, data: operation === "demotion" ? { role: "MEMBER" } : operation === "soft deletion" ? { deletedAt: new Date() } : { isActive: false } });
-      })).rejects.toMatchObject({ status: 409, response: { code: "LAST_ACTIVE_OWNER" } });
-      expect(await db.user.count({ where: activeOwners })).toBe(1);
-    });
+    it.each(["demote", "deactivate"])(
+      "sole OWNER cannot %s self and all session/audit/account changes roll back",
+      async (operation) => {
+        const session = await login(sole);
+        const before = await db.user.findUniqueOrThrow({ where: { id: sole } });
+        const sessionBefore = await db.session.findMany({
+          where: { userId: sole },
+        });
+        const auditBefore = await db.auditLog.findMany({
+          where: { actorId: sole },
+        });
+        const attempt =
+          operation === "demote"
+            ? lifecycle.updateRole(sole, "MEMBER", sole)
+            : lifecycle.setActive(sole, false, sole);
+        await expect(attempt).rejects.toMatchObject({
+          status: 409,
+          response: { code: "LAST_ACTIVE_OWNER" },
+        });
+        expect(
+          await db.user.findUniqueOrThrow({ where: { id: sole } }),
+        ).toEqual(before);
+        expect(await db.session.findMany({ where: { userId: sole } })).toEqual(
+          sessionBefore,
+        );
+        expect(
+          await db.auditLog.findMany({ where: { actorId: sole } }),
+        ).toEqual(auditBefore);
+        await expect(
+          sessions.refresh(session.refreshToken),
+        ).resolves.toHaveProperty("accessToken");
+      },
+    );
+    it.each(["demotion", "soft deletion", "deactivation"])(
+      "internal helper cannot remove final authority through %s",
+      async (operation) => {
+        await expect(
+          withOwnerQuorum(db, async (tx) => {
+            await tx.user.update({
+              where: { id: sole },
+              data:
+                operation === "demotion"
+                  ? { role: "MEMBER" }
+                  : operation === "soft deletion"
+                    ? { deletedAt: new Date() }
+                    : { isActive: false },
+            });
+          }),
+        ).rejects.toMatchObject({
+          status: 409,
+          response: { code: "LAST_ACTIVE_OWNER" },
+        });
+        expect(await db.user.count({ where: activeOwners })).toBe(1);
+      },
+    );
     it("HTTP reports an explicit domain conflict", async () => {
       const session = await login(sole);
-      const response = await fetch(`${origin}/users/${sole}/role`, { method: "PATCH", headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.accessToken}` }, body: JSON.stringify({ role: "MEMBER" }) });
+      const response = await fetch(`${origin}/users/${sole}/role`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.accessToken}`,
+        },
+        body: JSON.stringify({ role: "MEMBER" }),
+      });
       expect(response.status).toBe(409);
-      expect(await response.json()).toMatchObject({ code: "LAST_ACTIVE_OWNER" });
+      expect(await response.json()).toMatchObject({
+        code: "LAST_ACTIVE_OWNER",
+      });
     });
-    it.each(["inactive", "deleted"])("%s OWNER does not count toward quorum", async state => {
+    it.each(["inactive", "deleted"])(
+      "%s OWNER does not count toward quorum",
+      async (state) => {
+        const other = await second();
+        await db.user.update({
+          where: { id: other },
+          data:
+            state === "inactive"
+              ? { isActive: false }
+              : { deletedAt: new Date() },
+        });
+        await expect(
+          lifecycle.updateRole(sole, "MEMBER", sole),
+        ).rejects.toMatchObject({ status: 409 });
+        await expect(
+          lifecycle.setActive(sole, false, sole),
+        ).rejects.toMatchObject({ status: 409 });
+      },
+    );
+    it.each(["demote", "deactivate"])(
+      "with two active OWNERs one may %s and sessions are revoked",
+      async (operation) => {
+        const other = await second();
+        const session = await login(other);
+        if (operation === "demote")
+          await lifecycle.updateRole(other, "MEMBER", sole);
+        else await lifecycle.setActive(other, false, sole);
+        expect(await db.user.count({ where: activeOwners })).toBe(1);
+        await expect(sessions.refresh(session.refreshToken)).rejects.toThrow();
+        await expect(
+          sessions.authenticateAccess(jwt.decode(session.accessToken)),
+        ).rejects.toThrow();
+      },
+    );
+    it.each([
+      ["demote", "demote"],
+      ["deactivate", "deactivate"],
+      ["demote", "deactivate"],
+    ])(
+      "concurrent %s/%s of final two owners has only one winner",
+      async (first, last) => {
+        const other = await second();
+        const change = (id: string, operation: string) =>
+          operation === "demote"
+            ? lifecycle.updateRole(id, "MEMBER", id)
+            : lifecycle.setActive(id, false, id);
+        const result = await Promise.allSettled([
+          change(sole, first),
+          change(other, last),
+        ]);
+        expect(result.filter((r) => r.status === "fulfilled")).toHaveLength(1);
+        const rejected = result.find((r) => r.status === "rejected");
+        expect(rejected).toMatchObject({
+          status: "rejected",
+          reason: { status: 409, response: { code: "LAST_ACTIVE_OWNER" } },
+        });
+        expect(await db.user.count({ where: activeOwners })).toBe(1);
+      },
+    );
+    it("holds the quorum lock across the full transaction and the waiter observes the committed owner removal", async () => {
       const other = await second();
-      await db.user.update({ where: { id: other }, data: state === "inactive" ? { isActive: false } : { deletedAt: new Date() } });
-      await expect(lifecycle.updateRole(sole, "MEMBER", sole)).rejects.toMatchObject({ status: 409 });
-      await expect(lifecycle.setActive(sole, false, sole)).rejects.toMatchObject({ status: 409 });
-    });
-    it.each(["demote", "deactivate"])("with two active OWNERs one may %s and sessions are revoked", async operation => {
-      const other = await second();
-      const session = await login(other);
-      if (operation === "demote") await lifecycle.updateRole(other, "MEMBER", sole);
-      else await lifecycle.setActive(other, false, sole);
-      expect(await db.user.count({ where: activeOwners })).toBe(1);
-      await expect(sessions.refresh(session.refreshToken)).rejects.toThrow();
-      await expect(sessions.authenticateAccess(jwt.decode(session.accessToken))).rejects.toThrow();
-    });
-    it.each([["demote", "demote"], ["deactivate", "deactivate"], ["demote", "deactivate"]])("concurrent %s/%s of final two owners has only one winner", async (first, last) => {
-      const other = await second();
-      const change = (id: string, operation: string) => operation === "demote" ? lifecycle.updateRole(id, "MEMBER", id) : lifecycle.setActive(id, false, id);
-      const result = await Promise.allSettled([change(sole, first), change(other, last)]);
-      expect(result.filter(r => r.status === "fulfilled")).toHaveLength(1);
-      const rejected = result.find(r => r.status === "rejected");
-      expect(rejected).toMatchObject({ status: "rejected", reason: { status: 409, response: { code: "LAST_ACTIVE_OWNER" } } });
+      let enteredFirst!: () => void;
+      let releaseFirst!: () => void;
+      const entered = new Promise<void>((resolve) => {
+        enteredFirst = resolve;
+      });
+      const release = new Promise<void>((resolve) => {
+        releaseFirst = resolve;
+      });
+      const first = withOwnerQuorum(db, async (tx) => {
+        await tx.user.update({ where: { id: sole }, data: { role: "MEMBER" } });
+        enteredFirst();
+        await release;
+      });
+      await entered;
+      let secondEntered = false;
+      const waiter = withOwnerQuorum(db, async (tx) => {
+        secondEntered = true;
+        await tx.user.update({
+          where: { id: other },
+          data: { role: "MEMBER" },
+        });
+      });
+      // Attach rejection handling immediately, even if an assertion below fails.
+      const waiterResult = Promise.allSettled([waiter]);
+      try {
+        let waiting = false;
+        const deadline = Date.now() + 2000;
+        while (!waiting && !secondEntered && Date.now() < deadline) {
+          const locks = await db.$queryRaw<
+            { waiting: boolean }[]
+          >`SELECT EXISTS (SELECT 1 FROM pg_locks WHERE locktype = 'advisory' AND classid = 1095652434 AND objid = 1 AND NOT granted AND database = (SELECT oid FROM pg_database WHERE datname = current_database())) AS waiting`;
+          waiting = locks[0]?.waiting === true;
+          if (!waiting) await new Promise((resolve) => setTimeout(resolve, 10));
+        }
+        expect(waiting).toBe(true);
+        expect(secondEntered).toBe(false);
+      } finally {
+        releaseFirst();
+        await first;
+      }
+      expect(await waiterResult).toMatchObject([
+        { status: "rejected", reason: { status: 409 } },
+      ]);
       expect(await db.user.count({ where: activeOwners })).toBe(1);
     });
     it("promotion and OWNER reactivation remain possible without restoring sessions", async () => {
       const target = `quorum-member-${counter++}`;
       await user(target);
       const memberSession = await login(target);
-      expect((await lifecycle.updateRole(target, "OWNER", sole)).role).toBe("OWNER");
-      await expect(sessions.refresh(memberSession.refreshToken)).rejects.toThrow();
+      expect((await lifecycle.updateRole(target, "OWNER", sole)).role).toBe(
+        "OWNER",
+      );
+      await expect(
+        sessions.refresh(memberSession.refreshToken),
+      ).rejects.toThrow();
       const ownerSession = await login(target);
       await lifecycle.setActive(target, false, sole);
       await lifecycle.setActive(target, true, sole);
       expect(await db.user.count({ where: activeOwners })).toBe(2);
-      await expect(sessions.refresh(ownerSession.refreshToken)).rejects.toThrow();
+      await expect(
+        sessions.refresh(ownerSession.refreshToken),
+      ).rejects.toThrow();
       await expect(login(target)).resolves.toHaveProperty("accessToken");
     });
   });
-
 });

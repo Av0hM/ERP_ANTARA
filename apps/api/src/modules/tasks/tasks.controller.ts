@@ -1,4 +1,15 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, Query, Req, UseGuards } from "@nestjs/common";
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Patch,
+  Post,
+  Query,
+  Req,
+  UseGuards,
+} from "@nestjs/common";
 
 import { Roles } from "../../common/decorators/roles.decorator";
 import { RolesGuard } from "../../common/guards/roles.guard";
@@ -19,20 +30,23 @@ export class TasksController {
 
   @Get()
   @Roles("OWNER", "ADMIN", "MEMBER")
-  getTasks() {
-    return this.tasksService.findAll();
+  getTasks(@Req() req: AuthenticatedRequest) {
+    return this.tasksService.findAll(req.user.id);
   }
 
   @Get("activity")
   @Roles("OWNER", "ADMIN", "MEMBER")
-  getActivityFeed() {
-    return this.tasksService.getActivityFeed();
+  getActivityFeed(@Req() req: AuthenticatedRequest) {
+    return this.tasksService.getActivityFeed(req.user.id);
   }
 
   @Get("dependency-graph")
   @Roles("OWNER", "ADMIN", "MEMBER")
-  getDependencyGraph(@Query("subsystemId") subsystemId?: string) {
-    return this.tasksService.getDependencyGraph(subsystemId);
+  getDependencyGraph(
+    @Req() req: AuthenticatedRequest,
+    @Query("subsystemId") subsystemId?: string,
+  ) {
+    return this.tasksService.getDependencyGraph(req.user.id, subsystemId);
   }
 
   @Post()
@@ -43,19 +57,35 @@ export class TasksController {
 
   @Patch(":id/status")
   @Roles("OWNER", "ADMIN", "MEMBER")
-  updateStatus(@Param("id") id: string, @Body() payload: UpdateTaskStatusDto, @Req() req: AuthenticatedRequest) {
+  updateStatus(
+    @Param("id") id: string,
+    @Body() payload: UpdateTaskStatusDto,
+    @Req() req: AuthenticatedRequest,
+  ) {
     return this.tasksService.updateStatus(id, payload, req.user.id);
   }
 
   @Patch(":id/assign")
   @Roles("OWNER", "ADMIN")
-  reassign(@Param("id") id: string, @Body() body: { assignedToId?: string }, @Req() req: AuthenticatedRequest) {
-    return this.tasksService.reassign(id, body.assignedToId ?? null, req.user.id);
+  reassign(
+    @Param("id") id: string,
+    @Body() body: { assignedToId?: string },
+    @Req() req: AuthenticatedRequest,
+  ) {
+    return this.tasksService.reassign(
+      id,
+      body.assignedToId ?? null,
+      req.user.id,
+    );
   }
 
   @Post(":id/comments")
   @Roles("OWNER", "ADMIN", "MEMBER")
-  addComment(@Param("id") id: string, @Body() payload: CreateTaskCommentDto, @Req() req: AuthenticatedRequest) {
+  addComment(
+    @Param("id") id: string,
+    @Body() payload: CreateTaskCommentDto,
+    @Req() req: AuthenticatedRequest,
+  ) {
     return this.tasksService.addComment(id, payload, req.user.id);
   }
 

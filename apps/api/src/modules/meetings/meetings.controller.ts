@@ -1,4 +1,14 @@
-import { Body, Controller, Get, Param, Post, Query, Req, UseGuards } from "@nestjs/common";
+import {
+  Body,
+  Controller,
+  NotImplementedException,
+  Get,
+  Param,
+  Post,
+  Query,
+  Req,
+  UseGuards,
+} from "@nestjs/common";
 
 import { Roles } from "../../common/decorators/roles.decorator";
 import { RolesGuard } from "../../common/guards/roles.guard";
@@ -23,16 +33,25 @@ export class MeetingsController {
 
   @Get("agenda/:subsystemId")
   @Roles("OWNER", "ADMIN", "MEMBER")
-  async getAgenda(@Param("subsystemId") subsystemId: string, @Query("date") dateStr?: string) {
+  async getAgenda(
+    @Param("subsystemId") subsystemId: string,
+    @Query("date") dateStr?: string,
+  ) {
     const date = dateStr ? new Date(dateStr) : new Date();
     return this.meetingsService.generateMeetingAgenda(subsystemId, date);
   }
 
   @Get("agenda/:subsystemId/markdown")
   @Roles("OWNER", "ADMIN", "MEMBER")
-  async getAgendaMarkdown(@Param("subsystemId") subsystemId: string, @Query("date") dateStr?: string) {
+  async getAgendaMarkdown(
+    @Param("subsystemId") subsystemId: string,
+    @Query("date") dateStr?: string,
+  ) {
     const date = dateStr ? new Date(dateStr) : new Date();
-    const agenda = await this.meetingsService.generateMeetingAgenda(subsystemId, date);
+    const agenda = await this.meetingsService.generateMeetingAgenda(
+      subsystemId,
+      date,
+    );
     const markdown = await this.meetingsService.generateAgendaMarkdown(agenda);
     return { markdown };
   }
@@ -45,22 +64,26 @@ export class MeetingsController {
     @Req() req: AuthenticatedRequest,
   ) {
     const weeks = parseInt(horizonWeeks, 10);
-    return this.meetingsService.createSyncCalendarEvents(subsystemId, weeks, req.user.id);
+    return this.meetingsService.createSyncCalendarEvents(
+      subsystemId,
+      weeks,
+      req.user.id,
+    );
   }
 
   @Post("action-items")
   @Roles("OWNER", "ADMIN", "MEMBER")
   async createActionItems(
-    @Body() body: { meetingId: string; items: Array<{ taskId: string; action: string; assigneeId: string }> },
+    @Body()
+    body: {
+      meetingId: string;
+      items: Array<{ taskId: string; action: string; assigneeId: string }>;
+    },
     @Req() req: AuthenticatedRequest,
   ) {
-    // Convert action items to tasks
-    const results = [];
-    for (const item of body.items) {
-      // This would create tasks from action items
-      // For now, return the action items
-      results.push({ ...item, created: true });
-    }
-    return { created: results.length, items: results };
+    throw new NotImplementedException({
+      code: "MEETING_ACTION_ITEMS_NOT_IMPLEMENTED",
+      message: "Action item persistence is not implemented",
+    });
   }
 }

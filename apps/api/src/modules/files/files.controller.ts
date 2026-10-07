@@ -1,4 +1,13 @@
-import { Body, Controller, Delete, Get, Param, Post, Req, UseGuards } from "@nestjs/common";
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Post,
+  Req,
+  UseGuards,
+} from "@nestjs/common";
 
 import { Roles } from "../../common/decorators/roles.decorator";
 import { RolesGuard } from "../../common/guards/roles.guard";
@@ -23,8 +32,11 @@ export class FilesController {
 
   @Post("attachments")
   @Roles("OWNER", "ADMIN")
-  createAttachment(@Body() payload: CreateAttachmentDto) {
-    return this.filesService.create(payload);
+  createAttachment(
+    @Body() payload: CreateAttachmentDto,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    return this.filesService.create(payload, req.user.id);
   }
 
   @Delete("attachments/:id")

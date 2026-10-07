@@ -1,21 +1,9 @@
 import { Module, Global } from "@nestjs/common";
-import { PrometheusModule } from "@willsoto/nestjs-prometheus";
 import { MetricsController } from "./metrics.controller";
 import { MetricsService } from "./metrics.service";
 
 @Global()
 @Module({
-  imports: [
-    PrometheusModule.register({
-      defaultMetrics: {
-        enabled: false,
-      },
-      defaultLabels: {
-        app: "antara-erp-api",
-      },
-      customMetricPrefix: "antara_",
-    }),
-  ],
   controllers: [MetricsController],
   providers: [MetricsService],
   exports: [MetricsService],

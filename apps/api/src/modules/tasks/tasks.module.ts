@@ -1,3 +1,4 @@
+import { AuthorizationModule } from "../../common/authorization/authorization.module";
 import { SessionModule } from "../../common/sessions/session.module";
 import { WsJwtAuthGuard } from "../auth/guards/ws-jwt-auth.guard";
 import { Module } from "@nestjs/common";
@@ -11,7 +12,13 @@ import { TasksController } from "./tasks.controller";
 import { TasksService } from "./tasks.service";
 
 @Module({
-  imports: [SessionModule, PrismaModule, AuditModule, JwtModule.register({})],
+  imports: [
+    AuthorizationModule,
+    SessionModule,
+    PrismaModule,
+    AuditModule,
+    JwtModule.register({}),
+  ],
   providers: [
     WsJwtAuthGuard,
     TasksService,

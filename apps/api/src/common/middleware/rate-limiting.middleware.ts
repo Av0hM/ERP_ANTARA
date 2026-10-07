@@ -44,8 +44,12 @@ export class RateLimitingMiddleware implements NestMiddleware {
   constructor(private readonly configService: ConfigService) {
     this.config = {
       ...DEFAULT_CONFIG,
-      windowMs: configService.get<number>("RATE_LIMIT_WINDOW_MS") ?? DEFAULT_CONFIG.windowMs,
-      maxRequests: configService.get<number>("RATE_LIMIT_MAX_REQUESTS") ?? DEFAULT_CONFIG.maxRequests,
+      windowMs:
+        configService.get<number>("RATE_LIMIT_WINDOW_MS") ??
+        DEFAULT_CONFIG.windowMs,
+      maxRequests:
+        configService.get<number>("RATE_LIMIT_MAX_REQUESTS") ??
+        DEFAULT_CONFIG.maxRequests,
     };
 
     // Clean up expired entries every 5 minutes
@@ -56,7 +60,10 @@ export class RateLimitingMiddleware implements NestMiddleware {
   use(req: Request, res: Response, next: NextFunction) {
     // Refresh has credential/session limits and a generous source flood limit in
     // RefreshThrottleGuard. Do not also impose this shared proxy-IP quota.
-    if ((req.method === "POST" && /^\/api\/auth\/refresh\/?$/i.test(req.path)) || this.config.skip(req)) {
+    if (
+      (req.method === "POST" && /^\/api\/auth\/refresh\/?$/i.test(req.path)) ||
+      this.config.skip(req)
+    ) {
       return next();
     }
 
@@ -101,7 +108,10 @@ export class RateLimitingMiddleware implements NestMiddleware {
     // Set headers
     if (this.config.headers) {
       res.setHeader("X-RateLimit-Limit", this.config.maxRequests);
-      res.setHeader("X-RateLimit-Remaining", Math.max(0, this.config.maxRequests - record.count));
+      res.setHeader(
+        "X-RateLimit-Remaining",
+        Math.max(0, this.config.maxRequests - record.count),
+      );
       res.setHeader("X-RateLimit-Reset", Math.ceil(record.resetTime / 1000));
     }
 
@@ -126,12 +136,16 @@ export class RateLimitingMiddleware implements NestMiddleware {
 }
 
 // Stricter rate limiting for auth endpoints
-export function createAuthRateLimiter(configService: ConfigService): NestMiddleware {
+export function createAuthRateLimiter(
+  configService: ConfigService,
+): NestMiddleware {
   return new RateLimitingMiddleware(configService);
 }
 
 // Lenient rate limiting for API endpoints
-export function createApiRateLimiter(configService: ConfigService): NestMiddleware {
+export function createApiRateLimiter(
+  configService: ConfigService,
+): NestMiddleware {
   const config = new ConfigService();
   return new RateLimitingMiddleware(configService);
 }

@@ -1,4 +1,15 @@
-import { Injectable } from "@nestjs/common";
+import { CoreAuthorizationService } from "../../common/authorization/core-authorization.service";
+import {
+  administeredSubsystemIds,
+  readableSubsystemIds,
+} from "../../common/authorization/authorization.policy";
+import { safeUserSelect } from "../../common/prisma/safe-user.select";
+import { memberProfileSelect } from "../../common/prisma/safe-user.select";
+import {
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from "@nestjs/common";
 import { AppRole } from "@antara/contracts";
 
 import { PrismaService } from "../../common/prisma/prisma.service";
@@ -9,19 +20,20 @@ export class UsersService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly auditService: AuditService,
+    private readonly core: CoreAuthorizationService,
   ) {}
 
   findByEmail(email: string) {
     return this.prisma.user.findUnique({
       where: { email },
-      include: { subsystem: true },
+      select: memberProfileSelect,
     });
   }
 
   findById(id: string) {
     return this.prisma.user.findUnique({
       where: { id },
-      include: { subsystem: true },
+      select: memberProfileSelect,
     });
   }
 
@@ -38,6 +50,7 @@ export class UsersService {
         passwordHash: data.passwordHash,
         role: data.role,
       },
+      select: memberProfileSelect,
     });
   }
 
@@ -46,50 +59,79 @@ export class UsersService {
     data: { skills?: string[]; weeklyCapacityHours?: number },
     actorId: string,
   ) {
-    const oldUser = await this.prisma.user.findUnique({
-      where: { id: userId },
-    });
-
-    const user = await this.prisma.user.update({
-      where: { id: userId },
-      data: {
-        skills: data.skills,
-        weeklyCapacityHours: data.weeklyCapacityHours,
-      },
-    });
-
-    await this.auditService.log({
-      action: "PROFILE_UPDATE",
-      entityType: "User",
-      entityId: userId,
+    return this.core.withActor(
       actorId,
-      payload: {
-        oldSkills: oldUser?.skills,
-        newSkills: data.skills,
-        oldWeeklyCapacityHours: oldUser?.weeklyCapacityHours,
-        newWeeklyCapacityHours: data.weeklyCapacityHours,
+      async (tx, actor) => {
+        const target = await tx.user.findUnique({
+          where: { id: userId },
+          select: {
+            role: true,
+            memberships: { select: { subsystemId: true } },
+          },
+        });
+        if (!target) throw new NotFoundException("User not found");
+        const admin = administeredSubsystemIds(actor);
+        if (
+          !actor.globalAuthority &&
+          !(
+            target.role === "MEMBER" &&
+            admin.kind === "SCOPED" &&
+            target.memberships.some((membership) =>
+              admin.ids.includes(membership.subsystemId),
+            )
+          )
+        )
+          throw new ForbiddenException("Profile management denied");
+        const user = await tx.user.update({
+          where: { id: userId },
+          data: {
+            skills: data.skills,
+            weeklyCapacityHours: data.weeklyCapacityHours,
+          },
+          select: memberProfileSelect,
+        });
+        await tx.auditLog.create({
+          data: {
+            action: "PROFILE_UPDATE",
+            entityType: "User",
+            entityId: userId,
+            actorId,
+          },
+        });
+        // Do not expose a target's legacy subsystem outside the authorized directory scope.
+        const { subsystem, subsystemId, ...profile } = user;
+        return profile;
       },
-    });
-
-    return user;
+      [userId],
+    );
   }
 
-  listMembers() {
+  async listMembers(actorId: string) {
+    const actor = await this.core.actor(actorId);
+    const access =
+      actor.role === "ADMIN"
+        ? administeredSubsystemIds(actor)
+        : readableSubsystemIds(actor);
     return this.prisma.user.findMany({
-      where: { isActive: true },
-      select: {
-        id: true,
-        name: true,
-        email: true,
-        role: true,
-        skills: true,
-        weeklyCapacityHours: true,
-        subsystem: {
-          select: {
-            name: true,
-          },
-        },
+      where: {
+        isActive: true,
+        deletedAt: null,
+        ...(access.kind === "GLOBAL"
+          ? {}
+          : {
+              memberships: { some: { subsystemId: { in: [...access.ids] } } },
+            }),
       },
+      select:
+        actor.role === "MEMBER"
+          ? safeUserSelect
+          : {
+              ...safeUserSelect,
+              email: true,
+              role: true,
+              skills: true,
+              weeklyCapacityHours: true,
+            },
       orderBy: { name: "asc" },
     });
   }

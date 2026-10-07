@@ -8,7 +8,11 @@ import { TaskStatus } from "@antara/contracts";
 import { useActorProfile } from "@/hooks/use-actor-profile";
 import { canManageOperations } from "@/lib/permissions";
 import { Button } from "@/components/ui/button";
-import { useMemberCatalog, useReassignTask, useSubsystemCatalog } from "@/hooks/use-operations";
+import {
+  useMemberCatalog,
+  useReassignTask,
+  useSubsystemCatalog,
+} from "@/hooks/use-operations";
 import { TaskRecord, TypingRecord } from "@/lib/task-types";
 
 const statuses = [
@@ -47,10 +51,15 @@ export function TaskDetailPanel({
   if (!task) {
     return (
       <aside className="section-dark grid-texture-dark rounded-[2rem] p-6">
-        <p className="text-xs uppercase tracking-[0.28em] text-saffron">Task Console</p>
-        <h2 className="mt-3 text-2xl font-semibold">Select a task to inspect dependencies and discussion</h2>
+        <p className="text-xs uppercase tracking-[0.28em] text-saffron">
+          Task Console
+        </p>
+        <h2 className="mt-3 text-2xl font-semibold">
+          Select a task to inspect dependencies and discussion
+        </h2>
         <p className="mt-3 text-sm text-muted">
-          This rail becomes the collaboration center for status changes, blockers, comments, and future AI suggestions.
+          This rail becomes the collaboration center for status changes,
+          blockers, comments, and future AI suggestions.
         </p>
       </aside>
     );
@@ -60,7 +69,18 @@ export function TaskDetailPanel({
     <aside className="section-dark grid-texture-dark rounded-[2rem] p-6">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <p className="text-xs uppercase tracking-[0.28em] text-saffron">{subsystem ? <Link href={`/subsystems/${subsystem.slug}`} className="underline underline-offset-4">{task.subsystem}</Link> : task.subsystem}</p>
+          <p className="text-xs uppercase tracking-[0.28em] text-saffron">
+            {subsystem ? (
+              <Link
+                href={`/subsystems/${subsystem.slug}`}
+                className="underline underline-offset-4"
+              >
+                {task.subsystem}
+              </Link>
+            ) : (
+              task.subsystem
+            )}
+          </p>
           <h2 className="mt-2 text-2xl font-semibold">{task.title}</h2>
           <p className="mt-3 text-sm text-muted">{task.description}</p>
         </div>
@@ -72,41 +92,58 @@ export function TaskDetailPanel({
       <div className="mt-6 grid gap-3 sm:grid-cols-3">
         <div className="rounded-xl border border-steel/30 bg-white/5 p-4">
           <RadioTower className="size-4 text-saffron" />
-          <p className="mt-3 text-xs uppercase tracking-[0.18em] text-muted">Assignee</p>
-          {canManageOperations(actor?.role) && <select
-            aria-label="Assign task"
-            disabled={reassignTask.isPending}
-            value={task.assignedToId ?? ""}
-            onChange={(event) => reassignTask.mutate({ taskId: task.id, assignedToId: event.target.value || null })}
-            className="input-field mt-2"
-          >
-            <option value="">Unassigned</option>
-            {memberData.map((member) => (
-              <option key={member.id} value={member.id}>
-                {member.name} ({member.subsystem?.name ?? member.role})
-              </option>
-            ))}
-          </select>}
+          <p className="mt-3 text-xs uppercase tracking-[0.18em] text-muted">
+            Assignee
+          </p>
+          {task.permissions?.canManage && (
+            <select
+              aria-label="Assign task"
+              disabled={reassignTask.isPending}
+              value={task.assignedToId ?? ""}
+              onChange={(event) =>
+                reassignTask.mutate({
+                  taskId: task.id,
+                  assignedToId: event.target.value || null,
+                })
+              }
+              className="input-field mt-2"
+            >
+              <option value="">Unassigned</option>
+              {memberData.map((member) => (
+                <option key={member.id} value={member.id}>
+                  {member.name} ({member.subsystem?.name ?? member.role})
+                </option>
+              ))}
+            </select>
+          )}
           <p className="mt-2 text-xs text-muted">{task.assigneeName}</p>
         </div>
         <div className="rounded-xl border border-steel/30 bg-white/5 p-4">
           <Workflow className="size-4 text-saffron" />
-          <p className="mt-3 text-xs uppercase tracking-[0.18em] text-muted">Dependencies</p>
+          <p className="mt-3 text-xs uppercase tracking-[0.18em] text-muted">
+            Dependencies
+          </p>
           <p className="mt-1 font-medium">{task.dependencyCount}</p>
         </div>
         <div className="rounded-xl border border-steel/30 bg-white/5 p-4">
           <MessageSquare className="size-4 text-saffron" />
-          <p className="mt-3 text-xs uppercase tracking-[0.18em] text-muted">Comments</p>
+          <p className="mt-3 text-xs uppercase tracking-[0.18em] text-muted">
+            Comments
+          </p>
           <p className="mt-1 font-medium">{task.comments.length}</p>
         </div>
       </div>
 
       <div className="mt-6">
-        <label className="mb-2 block text-xs uppercase tracking-[0.2em] text-muted">Lifecycle Status</label>
+        <label className="mb-2 block text-xs uppercase tracking-[0.2em] text-muted">
+          Lifecycle Status
+        </label>
         <select
           value={task.status}
-          disabled={isMutating}
-          onChange={(event) => onStatusChange(task.id, event.target.value as TaskStatus)}
+          disabled={isMutating || !task.permissions?.canUpdateStatus}
+          onChange={(event) =>
+            onStatusChange(task.id, event.target.value as TaskStatus)
+          }
           className="input-field"
         >
           {statuses.map((status) => (
@@ -120,16 +157,24 @@ export function TaskDetailPanel({
       <div className="mt-8">
         <div className="flex items-center justify-between gap-3">
           <h3 className="text-lg font-semibold">Discussion Feed</h3>
-          {typing?.taskId === task.id ? <span className="text-xs text-saffron">{typing.userName} is typing...</span> : null}
+          {typing?.taskId === task.id ? (
+            <span className="text-xs text-saffron">
+              {typing.userName} is typing...
+            </span>
+          ) : null}
         </div>
         <div className="mt-4 max-h-72 space-y-3 overflow-auto pr-1">
           {task.comments.length === 0 ? (
             <div className="rounded-xl border border-dashed border-steel/30 p-4 text-sm text-muted">
-              No comments yet. This is ready for subsystem discussion and review notes.
+              No comments yet. This is ready for subsystem discussion and review
+              notes.
             </div>
           ) : (
             task.comments.map((entry) => (
-              <article key={entry.id} className="rounded-xl border border-steel/30 bg-white/5 p-4">
+              <article
+                key={entry.id}
+                className="rounded-xl border border-steel/30 bg-white/5 p-4"
+              >
                 <div className="flex items-center justify-between gap-3">
                   <p className="text-sm font-medium">{entry.authorName}</p>
                   <span className="text-xs text-muted">
@@ -149,7 +194,9 @@ export function TaskDetailPanel({
       </div>
 
       <div className="mt-6">
-        <label className="mb-2 block text-xs uppercase tracking-[0.2em] text-muted">Add Comment</label>
+        <label className="mb-2 block text-xs uppercase tracking-[0.2em] text-muted">
+          Add Comment
+        </label>
         <textarea
           value={comment}
           onChange={(event) => {

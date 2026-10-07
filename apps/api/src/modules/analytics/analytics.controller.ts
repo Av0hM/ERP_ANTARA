@@ -1,4 +1,4 @@
-import { Controller, Get, UseGuards } from "@nestjs/common";
+import { Controller, Get, Query, UseGuards } from "@nestjs/common";
 
 import { CurrentUser } from "../../common/decorators/current-user.decorator";
 import { Roles } from "../../common/decorators/roles.decorator";
@@ -13,36 +13,66 @@ export class AnalyticsController {
 
   @Get("overview")
   @Roles("OWNER", "ADMIN", "MEMBER")
-  async getOverview(@CurrentUser() user: { id: string }) {
-    const scope = await this.analyticsService.resolveScope(user.id);
+  async getOverview(
+    @CurrentUser() user: { id: string },
+    @Query("subsystemId") subsystemId?: string,
+  ) {
+    const scope = await this.analyticsService.resolveScope(
+      user.id,
+      subsystemId,
+    );
     return this.analyticsService.getOverview(scope);
   }
 
   @Get("bundle")
   @Roles("OWNER", "ADMIN", "MEMBER")
-  async getBundle(@CurrentUser() user: { id: string }) {
-    const scope = await this.analyticsService.resolveScope(user.id);
+  async getBundle(
+    @CurrentUser() user: { id: string },
+    @Query("subsystemId") subsystemId?: string,
+  ) {
+    const scope = await this.analyticsService.resolveScope(
+      user.id,
+      subsystemId,
+    );
     return this.analyticsService.getBundle(scope);
   }
 
   @Get("velocity")
   @Roles("OWNER", "ADMIN", "MEMBER")
-  async getVelocity(@CurrentUser() user: { id: string }) {
-    const scope = await this.analyticsService.resolveScope(user.id);
+  async getVelocity(
+    @CurrentUser() user: { id: string },
+    @Query("subsystemId") subsystemId?: string,
+  ) {
+    const scope = await this.analyticsService.resolveScope(
+      user.id,
+      subsystemId,
+    );
     return this.analyticsService.getVelocityTrend(scope);
   }
 
   @Get("heatmap")
   @Roles("OWNER", "ADMIN", "MEMBER")
-  async getHeatmap(@CurrentUser() user: { id: string }) {
-    const scope = await this.analyticsService.resolveScope(user.id);
+  async getHeatmap(
+    @CurrentUser() user: { id: string },
+    @Query("subsystemId") subsystemId?: string,
+  ) {
+    const scope = await this.analyticsService.resolveScope(
+      user.id,
+      subsystemId,
+    );
     return this.analyticsService.getHeatmap(scope);
   }
 
   @Get("subsystems")
   @Roles("OWNER", "ADMIN", "MEMBER")
-  async getSubsystems(@CurrentUser() user: { id: string }) {
-    const scope = await this.analyticsService.resolveScope(user.id);
+  async getSubsystems(
+    @CurrentUser() user: { id: string },
+    @Query("subsystemId") subsystemId?: string,
+  ) {
+    const scope = await this.analyticsService.resolveScope(
+      user.id,
+      subsystemId,
+    );
     return this.analyticsService.getSubsystemBreakdown(scope);
   }
 }

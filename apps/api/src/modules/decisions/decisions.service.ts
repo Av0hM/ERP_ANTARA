@@ -1,159 +1,237 @@
-import { Injectable, NotFoundException } from "@nestjs/common";
-
+import {
+  BadRequestException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from "@nestjs/common";
+import { Prisma } from "@prisma/client";
+import { safeUserSelect } from "../../common/prisma/safe-user.select";
 import { PrismaService } from "../../common/prisma/prisma.service";
+import { CoreAuthorizationService } from "../../common/authorization/core-authorization.service";
+import {
+  canManageDecision,
+  canReadDecision,
+} from "../../common/authorization/authorization.policy";
+import { ActorContext } from "../../common/authorization/authorization.types";
 import { AuditService } from "../audit/audit.service";
-import { CreateDecisionDto, UpdateDecisionDto, DecisionQueryDto } from "./dto/decision.dto";
+import {
+  CreateDecisionDto,
+  UpdateDecisionDto,
+  DecisionQueryDto,
+} from "./dto/decision.dto";
+
+const include = {
+  author: { select: safeUserSelect },
+  subsystem: { select: { id: true, name: true, slug: true, color: true } },
+} satisfies Prisma.DecisionRecordInclude;
+type Record = Prisma.DecisionRecordGetPayload<{ include: typeof include }>;
 
 @Injectable()
 export class DecisionsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly auditService: AuditService,
+    private readonly core: CoreAuthorizationService,
   ) {}
 
-  async create(dto: CreateDecisionDto, actorId: string) {
-    const decision = await this.prisma.decisionRecord.create({
-      data: {
-        title: dto.title,
-        context: dto.context,
-        decision: dto.decision,
-        rationale: dto.rationale,
-        alternatives: dto.alternatives ?? [],
-        consequences: dto.consequences,
-        authorId: actorId,
-        subsystemId: dto.subsystemId,
-        relatedTaskIds: dto.relatedTaskIds ?? [],
-        status: "PROPOSED",
+  private async response(
+    record: Record,
+    actor: ActorContext,
+    tx: Prisma.TransactionClient = this.prisma,
+  ) {
+    const links = await tx.decisionRecord.findMany({
+      where: {
+        AND: [
+          this.core.decisionWhere(actor),
+          {
+            OR: [
+              { id: record.supersededById ?? "" },
+              { supersededById: record.id },
+            ],
+          },
+        ],
       },
-      include: {
-        author: { select: { id: true, name: true, email: true } },
-        subsystem: { select: { id: true, name: true, slug: true, color: true } },
-        supersededBy: { select: { id: true, title: true, status: true } },
-        supersedes: { select: { id: true, title: true, status: true } },
-      },
+      select: { id: true, title: true, status: true, supersededById: true },
     });
-
-    await this.auditService.log({
-      action: "DECISION_CREATE",
-      entityType: "DecisionRecord",
-      entityId: decision.id,
-      actorId,
-      payload: { title: decision.title, status: decision.status },
+    const superseding = links.find((link) => link.id === record.supersededById);
+    const summary = (link: (typeof links)[number]) => ({
+      id: link.id,
+      title: link.title,
+      status: link.status,
     });
-
-    return decision;
+    return {
+      ...record,
+      relatedTaskIds: await this.core.visibleTaskIds(
+        actor,
+        record.relatedTaskIds,
+        tx,
+      ),
+      supersededById: superseding?.id ?? null,
+      supersededBy: superseding ? summary(superseding) : null,
+      supersedes: links
+        .filter((link) => link.supersededById === record.id)
+        .map(summary),
+    };
   }
 
-  async findAll(query: DecisionQueryDto) {
-    const where: any = {};
-    if (query.status) where.status = query.status;
-    if (query.subsystemId) where.subsystemId = query.subsystemId;
-    if (query.authorId) where.authorId = query.authorId;
+  create(dto: CreateDecisionDto, actorId: string) {
+    return this.core.withActor(actorId, async (tx, actor) => {
+      const scope = dto.scope ?? (dto.subsystemId ? "SUBSYSTEM" : "GLOBAL");
+      const authority =
+        dto.authority ?? (actor.role === "OWNER" ? "OWNER" : "SUBSYSTEM_ADMIN");
+      const placement = {
+        scope,
+        authority,
+        subsystemId: dto.subsystemId ?? null,
+      };
+      if (!canManageDecision(actor, placement))
+        throw new ForbiddenException("Decision creation denied");
+      const relatedTaskIds = [...new Set(dto.relatedTaskIds ?? [])];
+      if (
+        (await this.core.visibleTaskIds(actor, relatedTaskIds, tx)).length !==
+        relatedTaskIds.length
+      )
+        throw new ForbiddenException("Related task access denied");
+      const decision = await tx.decisionRecord.create({
+        data: {
+          title: dto.title,
+          context: dto.context,
+          decision: dto.decision,
+          rationale: dto.rationale,
+          alternatives: dto.alternatives ?? [],
+          consequences: dto.consequences,
+          authorId: actorId,
+          ...placement,
+          relatedTaskIds,
+          status: "PROPOSED",
+        },
+        include,
+      });
+      await tx.auditLog.create({
+        data: {
+          action: "DECISION_CREATE",
+          entityType: "DecisionRecord",
+          entityId: decision.id,
+          actorId,
+        },
+      });
+      return this.response(decision, actor, tx);
+    });
+  }
 
+  async findAll(query: DecisionQueryDto, actorId: string) {
+    const actor = await this.core.actor(actorId);
+    const where: Prisma.DecisionRecordWhereInput = {
+      AND: [
+        this.core.decisionWhere(actor),
+        {
+          status: query.status,
+          subsystemId: query.subsystemId,
+          authorId: query.authorId,
+        },
+      ],
+    };
     const [decisions, total] = await Promise.all([
       this.prisma.decisionRecord.findMany({
         where,
-        include: {
-          author: { select: { id: true, name: true, email: true } },
-          subsystem: { select: { id: true, name: true, slug: true, color: true } },
-          supersededBy: { select: { id: true, title: true, status: true } },
-          supersedes: { select: { id: true, title: true, status: true } },
-        },
+        include,
         orderBy: { createdAt: "desc" },
         take: 50,
       }),
       this.prisma.decisionRecord.count({ where }),
     ]);
-
-    return { decisions, total };
+    return {
+      decisions: await Promise.all(
+        decisions.map((record) => this.response(record, actor)),
+      ),
+      total,
+    };
   }
 
-  async findOne(id: string) {
+  async findOne(id: string, actorId: string) {
+    const actor = await this.core.actor(actorId);
     const decision = await this.prisma.decisionRecord.findUnique({
       where: { id },
-      include: {
-        author: { select: { id: true, name: true, email: true } },
-        subsystem: { select: { id: true, name: true, slug: true, color: true } },
-        supersededBy: { select: { id: true, title: true, status: true } },
-        supersedes: { select: { id: true, title: true, status: true } },
-      },
+      include,
     });
-
-    if (!decision) {
-      throw new NotFoundException(`Decision ${id} not found`);
-    }
-
-    return decision;
+    if (!decision) throw new NotFoundException("Decision not found");
+    if (!canReadDecision(actor, decision))
+      throw new ForbiddenException("Decision access denied");
+    return this.response(decision, actor);
   }
 
-  async update(id: string, dto: UpdateDecisionDto, actorId: string) {
-    const existing = await this.prisma.decisionRecord.findUnique({
-      where: { id },
-    });
-
-    if (!existing) {
-      throw new NotFoundException(`Decision ${id} not found`);
-    }
-
-    const updateData: any = { ...dto };
-
-    if (dto.status === "ACCEPTED" && existing.status !== "ACCEPTED") {
-      updateData.decidedAt = new Date();
-    }
-
-    if (dto.supersededById) {
-      const superseding = await this.prisma.decisionRecord.findUnique({
-        where: { id: dto.supersededById },
+  update(id: string, dto: UpdateDecisionDto, actorId: string) {
+    return this.core.withActor(actorId, async (tx, actor) => {
+      await this.core.lockDecisions(tx, [
+        id,
+        ...(dto.supersededById ? [dto.supersededById] : []),
+      ]);
+      const existing = await tx.decisionRecord.findUnique({ where: { id } });
+      if (!existing) throw new NotFoundException("Decision not found");
+      if (!canManageDecision(actor, existing))
+        throw new ForbiddenException("Decision management denied");
+      if (dto.supersededById) {
+        const target = await tx.decisionRecord.findUnique({
+          where: { id: dto.supersededById },
+        });
+        if (!target || !canManageDecision(actor, target))
+          throw new ForbiddenException("Superseding decision access denied");
+        if (target.id === id || target.status !== "ACCEPTED")
+          throw new BadRequestException("Choose a different ACCEPTED decision");
+      }
+      const decision = await tx.decisionRecord.update({
+        where: { id },
+        data: {
+          title: dto.title,
+          context: dto.context,
+          decision: dto.decision,
+          rationale: dto.rationale,
+          alternatives: dto.alternatives,
+          consequences: dto.consequences,
+          status: dto.status,
+          supersededById: dto.supersededById,
+          ...(dto.status === "ACCEPTED" && existing.status !== "ACCEPTED"
+            ? { decidedAt: new Date() }
+            : {}),
+        },
+        include,
       });
-      if (!superseding) {
-        throw new NotFoundException(`Superseding decision ${dto.supersededById} not found`);
-      }
-      if (superseding.status !== "ACCEPTED") {
-        throw new Error("Can only supersede with an ACCEPTED decision");
-      }
-    }
-
-    const decision = await this.prisma.decisionRecord.update({
-      where: { id },
-      data: updateData,
-      include: {
-        author: { select: { id: true, name: true, email: true } },
-        subsystem: { select: { id: true, name: true, slug: true, color: true } },
-        supersededBy: { select: { id: true, title: true, status: true } },
-        supersedes: { select: { id: true, title: true, status: true } },
-      },
+      await tx.auditLog.create({
+        data: {
+          action: "DECISION_UPDATE",
+          entityType: "DecisionRecord",
+          entityId: id,
+          actorId,
+        },
+      });
+      return this.response(decision, actor, tx);
     });
-
-    await this.auditService.log({
-      action: "DECISION_UPDATE",
-      entityType: "DecisionRecord",
-      entityId: decision.id,
-      actorId,
-      payload: { title: decision.title, oldStatus: existing.status, newStatus: decision.status },
-    });
-
-    return decision;
   }
 
-  async delete(id: string, actorId: string) {
-    const existing = await this.prisma.decisionRecord.findUnique({
-      where: { id },
+  delete(id: string, actorId: string) {
+    return this.core.withActor(actorId, async (tx, actor) => {
+      await this.core.lockDecisions(tx, [id]);
+      const decision = await tx.decisionRecord.findUnique({ where: { id } });
+      if (!decision) throw new NotFoundException("Decision not found");
+      if (!canManageDecision(actor, decision))
+        throw new ForbiddenException("Decision management denied");
+      // SET NULL on supersession must not mutate another authority's record.
+      await tx.$queryRaw`SELECT id FROM "DecisionRecord" WHERE "supersededById" = ${id} ORDER BY id FOR UPDATE`;
+      const referring = await tx.decisionRecord.findMany({
+        where: { supersededById: id },
+      });
+      if (referring.some((record) => !canManageDecision(actor, record)))
+        throw new ForbiddenException("Referenced decision management denied");
+      await tx.decisionRecord.delete({ where: { id } });
+      await tx.auditLog.create({
+        data: {
+          action: "DECISION_DELETE",
+          entityType: "DecisionRecord",
+          entityId: id,
+          actorId,
+        },
+      });
+      return { deleted: true };
     });
-
-    if (!existing) {
-      throw new NotFoundException(`Decision ${id} not found`);
-    }
-
-    await this.prisma.decisionRecord.delete({ where: { id } });
-
-    await this.auditService.log({
-      action: "DECISION_DELETE",
-      entityType: "DecisionRecord",
-      entityId: id,
-      actorId,
-      payload: { title: existing.title },
-    });
-
-    return { deleted: true };
   }
 }

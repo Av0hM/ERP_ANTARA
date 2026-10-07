@@ -1,9 +1,17 @@
+import { Test } from "@nestjs/testing";
+import { AuthorizationService } from "../../common/authorization/authorization.service";
+import { CoreAuthorizationService } from "../../common/authorization/core-authorization.service";
+import { PrismaService } from "../../common/prisma/prisma.service";
 import { TaskPriority, TaskStatus } from "@antara/contracts";
 
 import { SubsystemsService } from "./subsystems.service";
 
 describe("SubsystemsService", () => {
   const prisma = {
+    user: { findUnique: jest.fn() },
+    $transaction: jest.fn(),
+    $queryRaw: jest.fn(),
+    auditLog: { create: jest.fn() },
     subsystem: {
       findUnique: jest.fn(),
       findMany: jest.fn(),
@@ -21,9 +29,27 @@ describe("SubsystemsService", () => {
 
   let service: SubsystemsService;
 
-  beforeEach(() => {
+  beforeEach(async () => {
     jest.clearAllMocks();
-    service = new SubsystemsService(prisma as never);
+    prisma.user.findUnique.mockResolvedValue({
+      id: "owner",
+      role: "OWNER",
+      isActive: true,
+      deletedAt: null,
+      memberships: [],
+    });
+    prisma.$transaction.mockImplementation(
+      (callback: (tx: unknown) => Promise<unknown>) => callback(prisma),
+    );
+    const module = await Test.createTestingModule({
+      providers: [
+        SubsystemsService,
+        AuthorizationService,
+        CoreAuthorizationService,
+        { provide: PrismaService, useValue: prisma },
+      ],
+    }).compile();
+    service = module.get(SubsystemsService);
   });
 
   describe("getHealth", () => {
@@ -36,9 +62,9 @@ describe("SubsystemsService", () => {
         name: "Software",
         slug: "software",
         color: "#3b82f6",
-        users: [
-          { id: "user-1", name: "Alice", availabilityScore: 80 },
-          { id: "user-2", name: "Bob", availabilityScore: 60 },
+        memberships: [
+          { user: { id: "user-1", name: "Alice", availabilityScore: 80 } },
+          { user: { id: "user-2", name: "Bob", availabilityScore: 60 } },
         ],
       });
 
@@ -125,7 +151,7 @@ describe("SubsystemsService", () => {
         },
       ]);
 
-      const result = await service.getHealth("software");
+      const result = await service.getHealth("software", "owner");
 
       expect(result.subsystem.name).toBe("Software");
       expect(result.subsystem.memberCount).toBe(2);
@@ -134,7 +160,9 @@ describe("SubsystemsService", () => {
       expect(result.metrics.overdueCount).toBe(0);
       expect(result.metrics.blockedCount).toBe(1);
       expect(result.workload).toHaveLength(2);
-      expect(result.workload.find((w) => w.memberId === "user-1")?.activeTasks).toBe(1);
+      expect(
+        result.workload.find((w) => w.memberId === "user-1")?.activeTasks,
+      ).toBe(1);
       expect(result.recentActivity).toHaveLength(2);
     });
 
@@ -146,7 +174,9 @@ describe("SubsystemsService", () => {
         name: "Software",
         slug: "software",
         color: "#3b82f6",
-        users: [{ id: "user-1", name: "Alice", availabilityScore: 80 }],
+        memberships: [
+          { user: { id: "user-1", name: "Alice", availabilityScore: 80 } },
+        ],
       });
 
       prisma.task.findMany
@@ -184,11 +214,13 @@ describe("SubsystemsService", () => {
       prisma.workLog.findMany.mockResolvedValue([]);
       prisma.taskComment.findMany.mockResolvedValue([]);
 
-      const result = await service.getHealth("software");
+      const result = await service.getHealth("software", "owner");
 
       expect(result.incomingBlockers).toHaveLength(1);
       expect(result.incomingBlockers[0]?.fromSubsystem).toBe("Avionics");
-      expect(result.incomingBlockers[0]?.blockingTask).toBe("Avionics Firmware");
+      expect(result.incomingBlockers[0]?.blockingTask).toBe(
+        "Avionics Firmware",
+      );
     });
 
     it("calculates outgoing blockers to other subsystems", async () => {
@@ -199,7 +231,9 @@ describe("SubsystemsService", () => {
         name: "Software",
         slug: "software",
         color: "#3b82f6",
-        users: [{ id: "user-1", name: "Alice", availabilityScore: 80 }],
+        memberships: [
+          { user: { id: "user-1", name: "Alice", availabilityScore: 80 } },
+        ],
       });
 
       prisma.task.findMany
@@ -237,7 +271,7 @@ describe("SubsystemsService", () => {
       prisma.workLog.findMany.mockResolvedValue([]);
       prisma.taskComment.findMany.mockResolvedValue([]);
 
-      const result = await service.getHealth("software");
+      const result = await service.getHealth("software", "owner");
 
       expect(result.outgoingBlockers).toHaveLength(1);
       expect(result.outgoingBlockers[0]?.toSubsystem).toBe("Payload");
@@ -247,7 +281,9 @@ describe("SubsystemsService", () => {
     it("throws when subsystem not found", async () => {
       prisma.subsystem.findUnique.mockResolvedValue(null);
 
-      await expect(service.getHealth("nonexistent")).rejects.toThrow("Subsystem not found: nonexistent");
+      await expect(service.getHealth("nonexistent", "owner")).rejects.toThrow(
+        "Subsystem not found: nonexistent",
+      );
     });
   });
 });

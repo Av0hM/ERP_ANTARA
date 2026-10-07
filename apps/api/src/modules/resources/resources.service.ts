@@ -1,3 +1,7 @@
+import {
+  safeUserSelect,
+  memberProfileSelect,
+} from "../../common/prisma/safe-user.select";
 import { Injectable } from "@nestjs/common";
 import { TaskPriority, TaskStatus } from "@prisma/client";
 
@@ -64,16 +68,21 @@ export class ResourcesService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly aiService: AiService,
-  ) { }
+  ) {}
 
-  async getResourceAllocationBoard(horizonWeeks = 4): Promise<ResourceAllocationBoard> {
+  async getResourceAllocationBoard(
+    horizonWeeks = 4,
+  ): Promise<ResourceAllocationBoard> {
     const now = new Date();
-    const horizonEnd = new Date(now.getTime() + horizonWeeks * 7 * 24 * 60 * 60 * 1000);
+    const horizonEnd = new Date(
+      now.getTime() + horizonWeeks * 7 * 24 * 60 * 60 * 1000,
+    );
 
     const [users, tasks, subsystems] = await Promise.all([
       this.prisma.user.findMany({
         where: { isActive: true },
-        include: {
+        select: {
+          ...memberProfileSelect,
           subsystem: { select: { id: true, name: true, color: true } },
           assignedTasks: {
             where: {
@@ -103,7 +112,12 @@ export class ResourcesService {
       }),
     ]);
 
-    const subsystemMap = new Map(subsystems.map((s: { id: string; name: string; color: string }) => [s.id, s]));
+    const subsystemMap = new Map(
+      subsystems.map((s: { id: string; name: string; color: string }) => [
+        s.id,
+        s,
+      ]),
+    );
     const userMap = new Map(users.map((u: { id: string }) => [u.id, u]));
 
     // Build user allocation entries
@@ -117,7 +131,10 @@ export class ResourcesService {
         subsystemId: task.subsystemId,
       }));
 
-      const currentWeeklyLoadHours = activeTasks.reduce((sum: number, t: { estimatedHours: number }) => sum + t.estimatedHours, 0);
+      const currentWeeklyLoadHours = activeTasks.reduce(
+        (sum: number, t: { estimatedHours: number }) => sum + t.estimatedHours,
+        0,
+      );
 
       return {
         userId: user.id,
@@ -147,13 +164,18 @@ export class ResourcesService {
       weekEnd.setHours(23, 59, 59, 999);
 
       const weekTasks = tasks.filter(
-        (t: { deadline: Date }) => t.deadline >= weekStart && t.deadline <= weekEnd,
+        (t: { deadline: Date }) =>
+          t.deadline >= weekStart && t.deadline <= weekEnd,
       );
 
       const allocations: WeeklyAllocation["allocations"] = [];
       for (const task of weekTasks) {
         if (task.assignedToId) {
-          const existing = allocations.find((a) => a.userId === task.assignedToId && a.subsystemId === task.subsystemId);
+          const existing = allocations.find(
+            (a) =>
+              a.userId === task.assignedToId &&
+              a.subsystemId === task.subsystemId,
+          );
           if (existing) {
             existing.hours += Number(task.estimatedHours ?? 0);
             existing.tasks.push(task.id);
@@ -178,16 +200,18 @@ export class ResourcesService {
     let aiSuggestions: ResourceAllocationBoard["aiSuggestions"] = [];
     try {
       const workloadSuggestions = await this.aiService.getWorkloadSuggestions();
-      aiSuggestions = workloadSuggestions.map((s: { from: string; to: string; reason: string }) => ({
-        fromUserId: "",
-        fromUserName: s.from,
-        toUserId: "",
-        toUserName: s.to,
-        taskId: "",
-        taskTitle: "",
-        reason: s.reason,
-        estimatedHoursSaved: 0,
-      }));
+      aiSuggestions = workloadSuggestions.map(
+        (s: { from: string; to: string; reason: string }) => ({
+          fromUserId: "",
+          fromUserName: s.from,
+          toUserId: "",
+          toUserName: s.to,
+          taskId: "",
+          taskTitle: "",
+          reason: s.reason,
+          estimatedHoursSaved: 0,
+        }),
+      );
     } catch {
       // Ignore AI errors
     }
@@ -211,7 +235,10 @@ export class ResourcesService {
       if (user.currentWeeklyLoadHours > user.weeklyCapacityHours * 1.2) {
         conflicts.push({
           type: "overallocation",
-          severity: user.currentWeeklyLoadHours > user.weeklyCapacityHours * 1.5 ? "HIGH" : "MEDIUM",
+          severity:
+            user.currentWeeklyLoadHours > user.weeklyCapacityHours * 1.5
+              ? "HIGH"
+              : "MEDIUM",
           description: `${user.userName} is allocated ${user.currentWeeklyLoadHours}h against ${user.weeklyCapacityHours}h capacity (${Math.round((user.currentWeeklyLoadHours / user.weeklyCapacityHours) * 100)}%)`,
           affectedUsers: [user.userId],
         });
@@ -222,14 +249,18 @@ export class ResourcesService {
     for (const week of weeks) {
       const userLoads = new Map<string, number>();
       for (const alloc of week.allocations) {
-        userLoads.set(alloc.userId, (userLoads.get(alloc.userId) ?? 0) + alloc.hours);
+        userLoads.set(
+          alloc.userId,
+          (userLoads.get(alloc.userId) ?? 0) + alloc.hours,
+        );
       }
       for (const [userId, hours] of userLoads.entries()) {
         const user = users.find((u) => u.userId === userId);
         if (user && hours > user.weeklyCapacityHours) {
           conflicts.push({
             type: "overallocation",
-            severity: hours > user.weeklyCapacityHours * 1.5 ? "HIGH" : "MEDIUM",
+            severity:
+              hours > user.weeklyCapacityHours * 1.5 ? "HIGH" : "MEDIUM",
             description: `Week ${week.weekStart.toLocaleDateString()} - ${user.userName} overloaded with ${hours}h (capacity: ${user.weeklyCapacityHours}h)`,
             affectedUsers: [userId],
           });
@@ -243,15 +274,17 @@ export class ResourcesService {
     return conflicts;
   }
 
-  async getSuggestedMoves(): Promise<Array<{
-    taskId: string;
-    taskTitle: string;
-    fromUserId: string;
-    fromUserName: string;
-    toUserId: string;
-    toUserName: string;
-    reason: string;
-  }>> {
+  async getSuggestedMoves(): Promise<
+    Array<{
+      taskId: string;
+      taskTitle: string;
+      fromUserId: string;
+      fromUserName: string;
+      toUserId: string;
+      toUserName: string;
+      reason: string;
+    }>
+  > {
     const board = await this.getResourceAllocationBoard();
     return board.aiSuggestions.map((s) => ({
       taskId: s.taskId,
@@ -268,7 +301,7 @@ export class ResourcesService {
     return this.prisma.task.update({
       where: { id: taskId },
       data: { assignedToId: newAssigneeId },
-      include: { subsystem: true, assignedTo: true },
+      include: { subsystem: true, assignedTo: { select: safeUserSelect } },
     });
   }
 }

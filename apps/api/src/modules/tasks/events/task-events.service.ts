@@ -1,21 +1,19 @@
-import { Injectable } from "@nestjs/common";
-
+import { Injectable, Logger } from "@nestjs/common";
 import { TaskCollaborationGateway } from "../gateways/task-collaboration.gateway";
 
 @Injectable()
 export class TaskEventsService {
+  private readonly logger = new Logger(TaskEventsService.name);
   constructor(private readonly gateway: TaskCollaborationGateway) {}
-
-  emitTaskUpdated(payload: unknown) {
-    this.gateway.server?.emit("task.updated", payload);
+  emitTaskUpdated(payload: { type: string; task: { id: string } }) {
+    this.invalidate(payload.task.id);
   }
-
-  emitCommentAdded(payload: unknown) {
-    this.gateway.server?.emit("task.comment.added", payload);
+  emitCommentAdded(payload: { taskId: string }) {
+    this.invalidate(payload.taskId);
   }
-
-  emitPresenceSnapshot(payload: unknown) {
-    this.gateway.server?.emit("presence.snapshot", payload);
+  private invalidate(taskId: string) {
+    void this.gateway
+      .invalidateTask(taskId)
+      .catch(() => this.logger.warn("Task refresh delivery failed"));
   }
 }
-

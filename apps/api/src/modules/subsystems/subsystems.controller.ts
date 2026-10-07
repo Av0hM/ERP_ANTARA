@@ -1,3 +1,4 @@
+import { CurrentUser } from "../../common/decorators/current-user.decorator";
 import { Controller, Get, Param, UseGuards } from "@nestjs/common";
 
 import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard";
@@ -12,13 +13,13 @@ export class SubsystemsController {
 
   @Get()
   @Roles("OWNER", "ADMIN", "MEMBER")
-  list() {
-    return this.subsystemsService.list();
+  list(@CurrentUser() user: { id: string }) {
+    return this.subsystemsService.list(user.id);
   }
 
   @Get(":slug/health")
   @Roles("OWNER", "ADMIN", "MEMBER")
-  getHealth(@Param("slug") slug: string) {
-    return this.subsystemsService.getHealth(slug);
+  getHealth(@Param("slug") slug: string, @CurrentUser() user: { id: string }) {
+    return this.subsystemsService.getHealth(slug, user.id);
   }
 }

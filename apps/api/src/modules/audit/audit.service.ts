@@ -1,4 +1,4 @@
-import { Injectable } from "@nestjs/common";
+import { Injectable, Logger } from "@nestjs/common";
 import { Prisma } from "@prisma/client";
 
 import { PrismaService } from "../../common/prisma/prisma.service";
@@ -13,7 +13,8 @@ export interface AuditLogInput {
 
 @Injectable()
 export class AuditService {
-  constructor(private readonly prisma: PrismaService) { }
+  private readonly logger = new Logger(AuditService.name);
+  constructor(private readonly prisma: PrismaService) {}
 
   async log(input: AuditLogInput) {
     try {
@@ -27,7 +28,10 @@ export class AuditService {
         },
       });
     } catch {
-      // Audit logging should never block the main operation
+      // Legacy feature auditing is best-effort; no audit row is claimed on failure.
+      this.logger.error(
+        "Audit persistence failed; audit reconciliation required",
+      );
       return null;
     }
   }

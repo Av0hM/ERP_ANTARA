@@ -1,4 +1,10 @@
-import { Controller, Get, HttpCode, HttpStatus, ServiceUnavailableException } from "@nestjs/common";
+import {
+  Controller,
+  Get,
+  HttpCode,
+  HttpStatus,
+  ServiceUnavailableException,
+} from "@nestjs/common";
 
 import { HealthService } from "./health.service";
 
@@ -11,9 +17,9 @@ export class HealthController {
   async check() {
     const health = await this.healthService.checkHealth();
     if (health.status === "unhealthy") {
-      throw new ServiceUnavailableException(health);
+      throw new ServiceUnavailableException({ status: health.status });
     }
-    return health;
+    return { status: health.status, timestamp: health.timestamp };
   }
 
   @Get("ready")
@@ -21,7 +27,7 @@ export class HealthController {
   async readiness() {
     const health = await this.healthService.checkHealth();
     if (health.status === "unhealthy") {
-      throw new ServiceUnavailableException(health);
+      throw new ServiceUnavailableException({ status: health.status });
     }
     return { ready: true, status: health.status };
   }

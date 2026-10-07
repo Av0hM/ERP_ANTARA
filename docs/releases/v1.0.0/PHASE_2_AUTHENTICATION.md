@@ -80,9 +80,9 @@ Configure backend Google client ID and allowlist before enabling Google sign-in.
 
 ## Rate limiting
 
-Auth and invitation controllers now activate the already-installed Nest ThrottlerGuard at 20 requests per 60 seconds per IP/handler, including login, Google callback, refresh and public invitation acceptance. The existing general middleware limit is unchanged. An actual HTTP integration test proves the 21st refresh request is 429 with Retry-After. Unit tests do not invoke the guard.
+Auth and invitation controllers use the already-installed Nest ThrottlerGuard at 20 requests per 60 seconds per IP/handler for login, Google callback and public invitation acceptance. Phase 2.1 replaces refresh's shared-IP bucket with the dedicated limits documented below. Other endpoints retain the existing general middleware limit. HTTP tests exercise both layers.
 
-Counters are process-local. API calls proxied through NextAuth may share its server IP; multiple API replicas have independent counters. Trusted proxy identity and shared counter storage need deployment-specific review before larger-scale rollout. No untrusted forwarded-IP header is made authoritative in this phase.
+Counters are process-local. Refresh credentials/sessions behind NextAuth's shared source IP have independent small buckets. Multiple API replicas would require shared state and coordinated keyed identifiers before scale-out. No untrusted forwarded-IP header is made authoritative.
 
 ## Validation evidence
 
@@ -118,7 +118,7 @@ The PostgreSQL gate applies the original three migrations, inserts legacy users/
 - Refresh rotation deliberately has no replay grace period. Concurrent refresh requests from multiple NextAuth requests/tabs have one winner and may force reauthentication for a losing request. Distributed frontend refresh coordination is not implemented.
 - Invitation email queue delivery happens after DB creation, using the existing queue/retry mechanism. A queue outage can leave a pending invitation without delivered mail; there is no new transactional outbox.
 - Google-provider connectivity/configuration, full browser interaction, distributed rate limits and proactive live-socket disconnects still require release/deployment verification.
-- Global lifecycle operations do not impose a last-OWNER quorum; operators must retain an active OWNER. No automatic OWNER bootstrap or assignment was added.
+- Phase 2.1 enforces the last-active-OWNER invariant for normal lifecycle/role operations. Direct SQL and future writers must follow the documented quorum protocol. No automatic OWNER bootstrap or repair of an already ownerless database was added.
 - Third-party Google-account email ownership follows the requested verified-email/explicit-allowlist model. Google recommends an additional challenge for non-Gmail/non-Workspace email ownership; provider-subject binding/account-linking policy is not introduced here.
 
 ## Exact Phase 2 file inventory
@@ -171,3 +171,73 @@ apps/web/tests/backend-auth.spec.ts
 ```
 
 The task gateway/module changes only wire current session authentication; they do not migrate task object authorization. The invitation-form change is onboarding only, not UI shell work. One direct Google verification dependency was added; no existing dependency versions were upgraded. Shared contracts were not changed by Phase 2, so their pre-existing built artifacts were used and no contracts rebuild was necessary.
+
+## Phase 2.1 — OWNER quorum and proxy-safe refresh throttling
+
+This patch addresses only the two Phase 2 review blockers. No schema/migration, frontend, dependency version, production configuration or Phase 3 feature changes are introduced.
+
+### Last-active-OWNER invariant
+
+`withOwnerQuorum(prisma, operation)` wraps operations that can remove active OWNER authority. An active OWNER is exactly `role=OWNER AND isActive=true AND deletedAt IS NULL`. `AccountLifecycleService.updateRole` and `setActive` run inside this wrapper, covering demotion/deactivation and preserving promotion/reactivation behavior. There is no existing public delete endpoint. The internal wrapper also protects future soft-delete/bulk-removal operations when used according to its contract; tests exercise those internal paths.
+
+The wrapper starts an explicit PostgreSQL READ COMMITTED transaction, acquires `pg_advisory_xact_lock(1095652434, 1)` **before all User row locks and mutations**, runs the operation, and checks that at least one active OWNER remains before commit. A zero count throws HTTP **409**, code **LAST_ACTIVE_OWNER**, with message “At least one active, non-deleted OWNER must remain”. All role/account updates, session revocation and audit inserts roll back together. It is an explicit failure, never a silent no-op.
+
+[PostgreSQL transaction advisory locks](https://www.postgresql.org/docs/current/explicit-locking.html#ADVISORY-LOCKS) last through commit/rollback. Competing removals use the same database-wide application lock, so only one removal transaction evaluates its final state at a time. READ COMMITTED gives the waiting transaction a fresh snapshot after its predecessor commits. This protects concurrent self-demotions/deactivations of the final two owners even though their User-row locks are disjoint.
+
+**Mandatory future-writer protocol:** acquire the quorum advisory lock first, then the existing sorted User-row locks; make all account/session/audit writes in the supplied transaction; propagate failures; do not nest this wrapper inside another transaction or acquire the advisory lock after User locks. All removal paths, including future deletion/security administration, must use it. Additive OWNER grants do not need this lock because they cannot reduce quorum. The existing membership helper preserves OWNER and rejects callback role/account changes. Session-only revocation does not remove OWNER authority.
+
+This is an application transactional invariant, not a database trigger. Direct SQL and older application binaries can bypass it. Replace all old lifecycle writers during release; do not assume this repairs a database already lacking an active OWNER. Initial OWNER bootstrap remains separately controlled.
+
+### Refresh limiter
+
+`RefreshThrottleGuard` uses the existing replaceable Nest `ThrottlerStorage` adapter with process-local state for the single-API-instance v1 deployment:
+
+| Endpoint / dimension                                        | Limit                                                     |
+| ----------------------------------------------------------- | --------------------------------------------------------- |
+| Login / Google callback / public invitation acceptance      | Unchanged: 20 attempts / 60 seconds / source IP / handler |
+| Refresh, same well-formed credential                        | 20 attempts / 60 seconds                                  |
+| Refresh, stable database session across credential rotation | 60 attempts / 60 seconds                                  |
+| Refresh, malformed credentials                              | 20 attempts / 60 seconds / source IP                      |
+| Refresh, all attempts from one source IP                    | 3,000 attempts / 60 seconds, before database lookup       |
+
+Refresh alone skips the generic controller IP bucket. The exact POST `/api/auth/refresh` route (including trailing slash/case variants accepted by the router) also bypasses the older 100-per-15-minute general middleware bucket, so that bucket cannot reintroduce proxy-wide refresh starvation. Its dedicated guard remains mandatory. Other routes and methods retain the previous general middleware protection.
+
+The credential bucket runs before a minimal session-ID lookup using the credential's SHA-256 digest. If a session exists, a stable session bucket prevents rotation from resetting the limit. This lookup grants no authentication: the existing session service still validates expiry, revocation/account validity and atomically rotates the credential. Unknown random-credential floods remain bounded by the larger source limit. Blocked requests receive 429 and Retry-After; credentials are never included in responses or logs by the limiter.
+
+All storage keys use domain-separated HMAC-SHA-256 identifiers with a random per-guard process-lifetime secret. Neither raw refresh credentials nor their database digests become cache keys. The guard does not log them. Later distributed throttling can replace the storage adapter and provide a coordinated HMAC secret; that is deliberately not added for v1.
+
+**Proxy assumption:** use Express `req.ip` under the existing trust-proxy configuration. Do not parse or trust arbitrary X-Forwarded-For headers. The larger source bucket is an intentional flood bound, not an unlimited proxy exemption. A restart resets counters; distributed floods or scale-out require deployment-level protection/shared state later.
+
+### Phase 2.1 validation
+
+Commands run on dedicated loopback PostgreSQL only:
+
+```sh
+npm run test:auth --workspace @antara/api
+AUTH_TEST_DATABASE_URL=postgresql://phase1a@127.0.0.1:55461/antara_phase2_test npm run test:auth:integration --workspace @antara/api
+npm run test:authorization --workspace @antara/api
+AUTHORIZATION_TEST_DATABASE_URL=postgresql://phase1a@127.0.0.1:55461/antara_phase1b_test npm run test:authorization:integration --workspace @antara/api
+npm run lint --workspace @antara/api
+npm run build --workspace @antara/api
+```
+
+Results: **53 auth unit tests, 56 PostgreSQL/HTTP auth tests, 196 Phase 1 authorization unit tests and 7 Phase 1 PostgreSQL tests passed (312 total)**. API lint/typecheck and build (including postbuild) passed.
+
+Focused Prettier write/check and `git diff --check` passed. Web typecheck is not required for this patch because no web files changed. Existing Phase 2 migration/rotation/concurrency tests remain in the gate. No production, deploy, commit or push was performed.
+
+Added coverage: sole OWNER demotion/deactivation/internal soft deletion, inactive/deleted OWNER exclusion, two-owner successful transitions, all concurrent demotion/deactivation combinations, deterministic PostgreSQL lock waiting, transactional account/session/audit rollback, preserved promotion/reactivation/session behavior, independent proxy refresh sessions, unchanged login/Google/invitation HTTP protection, credential/session/flood limits, opaque limiter state, expiry recovery and forwarded-header spoof resistance. HTTP tests install the actual general middleware and prove **125 valid sessions across 25 users** succeed behind one source IP.
+
+Exact Phase 2.1 file inventory:
+
+```text
+apps/api/package.json
+apps/api/src/common/middleware/rate-limiting.middleware.ts
+apps/api/src/modules/auth/auth.controller.ts
+apps/api/src/modules/auth/auth.module.ts
+apps/api/src/modules/auth/auth.integration.spec.ts
+apps/api/src/modules/auth/refresh-throttle.guard.ts                 (new)
+apps/api/src/modules/auth/refresh-throttle.guard.spec.ts            (new)
+apps/api/src/modules/users/account-lifecycle.service.ts
+apps/api/src/modules/users/owner-quorum.ts                          (new)
+docs/releases/v1.0.0/PHASE_2_AUTHENTICATION.md
+```

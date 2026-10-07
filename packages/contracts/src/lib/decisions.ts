@@ -45,7 +45,7 @@ export interface DecisionRecord {
   author: {
     id: string;
     name: string;
-    email: string;
+    avatarUrl?: string | null;
   };
   subsystemId?: string | null;
   subsystem?: {

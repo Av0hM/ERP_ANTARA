@@ -28,9 +28,6 @@ export class CreateTaskDto {
   subsystemId!: string;
 
   @IsString()
-  assignedById!: string;
-
-  @IsString()
   @IsOptional()
   assignedToId?: string;
 
@@ -51,4 +48,3 @@ export class CreateTaskDto {
   @IsDateString()
   deadline!: string;
 }
-

@@ -39,17 +39,27 @@ type GoogleTokenResponse = {
 
 @Injectable()
 export class GoogleIntegrationService {
-  private accessToken: string | null = null;
-  private accessTokenExpiresAt = 0;
+  private readonly tokens = new Map<
+    string,
+    { token: string; expiresAt: number }
+  >();
 
   constructor(private readonly configService: ConfigService) {}
 
   isCalendarConfigured() {
-    return Boolean(this.getGoogleCalendarId() && this.getServiceAccountEmail() && this.getPrivateKey());
+    return Boolean(
+      this.getGoogleCalendarId() &&
+      this.getServiceAccountEmail() &&
+      this.getPrivateKey(),
+    );
   }
 
   isDriveConfigured() {
-    return Boolean(this.getGoogleDriveRootFolderId() && this.getServiceAccountEmail() && this.getPrivateKey());
+    return Boolean(
+      this.getGoogleDriveRootFolderId() &&
+      this.getServiceAccountEmail() &&
+      this.getPrivateKey(),
+    );
   }
 
   async createCalendarEvent(input: GoogleEventInput) {
@@ -58,20 +68,28 @@ export class GoogleIntegrationService {
       return null;
     }
 
-    const accessToken = await this.getAccessToken("https://www.googleapis.com/auth/calendar.events");
-    const response = await fetch(`https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        "Content-Type": "application/json",
+    const accessToken = await this.getAccessToken(
+      "https://www.googleapis.com/auth/calendar.events",
+    );
+    const response = await fetch(
+      `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          summary: input.title,
+          description: this.buildDescription(
+            input.description,
+            input.subsystemName,
+          ),
+          start: { dateTime: input.startsAt },
+          end: { dateTime: input.endsAt },
+        }),
       },
-      body: JSON.stringify({
-        summary: input.title,
-        description: this.buildDescription(input.description, input.subsystemName),
-        start: { dateTime: input.startsAt },
-        end: { dateTime: input.endsAt },
-      }),
-    });
+    );
 
     if (!response.ok) {
       throw new Error(`Google Calendar create failed: ${response.status}`);
@@ -80,13 +98,19 @@ export class GoogleIntegrationService {
     return (await response.json()) as GoogleCalendarEventResult;
   }
 
-  async listCalendarEvents(params: { timeMin: string; timeMax: string; maxResults?: number }) {
+  async listCalendarEvents(params: {
+    timeMin: string;
+    timeMax: string;
+    maxResults?: number;
+  }) {
     const calendarId = this.getGoogleCalendarId();
     if (!calendarId || !this.isCalendarConfigured()) {
       return [];
     }
 
-    const accessToken = await this.getAccessToken("https://www.googleapis.com/auth/calendar.readonly");
+    const accessToken = await this.getAccessToken(
+      "https://www.googleapis.com/auth/calendar.readonly",
+    );
     const query = new URLSearchParams({
       timeMin: params.timeMin,
       timeMax: params.timeMax,
@@ -95,17 +119,22 @@ export class GoogleIntegrationService {
       maxResults: String(params.maxResults ?? 10),
     });
 
-    const response = await fetch(`https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events?${query.toString()}`, {
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
+    const response = await fetch(
+      `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events?${query.toString()}`,
+      {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+        },
       },
-    });
+    );
 
     if (!response.ok) {
       throw new Error(`Google Calendar list failed: ${response.status}`);
     }
 
-    const payload = (await response.json()) as { items?: GoogleCalendarEventResult[] };
+    const payload = (await response.json()) as {
+      items?: GoogleCalendarEventResult[];
+    };
     return payload.items ?? [];
   }
 
@@ -115,7 +144,9 @@ export class GoogleIntegrationService {
       return null;
     }
 
-    const accessToken = await this.getAccessToken("https://www.googleapis.com/auth/drive.file");
+    const accessToken = await this.getAccessToken(
+      "https://www.googleapis.com/auth/drive.file",
+    );
     const boundary = `antara-${randomUUID()}`;
     const metadata = {
       name: input.name,
@@ -124,20 +155,25 @@ export class GoogleIntegrationService {
 
     const contentBytes = Buffer.from(input.contentBase64, "base64");
     const body = Buffer.concat([
-      Buffer.from(`--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(metadata)}\r\n`),
+      Buffer.from(
+        `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(metadata)}\r\n`,
+      ),
       Buffer.from(`--${boundary}\r\nContent-Type: ${input.mimeType}\r\n\r\n`),
       contentBytes,
       Buffer.from(`\r\n--${boundary}--`),
     ]);
 
-    const response = await fetch("https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,webViewLink", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        "Content-Type": `multipart/related; boundary=${boundary}`,
+    const response = await fetch(
+      "https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,webViewLink",
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          "Content-Type": `multipart/related; boundary=${boundary}`,
+        },
+        body,
       },
-      body,
-    });
+    );
 
     if (!response.ok) {
       throw new Error(`Google Drive upload failed: ${response.status}`);
@@ -146,20 +182,66 @@ export class GoogleIntegrationService {
     return (await response.json()) as GoogleDriveUploadResult;
   }
 
-  private buildDescription(description?: string, subsystemName?: string | null) {
-    return [description, subsystemName ? `Subsystem: ${subsystemName}` : null].filter(Boolean).join("\n\n");
+  async deleteDriveFile(id: string) {
+    const token = await this.getAccessToken(
+      "https://www.googleapis.com/auth/drive.file",
+    );
+    const response = await fetch(
+      `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(id)}`,
+      {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      },
+    );
+    if (!response.ok && response.status !== 404)
+      throw new Error("Drive cleanup failed");
+  }
+
+  async deleteCalendarEvent(id: string) {
+    const calendarId = this.getGoogleCalendarId();
+    if (!calendarId) throw new Error("Calendar is not configured");
+    const token = await this.getAccessToken(
+      "https://www.googleapis.com/auth/calendar.events",
+    );
+    const response = await fetch(
+      `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(id)}`,
+      {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      },
+    );
+    if (!response.ok && response.status !== 404 && response.status !== 410)
+      throw new Error("Calendar cleanup failed");
+  }
+
+  private buildDescription(
+    description?: string,
+    subsystemName?: string | null,
+  ) {
+    return [description, subsystemName ? `Subsystem: ${subsystemName}` : null]
+      .filter(Boolean)
+      .join("\n\n");
   }
 
   private getGoogleCalendarId() {
-    return this.configService.get<string>("integrations.googleCalendarId") ?? null;
+    return (
+      this.configService.get<string>("integrations.googleCalendarId") ?? null
+    );
   }
 
   private getGoogleDriveRootFolderId() {
-    return this.configService.get<string>("integrations.googleDriveRootFolderId") ?? null;
+    return (
+      this.configService.get<string>("integrations.googleDriveRootFolderId") ??
+      null
+    );
   }
 
   private getServiceAccountEmail() {
-    return this.configService.get<string>("integrations.googleServiceAccountEmail") ?? null;
+    return (
+      this.configService.get<string>(
+        "integrations.googleServiceAccountEmail",
+      ) ?? null
+    );
   }
 
   private getPrivateKey() {
@@ -171,9 +253,8 @@ export class GoogleIntegrationService {
   }
 
   private async getAccessToken(scope: string) {
-    if (this.accessToken && Date.now() < this.accessTokenExpiresAt - 60_000) {
-      return this.accessToken;
-    }
+    const cached = this.tokens.get(scope);
+    if (cached && Date.now() < cached.expiresAt - 60_000) return cached.token;
 
     const email = this.getServiceAccountEmail();
     const privateKey = this.getPrivateKey();
@@ -219,13 +300,18 @@ export class GoogleIntegrationService {
       throw new Error("Google token exchange did not return an access token");
     }
 
-    this.accessToken = payload.access_token;
-    this.accessTokenExpiresAt = Date.now() + (payload.expires_in ?? 3600) * 1000;
-    return this.accessToken;
+    this.tokens.set(scope, {
+      token: payload.access_token,
+      expiresAt: Date.now() + (payload.expires_in ?? 3600) * 1000,
+    });
+    return payload.access_token;
   }
 
   private base64Url(input: string | Buffer) {
-    return Buffer.from(input).toString("base64").replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+    return Buffer.from(input)
+      .toString("base64")
+      .replace(/\+/g, "-")
+      .replace(/\//g, "_")
+      .replace(/=+$/g, "");
   }
 }
-

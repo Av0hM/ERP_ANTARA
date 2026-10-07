@@ -1,9 +1,19 @@
+import { TaskEventsService } from "./events/task-events.service";
+import { AuditService } from "../audit/audit.service";
+import { Test } from "@nestjs/testing";
+import { AuthorizationService } from "../../common/authorization/authorization.service";
+import { CoreAuthorizationService } from "../../common/authorization/core-authorization.service";
+import { PrismaService } from "../../common/prisma/prisma.service";
 import { TaskPriority, TaskStatus } from "@antara/contracts";
 
 import { TasksService } from "./tasks.service";
 
 describe("TasksService", () => {
   const prisma = {
+    user: { findUnique: jest.fn() },
+    $transaction: jest.fn(),
+    $queryRaw: jest.fn(),
+    auditLog: { create: jest.fn() },
     task: {
       create: jest.fn(),
       update: jest.fn(),
@@ -27,9 +37,29 @@ describe("TasksService", () => {
 
   let service: TasksService;
 
-  beforeEach(() => {
+  beforeEach(async () => {
     jest.clearAllMocks();
-    service = new TasksService(prisma as never, taskEvents as never, auditService as never);
+    prisma.user.findUnique.mockResolvedValue({
+      id: "owner",
+      role: "OWNER",
+      isActive: true,
+      deletedAt: null,
+      memberships: [],
+    });
+    prisma.$transaction.mockImplementation(
+      (callback: (tx: unknown) => Promise<unknown>) => callback(prisma),
+    );
+    const module = await Test.createTestingModule({
+      providers: [
+        TasksService,
+        AuthorizationService,
+        CoreAuthorizationService,
+        { provide: PrismaService, useValue: prisma },
+        { provide: TaskEventsService, useValue: taskEvents },
+        { provide: AuditService, useValue: auditService },
+      ],
+    }).compile();
+    service = module.get(TasksService);
   });
 
   it("emits a task update when a task is created", async () => {
@@ -37,27 +67,34 @@ describe("TasksService", () => {
       id: "task-1",
       title: "Firmware telemetry packet validation",
       status: TaskStatus.TODO,
+      dependencyIds: [],
+      subsystemId: "adcs",
+      assignedToId: "member-1",
     });
 
-    await service.create({
-      title: "Firmware telemetry packet validation",
-      description: "Validate CRC handling.",
-      priority: TaskPriority.HIGH,
-      subsystemId: "software",
-      assignedById: "owner-1",
-      assignedToId: "member-1",
-      estimatedHours: 8,
-      deadline: new Date().toISOString(),
-      tags: ["firmware"],
-      dependencyIds: [],
-    }, "actor-1");
+    await service.create(
+      {
+        title: "Firmware telemetry packet validation",
+        description: "Validate CRC handling.",
+        priority: TaskPriority.HIGH,
+        subsystemId: "software",
+        assignedToId: "member-1",
+        estimatedHours: 8,
+        deadline: new Date().toISOString(),
+        tags: ["firmware"],
+        dependencyIds: [],
+      },
+      "actor-1",
+    );
 
     expect(taskEvents.emitTaskUpdated).toHaveBeenCalled();
-    expect(auditService.log).toHaveBeenCalledWith(
+    expect(prisma.auditLog.create).toHaveBeenCalledWith(
       expect.objectContaining({
-        action: "CREATE",
-        entityType: "Task",
-        actorId: "actor-1",
+        data: expect.objectContaining({
+          action: "CREATE",
+          entityType: "Task",
+          actorId: "actor-1",
+        }),
       }),
     );
   });
@@ -98,7 +135,7 @@ describe("TasksService", () => {
         },
       ]);
 
-      const result = await service.getDependencyGraph();
+      const result = await service.getDependencyGraph("owner");
 
       expect(result.nodes).toHaveLength(3);
       expect(result.edges).toHaveLength(2);
@@ -125,7 +162,7 @@ describe("TasksService", () => {
         },
       ]);
 
-      const result = await service.getDependencyGraph("software");
+      const result = await service.getDependencyGraph("owner", "software");
 
       expect(prisma.task.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -169,17 +206,23 @@ describe("TasksService", () => {
         },
       ]);
 
-      const result = await service.getDependencyGraph();
+      const result = await service.getDependencyGraph("owner");
 
-      expect(result.nodes.find((n) => n.id === "task-1")?.isCriticalPath).toBe(true);
-      expect(result.nodes.find((n) => n.id === "task-2")?.isCriticalPath).toBe(true);
-      expect(result.nodes.find((n) => n.id === "task-3")?.isCriticalPath).toBe(false);
+      expect(result.nodes.find((n) => n.id === "task-1")?.isCriticalPath).toBe(
+        true,
+      );
+      expect(result.nodes.find((n) => n.id === "task-2")?.isCriticalPath).toBe(
+        true,
+      );
+      expect(result.nodes.find((n) => n.id === "task-3")?.isCriticalPath).toBe(
+        false,
+      );
     });
 
     it("handles empty task list", async () => {
       prisma.task.findMany.mockResolvedValue([]);
 
-      const result = await service.getDependencyGraph();
+      const result = await service.getDependencyGraph("owner");
 
       expect(result.nodes).toEqual([]);
       expect(result.edges).toEqual([]);
@@ -187,5 +230,3 @@ describe("TasksService", () => {
     });
   });
 });
-
-

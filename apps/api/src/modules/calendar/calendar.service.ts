@@ -1,4 +1,8 @@
-import { Injectable } from "@nestjs/common";
+import {
+  Injectable,
+  Logger,
+  ServiceUnavailableException,
+} from "@nestjs/common";
 
 import { GoogleIntegrationService } from "../../common/integrations/google.integration.service";
 import { PrismaService } from "../../common/prisma/prisma.service";
@@ -6,102 +10,73 @@ import { CreateCalendarEventDto } from "./dto/create-calendar-event.dto";
 
 @Injectable()
 export class CalendarService {
+  private readonly logger = new Logger(CalendarService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly googleIntegration: GoogleIntegrationService,
   ) {}
 
-  async list() {
-    try {
-      if (this.googleIntegration.isCalendarConfigured()) {
-        const now = new Date();
-        const horizon = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
-        const googleEvents = await this.googleIntegration.listCalendarEvents({
-          timeMin: now.toISOString(),
-          timeMax: horizon.toISOString(),
-          maxResults: 20,
-        });
-
-        if (googleEvents.length) {
-          return googleEvents.map((event) => ({
-            id: event.id,
-            title: event.summary ?? "Untitled event",
-            description: event.description ?? undefined,
-            startsAt: event.start?.dateTime ?? now.toISOString(),
-            endsAt: event.end?.dateTime ?? now.toISOString(),
-            isRecurring: false,
-            subsystem: null,
-          }));
-        }
-      }
-
-      return await this.prisma.calendarEvent.findMany({
-        include: { subsystem: true },
-        orderBy: { startsAt: "asc" },
-      });
-    } catch {
-      return [
-        {
-          id: "c1",
-          title: "Payload thermal review",
-          description: "Cross-subsystem review before enclosure freeze.",
-          startsAt: new Date(Date.now() + 1000 * 60 * 60 * 24).toISOString(),
-          endsAt: new Date(Date.now() + 1000 * 60 * 60 * 25).toISOString(),
-          isRecurring: false,
-          subsystem: { name: "Payload" },
-        },
-        {
-          id: "c2",
-          title: "Ground station rehearsal",
-          description: "Run uplink/downlink mission rehearsal.",
-          startsAt: new Date(Date.now() + 1000 * 60 * 60 * 48).toISOString(),
-          endsAt: new Date(Date.now() + 1000 * 60 * 60 * 50).toISOString(),
-          isRecurring: false,
-          subsystem: { name: "Ground Station" },
-        },
-      ];
-    }
+  // Persisted ERP events remain visible even when Google is unavailable.
+  list() {
+    return this.prisma.calendarEvent.findMany({
+      include: { subsystem: true },
+      orderBy: { startsAt: "asc" },
+    });
   }
 
   async create(payload: CreateCalendarEventDto) {
+    const subsystem = payload.subsystemId
+      ? await this.prisma.subsystem.findUniqueOrThrow({
+          where: { id: payload.subsystemId },
+          select: { name: true },
+        })
+      : null;
+    const configured = this.googleIntegration.isCalendarConfigured();
+    let externalRef: string | null = null;
+    if (configured) {
+      try {
+        const event = await this.googleIntegration.createCalendarEvent({
+          ...payload,
+          subsystemName: subsystem?.name,
+        });
+        if (!event?.id) throw new Error("Missing provider event ID");
+        externalRef = event.id;
+      } catch {
+        throw new ServiceUnavailableException({
+          code: "CALENDAR_PROVIDER_UNAVAILABLE",
+          message: "Calendar integration unavailable; event was not saved",
+        });
+      }
+    }
     try {
-      const subsystem = payload.subsystemId
-        ? await this.prisma.subsystem.findUnique({
-            where: { id: payload.subsystemId },
-            select: { name: true },
-          })
-        : null;
-
-      const googleEvent = await this.googleIntegration.createCalendarEvent({
-        title: payload.title,
-        description: payload.description,
-        startsAt: payload.startsAt,
-        endsAt: payload.endsAt,
-        subsystemName: subsystem?.name ?? payload.subsystemId,
-      });
-
-      return await this.prisma.calendarEvent.create({
+      const event = await this.prisma.calendarEvent.create({
         data: {
           title: payload.title,
           description: payload.description,
           startsAt: new Date(payload.startsAt),
           endsAt: new Date(payload.endsAt),
           isRecurring: payload.isRecurring ?? false,
-          externalRef: googleEvent?.id ?? null,
-          ...(payload.subsystemId ? { subsystemId: payload.subsystemId } : {}),
+          subsystemId: payload.subsystemId,
+          externalRef,
         },
         include: { subsystem: true },
       });
-    } catch {
       return {
-        id: `calendar-${Date.now()}`,
-        title: payload.title,
-        description: payload.description,
-        startsAt: payload.startsAt,
-        endsAt: payload.endsAt,
-        isRecurring: payload.isRecurring ?? false,
-        subsystem: payload.subsystemId ? { name: payload.subsystemId } : null,
+        ...event,
+        integrationStatus: configured ? "SYNCED" : "NOT_CONFIGURED",
       };
+    } catch (error) {
+      if (externalRef) {
+        try {
+          await this.googleIntegration.deleteCalendarEvent(externalRef);
+        } catch {
+          this.logger.error(
+            "Calendar compensation failed; provider reconciliation required",
+          );
+        }
+      }
+      throw error;
     }
   }
 }
