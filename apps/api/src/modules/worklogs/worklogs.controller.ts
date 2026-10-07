@@ -24,14 +24,14 @@ export class WorklogsController {
 
   @Get()
   @Roles("OWNER", "ADMIN", "MEMBER")
-  list() {
-    return this.worklogsService.list();
+  list(@CurrentUser() actor: { id: string }) {
+    return this.worklogsService.list(actor.id);
   }
 
   @Get("summary")
   @Roles("OWNER", "ADMIN", "MEMBER")
-  summary() {
-    return this.worklogsService.summary();
+  summary(@CurrentUser() actor: { id: string }) {
+    return this.worklogsService.summary(actor.id);
   }
 
   @Post()

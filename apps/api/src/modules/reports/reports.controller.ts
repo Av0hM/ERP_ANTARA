@@ -16,21 +16,39 @@ export class ReportsController {
 
   @Get("handoff")
   @Roles("OWNER", "ADMIN")
-  async getHandoffPackage(@Req() req: AuthenticatedRequest) {
-    return this.reportsService.generateHandoffPackage(req.user.id);
+  async getHandoffPackage(
+    @Req() req: AuthenticatedRequest,
+    @Query("subsystemId") subsystemId?: string,
+  ) {
+    return this.reportsService.generateHandoffPackage(req.user.id, subsystemId);
   }
 
   @Get("handoff/markdown")
   @Roles("OWNER", "ADMIN")
-  async getHandoffMarkdown(@Req() req: AuthenticatedRequest) {
-    const markdown = await this.reportsService.generateMarkdownHandoff(req.user.id);
+  async getHandoffMarkdown(
+    @Req() req: AuthenticatedRequest,
+    @Query("subsystemId") subsystemId?: string,
+  ) {
+    const markdown = await this.reportsService.generateMarkdownHandoff(
+      req.user.id,
+      subsystemId,
+    );
     return { markdown };
   }
 
   @Get("handoff/download")
   @Roles("OWNER", "ADMIN")
-  async downloadHandoff(@Req() req: AuthenticatedRequest) {
-    const markdown = await this.reportsService.generateMarkdownHandoff(req.user.id);
-    return { content: markdown, filename: `antara-handoff-${new Date().toISOString().split("T")[0]}.md` };
+  async downloadHandoff(
+    @Req() req: AuthenticatedRequest,
+    @Query("subsystemId") subsystemId?: string,
+  ) {
+    const markdown = await this.reportsService.generateMarkdownHandoff(
+      req.user.id,
+      subsystemId,
+    );
+    return {
+      content: markdown,
+      filename: `antara-handoff-${new Date().toISOString().split("T")[0]}.md`,
+    };
   }
 }

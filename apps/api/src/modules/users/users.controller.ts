@@ -80,7 +80,7 @@ export class UsersController {
   }
 
   @Patch(":id/profile")
-  @Roles("OWNER", "ADMIN")
+  @Roles("OWNER", "ADMIN", "MEMBER")
   updateProfile(
     @Param("id") id: string,
     @Body() body: UpdateProfileDto,

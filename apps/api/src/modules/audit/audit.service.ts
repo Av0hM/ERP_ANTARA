@@ -1,3 +1,5 @@
+import { CoreAuthorizationService } from "../../common/authorization/core-authorization.service";
+import { ForbiddenException } from "@nestjs/common";
 import { Injectable, Logger } from "@nestjs/common";
 import { Prisma } from "@prisma/client";
 
@@ -14,7 +16,10 @@ export interface AuditLogInput {
 @Injectable()
 export class AuditService {
   private readonly logger = new Logger(AuditService.name);
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly core: CoreAuthorizationService,
+  ) {}
 
   async log(input: AuditLogInput) {
     try {
@@ -36,7 +41,9 @@ export class AuditService {
     }
   }
 
-  async findAll(limit = 100) {
+  async findAll(limit = 100, actorId: string) {
+    if (!(await this.core.actor(actorId)).globalAuthority)
+      throw new ForbiddenException("Audit history requires OWNER");
     return this.prisma.auditLog.findMany({
       orderBy: { createdAt: "desc" },
       take: limit,

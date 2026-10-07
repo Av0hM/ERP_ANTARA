@@ -1,3 +1,4 @@
+import { AuthorizationModule } from "../../common/authorization/authorization.module";
 import { Module } from "@nestjs/common";
 
 import { PrismaModule } from "../../common/prisma/prisma.module";
@@ -8,7 +9,13 @@ import { MeetingsController } from "./meetings.controller";
 import { MeetingAutomationService } from "./meetings.service";
 
 @Module({
-  imports: [PrismaModule, CalendarModule, TasksModule, AiModule],
+  imports: [
+    AuthorizationModule,
+    PrismaModule,
+    CalendarModule,
+    TasksModule,
+    AiModule,
+  ],
   controllers: [MeetingsController],
   providers: [MeetingAutomationService],
   exports: [MeetingAutomationService],

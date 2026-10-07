@@ -1,3 +1,9 @@
+import { CoreAuthorizationService } from "../../common/authorization/core-authorization.service";
+import {
+  canManageSubsystem,
+  readableSubsystemIds,
+} from "../../common/authorization/authorization.policy";
+import { ForbiddenException } from "@nestjs/common";
 import {
   Injectable,
   Logger,
@@ -15,17 +21,32 @@ export class CalendarService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly googleIntegration: GoogleIntegrationService,
+    private readonly core: CoreAuthorizationService,
   ) {}
 
   // Persisted ERP events remain visible even when Google is unavailable.
-  list() {
+  async list(actorId: string) {
+    const actor = await this.core.actor(actorId);
+    const scope = readableSubsystemIds(actor);
     return this.prisma.calendarEvent.findMany({
+      where:
+        scope.kind === "GLOBAL" ? {} : { subsystemId: { in: [...scope.ids] } },
       include: { subsystem: true },
       orderBy: { startsAt: "asc" },
     });
   }
 
-  async create(payload: CreateCalendarEventDto) {
+  async create(payload: CreateCalendarEventDto, actorId: string) {
+    const authorize = async () => {
+      const actor = await this.core.actor(actorId);
+      if (
+        payload.subsystemId
+          ? !canManageSubsystem(actor, payload.subsystemId)
+          : !actor.globalAuthority
+      )
+        throw new ForbiddenException("Calendar management denied");
+    };
+    await authorize();
     const subsystem = payload.subsystemId
       ? await this.prisma.subsystem.findUniqueOrThrow({
           where: { id: payload.subsystemId },
@@ -50,17 +71,35 @@ export class CalendarService {
       }
     }
     try {
-      const event = await this.prisma.calendarEvent.create({
-        data: {
-          title: payload.title,
-          description: payload.description,
-          startsAt: new Date(payload.startsAt),
-          endsAt: new Date(payload.endsAt),
-          isRecurring: payload.isRecurring ?? false,
-          subsystemId: payload.subsystemId,
-          externalRef,
-        },
-        include: { subsystem: true },
+      const event = await this.core.withActor(actorId, async (tx, actor) => {
+        if (
+          payload.subsystemId
+            ? !canManageSubsystem(actor, payload.subsystemId)
+            : !actor.globalAuthority
+        )
+          throw new ForbiddenException("Calendar management denied");
+        const saved = await tx.calendarEvent.create({
+          data: {
+            title: payload.title,
+            description: payload.description,
+            startsAt: new Date(payload.startsAt),
+            endsAt: new Date(payload.endsAt),
+            isRecurring: payload.isRecurring ?? false,
+            subsystemId: payload.subsystemId,
+            externalRef,
+          },
+          include: { subsystem: true },
+        });
+        await tx.auditLog.create({
+          data: {
+            action: "CREATE",
+            entityType: "CalendarEvent",
+            entityId: saved.id,
+            actorId,
+            payload: { subsystemId: saved.subsystemId },
+          },
+        });
+        return saved;
       });
       return {
         ...event,

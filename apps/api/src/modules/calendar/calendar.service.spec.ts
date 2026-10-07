@@ -1,9 +1,10 @@
+import { fixtureCore } from "../../../test/authorization.fixture";
 import { CalendarService } from "./calendar.service";
 
 describe("CalendarService", () => {
   const prisma = {
     subsystem: {
-      findUnique: jest.fn(),
+      findUniqueOrThrow: jest.fn(),
     },
     calendarEvent: {
       findMany: jest.fn(),
@@ -19,9 +20,14 @@ describe("CalendarService", () => {
 
   let service: CalendarService;
 
-  beforeEach(() => {
+  beforeEach(async () => {
     jest.clearAllMocks();
-    service = new CalendarService(prisma as never, googleIntegration as never);
+    const fixture = await fixtureCore(prisma);
+    service = new CalendarService(
+      fixture.prisma,
+      googleIntegration as never,
+      fixture.core,
+    );
   });
 
   it("falls back to prisma events when google calendar is unavailable", async () => {
@@ -34,14 +40,15 @@ describe("CalendarService", () => {
       },
     ]);
 
-    await expect(service.list()).resolves.toHaveLength(1);
+    await expect(service.list("owner")).resolves.toHaveLength(1);
   });
 
   it("creates a calendar event with google sync metadata when configured", async () => {
+    googleIntegration.isCalendarConfigured.mockReturnValue(true);
     googleIntegration.createCalendarEvent.mockResolvedValue({
       id: "google-event-1",
     });
-    prisma.subsystem.findUnique.mockResolvedValue({
+    prisma.subsystem.findUniqueOrThrow.mockResolvedValue({
       name: "Payload",
     });
     prisma.calendarEvent.create.mockResolvedValue({
@@ -49,14 +56,17 @@ describe("CalendarService", () => {
       title: "Payload review",
     });
 
-    await service.create({
-      title: "Payload review",
-      description: "Review payload fit checks.",
-      startsAt: new Date().toISOString(),
-      endsAt: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
-      subsystemId: "payload",
-      isRecurring: false,
-    });
+    await service.create(
+      {
+        title: "Payload review",
+        description: "Review payload fit checks.",
+        startsAt: new Date().toISOString(),
+        endsAt: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+        subsystemId: "payload",
+        isRecurring: false,
+      },
+      "owner",
+    );
 
     expect(googleIntegration.createCalendarEvent).toHaveBeenCalledWith(
       expect.objectContaining({

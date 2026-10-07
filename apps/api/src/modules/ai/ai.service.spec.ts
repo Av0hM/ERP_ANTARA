@@ -1,3 +1,4 @@
+import { fixtureCore } from "../../../test/authorization.fixture";
 import { InsightSeverity, TaskPriority, TaskStatus } from "@antara/contracts";
 
 import { AiService } from "./ai.service";
@@ -32,11 +33,16 @@ describe("AiService", () => {
 
   let service: AiService;
 
-  beforeEach(() => {
+  beforeEach(async () => {
     jest.clearAllMocks();
     cache.getJson.mockResolvedValue(null);
     cache.setJson.mockResolvedValue(undefined);
-    service = new AiService(prisma as never, openAiIntegration as never, cache as never);
+    service = new AiService(
+      prisma as never,
+      openAiIntegration as never,
+      cache as never,
+      (await fixtureCore()).core,
+    );
   });
 
   it("derives high-risk insights from overdue and blocked tasks", async () => {
@@ -89,12 +95,16 @@ describe("AiService", () => {
       { id: "sub-ground", name: "Ground Station" },
     ]);
 
-    const insights = await service.getInsights();
+    const insights = await service.getInsights("owner");
 
     expect(insights.length).toBeGreaterThan(0);
     expect(insights[0]?.severity).toBe(InsightSeverity.CRITICAL);
-    expect(insights.some((item) => item.title.includes("deadline slip risk"))).toBe(true);
-    expect(insights.some((item) => item.title.includes("Dependency chain blockage"))).toBe(true);
+    expect(
+      insights.some((item) => item.title.includes("deadline slip risk")),
+    ).toBe(true);
+    expect(
+      insights.some((item) => item.title.includes("Dependency chain blockage")),
+    ).toBe(true);
     expect(prisma.aIInsight.createMany).toHaveBeenCalled();
   });
 
@@ -135,14 +145,16 @@ describe("AiService", () => {
       },
     ]);
 
-    const suggestions = await service.getWorkloadSuggestions();
+    const suggestions = await service.getWorkloadSuggestions("owner");
 
     expect(suggestions[0]?.from).toBe("Software");
     expect(suggestions[0]?.to).toBe("Structures");
   });
 
   it("uses the live OpenAI adapter when text summarization is requested", async () => {
-    openAiIntegration.summarize.mockResolvedValue("Summarized technical update.");
+    openAiIntegration.summarize.mockResolvedValue(
+      "Summarized technical update.",
+    );
 
     await expect(
       service.summarizeText({
@@ -155,4 +167,3 @@ describe("AiService", () => {
     });
   });
 });
-

@@ -23,10 +23,10 @@ export type AnalyticsScope =
   | { kind: "EMPTY"; id: string };
 const globalScope: AnalyticsScope = { kind: "GLOBAL" };
 export const scopeKey = (scope: AnalyticsScope) => {
-  if (scope.kind === "GLOBAL") return "v4a:OWNER_GLOBAL";
+  if (scope.kind === "GLOBAL") return "v4b:OWNER_GLOBAL";
   if (scope.kind === "ADMIN")
-    return `v4a:ADMIN:${JSON.stringify([...new Set(scope.ids)].sort())}`;
-  return `v4a:${scope.kind === "SUBSYSTEM" ? "OWNER_SUBSYSTEM" : scope.kind}:${scope.id}`;
+    return `v4b:ADMIN:${JSON.stringify([...new Set(scope.ids)].sort())}`;
+  return `v4b:${scope.kind === "SUBSYSTEM" ? "OWNER_SUBSYSTEM" : scope.kind}:${scope.id}`;
 };
 
 function taskScope(scope: AnalyticsScope): Prisma.TaskWhereInput {
@@ -38,7 +38,10 @@ function taskScope(scope: AnalyticsScope): Prisma.TaskWhereInput {
     case "ADMIN":
       return { subsystemId: { in: scope.ids } };
     case "PERSONAL":
-      return { assignedToId: scope.id };
+      return {
+        assignedToId: scope.id,
+        subsystem: { memberships: { some: { userId: scope.id } } },
+      };
     case "EMPTY":
       return { id: { in: [] } };
   }
@@ -50,7 +53,7 @@ function worklogScope(scope: AnalyticsScope): Prisma.WorkLogWhereInput {
     case "SUBSYSTEM":
       return { task: { subsystemId: scope.id } };
     case "ADMIN":
-      return { task: { subsystemId: { in: scope.ids } } };
+      return { id: { in: [] } };
     case "PERSONAL":
       return { userId: scope.id };
     case "EMPTY":
@@ -303,16 +306,9 @@ export class AnalyticsService implements OnModuleInit, OnModuleDestroy {
         this.getVelocityTrend(scope),
         this.getHeatmap(scope),
         this.getSubsystemBreakdown(scope),
-        scope.kind === "SUBSYSTEM" ||
-        scope.kind === "ADMIN" ||
-        scope.kind === "PERSONAL"
+        scope.kind === "SUBSYSTEM"
           ? this.prisma.aIInsight.findMany({
-              where:
-                scope.kind === "SUBSYSTEM"
-                  ? { subsystemId: scope.id }
-                  : scope.kind === "ADMIN"
-                    ? { subsystemId: { in: scope.ids } }
-                    : { actorId: scope.id },
+              where: { subsystemId: scope.id },
               take: 10,
               orderBy: { createdAt: "desc" },
               select: {

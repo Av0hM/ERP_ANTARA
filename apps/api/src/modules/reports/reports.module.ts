@@ -1,3 +1,4 @@
+import { AuthorizationModule } from "../../common/authorization/authorization.module";
 import { Module } from "@nestjs/common";
 
 import { PrismaModule } from "../../common/prisma/prisma.module";
@@ -9,7 +10,14 @@ import { ReportsController } from "./reports.controller";
 import { ReportsService } from "./reports.service";
 
 @Module({
-  imports: [PrismaModule, AuditModule, AiModule, CalendarModule, TasksModule],
+  imports: [
+    AuthorizationModule,
+    PrismaModule,
+    AuditModule,
+    AiModule,
+    CalendarModule,
+    TasksModule,
+  ],
   controllers: [ReportsController],
   providers: [ReportsService],
   exports: [ReportsService],

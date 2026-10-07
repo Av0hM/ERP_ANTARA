@@ -1,4 +1,13 @@
-import { Body, Controller, Delete, Get, Param, Patch, UseGuards } from "@nestjs/common";
+import { CurrentUser } from "../../common/decorators/current-user.decorator";
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Patch,
+  UseGuards,
+} from "@nestjs/common";
 
 import { Roles } from "../../common/decorators/roles.decorator";
 import { RolesGuard } from "../../common/guards/roles.guard";
@@ -13,19 +22,23 @@ export class NotificationsController {
 
   @Get()
   @Roles("OWNER", "ADMIN", "MEMBER")
-  list() {
-    return this.notificationsService.list();
+  list(@CurrentUser() actor: { id: string }) {
+    return this.notificationsService.list(actor.id);
   }
 
   @Patch(":id")
   @Roles("OWNER", "ADMIN", "MEMBER")
-  update(@Param("id") id: string, @Body() payload: UpdateNotificationDto) {
-    return this.notificationsService.update(id, payload);
+  update(
+    @Param("id") id: string,
+    @Body() payload: UpdateNotificationDto,
+    @CurrentUser() actor: { id: string },
+  ) {
+    return this.notificationsService.update(id, payload, actor.id);
   }
 
   @Delete(":id")
   @Roles("OWNER", "ADMIN", "MEMBER")
-  delete(@Param("id") id: string) {
-    return this.notificationsService.delete(id);
+  delete(@Param("id") id: string, @CurrentUser() actor: { id: string }) {
+    return this.notificationsService.delete(id, actor.id);
   }
 }

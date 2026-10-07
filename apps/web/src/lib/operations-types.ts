@@ -42,7 +42,7 @@ export type WorklogRecord = {
   notes?: string;
   task?: {
     title: string;
-  };
+  } | null;
   user?: {
     name: string;
   };

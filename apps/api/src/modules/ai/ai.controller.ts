@@ -1,3 +1,4 @@
+import { CurrentUser } from "../../common/decorators/current-user.decorator";
 import { Controller, Get, Query, UseGuards } from "@nestjs/common";
 import { Body, Post } from "@nestjs/common";
 
@@ -35,38 +36,45 @@ export class AiController {
 
   @Get("insights")
   @Roles("OWNER", "ADMIN", "MEMBER")
-  async getInsights() {
-    return this.aiService.getInsights();
+  async getInsights(@CurrentUser() actor: { id: string }) {
+    return this.aiService.getInsights(actor.id);
   }
 
   @Get("bundle")
   @Roles("OWNER", "ADMIN", "MEMBER")
-  async getBundle() {
-    return this.aiService.getBundle();
+  async getBundle(@CurrentUser() actor: { id: string }) {
+    return this.aiService.getBundle(actor.id);
   }
 
   @Get("reminders")
   @Roles("OWNER", "ADMIN", "MEMBER")
-  async getReminders() {
-    return this.aiService.getSmartReminders();
+  async getReminders(@CurrentUser() actor: { id: string }) {
+    return this.aiService.getSmartReminders(actor.id);
   }
 
   @Get("schedule")
   @Roles("OWNER", "ADMIN", "MEMBER")
-  async getSchedule() {
-    return this.aiService.getSchedulingRecommendations();
+  async getSchedule(@CurrentUser() actor: { id: string }) {
+    return this.aiService.getSchedulingRecommendations(actor.id);
   }
 
   @Get("workload")
   @Roles("OWNER", "ADMIN", "MEMBER")
-  async getWorkload() {
-    return this.aiService.getWorkloadSuggestions();
+  async getWorkload(@CurrentUser() actor: { id: string }) {
+    return this.aiService.getWorkloadSuggestions(actor.id);
   }
 
   @Get("schedule-risk")
   @Roles("OWNER", "ADMIN", "MEMBER")
-  async getScheduleRisk(@Query() query: ScheduleRiskDto) {
-    return this.aiService.getScheduleRisk(query.horizonDays ?? 14, query.simulations ?? 1000);
+  async getScheduleRisk(
+    @CurrentUser() actor: { id: string },
+    @Query() query: ScheduleRiskDto,
+  ) {
+    return this.aiService.getScheduleRisk(
+      query.horizonDays ?? 14,
+      query.simulations ?? 1000,
+      actor.id,
+    );
   }
 
   @Post("summarize")

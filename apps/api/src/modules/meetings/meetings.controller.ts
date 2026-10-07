@@ -1,3 +1,4 @@
+import { CurrentUser } from "../../common/decorators/current-user.decorator";
 import {
   Body,
   Controller,
@@ -26,31 +27,41 @@ export class MeetingsController {
 
   @Get("sync-preview")
   @Roles("OWNER", "ADMIN", "MEMBER")
-  async getSyncPreview(@Query("horizonWeeks") horizonWeeks?: string) {
+  async getSyncPreview(
+    @CurrentUser() actor: { id: string },
+    @Query("horizonWeeks") horizonWeeks?: string,
+  ) {
     const weeks = horizonWeeks ? parseInt(horizonWeeks, 10) : 4;
-    return this.meetingsService.generateSubsystemSyncEvents(weeks);
+    return this.meetingsService.generateSubsystemSyncEvents(weeks, actor.id);
   }
 
   @Get("agenda/:subsystemId")
   @Roles("OWNER", "ADMIN", "MEMBER")
   async getAgenda(
     @Param("subsystemId") subsystemId: string,
+    @CurrentUser() actor: { id: string },
     @Query("date") dateStr?: string,
   ) {
     const date = dateStr ? new Date(dateStr) : new Date();
-    return this.meetingsService.generateMeetingAgenda(subsystemId, date);
+    return this.meetingsService.generateMeetingAgenda(
+      subsystemId,
+      date,
+      actor.id,
+    );
   }
 
   @Get("agenda/:subsystemId/markdown")
   @Roles("OWNER", "ADMIN", "MEMBER")
   async getAgendaMarkdown(
     @Param("subsystemId") subsystemId: string,
+    @CurrentUser() actor: { id: string },
     @Query("date") dateStr?: string,
   ) {
     const date = dateStr ? new Date(dateStr) : new Date();
     const agenda = await this.meetingsService.generateMeetingAgenda(
       subsystemId,
       date,
+      actor.id,
     );
     const markdown = await this.meetingsService.generateAgendaMarkdown(agenda);
     return { markdown };

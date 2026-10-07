@@ -64,23 +64,10 @@ export class UsersService {
       async (tx, actor) => {
         const target = await tx.user.findUnique({
           where: { id: userId },
-          select: {
-            role: true,
-            memberships: { select: { subsystemId: true } },
-          },
+          select: { id: true },
         });
         if (!target) throw new NotFoundException("User not found");
-        const admin = administeredSubsystemIds(actor);
-        if (
-          !actor.globalAuthority &&
-          !(
-            target.role === "MEMBER" &&
-            admin.kind === "SCOPED" &&
-            target.memberships.some((membership) =>
-              admin.ids.includes(membership.subsystemId),
-            )
-          )
-        )
+        if (!actor.globalAuthority && actor.userId !== userId)
           throw new ForbiddenException("Profile management denied");
         const user = await tx.user.update({
           where: { id: userId },

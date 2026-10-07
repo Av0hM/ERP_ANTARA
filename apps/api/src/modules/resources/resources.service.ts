@@ -1,3 +1,5 @@
+import { CoreAuthorizationService } from "../../common/authorization/core-authorization.service";
+import { TasksService } from "../tasks/tasks.service";
 import {
   safeUserSelect,
   memberProfileSelect,
@@ -68,11 +70,28 @@ export class ResourcesService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly aiService: AiService,
+    private readonly core: CoreAuthorizationService,
+    private readonly tasksService: TasksService,
   ) {}
 
   async getResourceAllocationBoard(
     horizonWeeks = 4,
+    actorId: string,
   ): Promise<ResourceAllocationBoard> {
+    const actor = await this.core.actor(actorId);
+    if (!actor.globalAuthority && actor.role !== "ADMIN")
+      return { users: [], weeks: [], conflicts: [], aiSuggestions: [] };
+    const scope = this.core.managementScope(actor);
+    if (scope.kind === "SCOPED" && !scope.ids.length)
+      return { users: [], weeks: [], conflicts: [], aiSuggestions: [] };
+    const subsystemWhere =
+      scope.kind === "GLOBAL" ? {} : { id: { in: [...scope.ids] } };
+    const taskWhere =
+      scope.kind === "GLOBAL" ? {} : { subsystemId: { in: [...scope.ids] } };
+    horizonWeeks = Math.max(
+      1,
+      Math.min(12, Number.isFinite(horizonWeeks) ? horizonWeeks : 4),
+    );
     const now = new Date();
     const horizonEnd = new Date(
       now.getTime() + horizonWeeks * 7 * 24 * 60 * 60 * 1000,
@@ -80,12 +99,34 @@ export class ResourcesService {
 
     const [users, tasks, subsystems] = await Promise.all([
       this.prisma.user.findMany({
-        where: { isActive: true },
+        where: {
+          isActive: true,
+          deletedAt: null,
+          ...(scope.kind === "GLOBAL"
+            ? {}
+            : {
+                memberships: { some: { subsystemId: { in: [...scope.ids] } } },
+              }),
+        },
         select: {
-          ...memberProfileSelect,
-          subsystem: { select: { id: true, name: true, color: true } },
+          id: true,
+          name: true,
+          email: true,
+          avatarUrl: true,
+          role: true,
+          skills: true,
+          weeklyCapacityHours: true,
+          availabilityScore: true,
+          memberships: {
+            where: { subsystem: subsystemWhere },
+            select: {
+              subsystem: { select: { id: true, name: true, color: true } },
+            },
+            orderBy: { subsystemId: "asc" },
+          },
           assignedTasks: {
             where: {
+              ...taskWhere,
               deletedAt: null,
               isArchived: false,
               status: { not: TaskStatus.COMPLETED },
@@ -97,6 +138,7 @@ export class ResourcesService {
       }),
       this.prisma.task.findMany({
         where: {
+          ...taskWhere,
           deletedAt: null,
           isArchived: false,
           status: { not: TaskStatus.COMPLETED },
@@ -108,6 +150,7 @@ export class ResourcesService {
         },
       }),
       this.prisma.subsystem.findMany({
+        where: subsystemWhere,
         select: { id: true, name: true, color: true },
       }),
     ]);
@@ -141,9 +184,9 @@ export class ResourcesService {
         userName: user.name,
         userEmail: user.email,
         avatarUrl: user.avatarUrl,
-        subsystemId: user.subsystemId ?? "",
-        subsystemName: user.subsystem?.name ?? "Unassigned",
-        subsystemColor: user.subsystem?.color ?? "#64748b",
+        subsystemId: user.memberships[0]?.subsystem.id ?? "",
+        subsystemName: user.memberships[0]?.subsystem.name ?? "Unassigned",
+        subsystemColor: user.memberships[0]?.subsystem.color ?? "#64748b",
         role: user.role,
         skills: user.skills,
         weeklyCapacityHours: user.weeklyCapacityHours,
@@ -199,7 +242,8 @@ export class ResourcesService {
     // Get AI suggestions
     let aiSuggestions: ResourceAllocationBoard["aiSuggestions"] = [];
     try {
-      const workloadSuggestions = await this.aiService.getWorkloadSuggestions();
+      const workloadSuggestions =
+        await this.aiService.getWorkloadSuggestions(actorId);
       aiSuggestions = workloadSuggestions.map(
         (s: { from: string; to: string; reason: string }) => ({
           fromUserId: "",
@@ -274,7 +318,7 @@ export class ResourcesService {
     return conflicts;
   }
 
-  async getSuggestedMoves(): Promise<
+  async getSuggestedMoves(actorId: string): Promise<
     Array<{
       taskId: string;
       taskTitle: string;
@@ -285,7 +329,8 @@ export class ResourcesService {
       reason: string;
     }>
   > {
-    const board = await this.getResourceAllocationBoard();
+    this.core.managementScope(await this.core.actor(actorId));
+    const board = await this.getResourceAllocationBoard(4, actorId);
     return board.aiSuggestions.map((s) => ({
       taskId: s.taskId,
       taskTitle: s.taskTitle,
@@ -298,10 +343,6 @@ export class ResourcesService {
   }
 
   async applyMove(taskId: string, newAssigneeId: string, actorId: string) {
-    return this.prisma.task.update({
-      where: { id: taskId },
-      data: { assignedToId: newAssigneeId },
-      include: { subsystem: true, assignedTo: { select: safeUserSelect } },
-    });
+    return this.tasksService.reassign(taskId, newAssigneeId, actorId);
   }
 }

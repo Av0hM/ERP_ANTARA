@@ -16,7 +16,9 @@ describe("FilesController", () => {
   it("delegates attachment listing to the service", async () => {
     filesService.list.mockResolvedValue([]);
 
-    await expect(controller.listAttachments()).resolves.toEqual([]);
-    expect(filesService.list).toHaveBeenCalled();
+    await expect(controller.listAttachments({ id: "member" })).resolves.toEqual(
+      [],
+    );
+    expect(filesService.list).toHaveBeenCalledWith("member");
   });
 });

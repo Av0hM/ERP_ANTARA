@@ -1,3 +1,4 @@
+import { CurrentUser } from "../../common/decorators/current-user.decorator";
 import {
   Body,
   Controller,
@@ -26,8 +27,8 @@ export class FilesController {
 
   @Get("attachments")
   @Roles("OWNER", "ADMIN", "MEMBER")
-  listAttachments() {
-    return this.filesService.list();
+  listAttachments(@CurrentUser() actor: { id: string }) {
+    return this.filesService.list(actor.id);
   }
 
   @Post("attachments")

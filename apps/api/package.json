@@ -24,7 +24,11 @@
     "test:auth": "jest --runInBand --config jest.config.js --runTestsByPath src/modules/auth/auth.service.spec.ts src/modules/auth/google-identity.service.spec.ts src/modules/auth/dummy-credentials.spec.ts src/modules/invitations/invitations.service.spec.ts src/modules/auth/guards/ws-jwt-auth.guard.spec.ts src/modules/auth/refresh-throttle.guard.spec.ts",
     "test:privacy": "jest --runInBand --config jest.config.js --runTestsByPath src/common/privacy/privacy.spec.ts src/modules/tasks/tasks.service.spec.ts",
     "test:privacy:integration": "PRIVACY_REQUIRE_DB=true jest --runInBand --config jest.config.js --runTestsByPath src/common/privacy/privacy.integration.spec.ts",
-    "test:core:integration": "CORE_REQUIRE_DB=true jest --runInBand --config jest.config.js --runTestsByPath src/common/authorization/core.integration.spec.ts"
+    "test:core:integration": "CORE_REQUIRE_DB=true jest --runInBand --config jest.config.js --runTestsByPath src/common/authorization/core.integration.spec.ts",
+    "test:remaining:integration": "REMAINING_REQUIRE_DB=true jest --runInBand --config jest.config.js --runTestsByPath src/common/authorization/remaining.integration.spec.ts",
+    "bootstrap:v1": "ts-node src/scripts/bootstrap-v1.ts",
+    "bootstrap:v1-owner": "ts-node src/scripts/bootstrap-v1.ts --action owner",
+    "test:bootstrap": "PHASE1C_REQUIRE_DB=true jest --runInBand --config jest.config.js --runTestsByPath src/scripts/__tests__/phase1c.spec.ts src/scripts/__tests__/phase1c.integration.spec.ts"
   },
   "dependencies": {
     "@nestjs/bullmq": "^12.0.0",

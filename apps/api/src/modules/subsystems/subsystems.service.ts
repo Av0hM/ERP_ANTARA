@@ -171,6 +171,7 @@ export class SubsystemsService {
       }),
       this.prisma.workLog.findMany({
         where: {
+          ...(actor.globalAuthority ? {} : { id: { in: [] } }),
           task: { subsystemId: subsystem.id },
           startedAt: {
             gte: new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000),
@@ -330,7 +331,7 @@ export class SubsystemsService {
       },
       incomingBlockers,
       outgoingBlockers,
-      workload,
+      workload: canManageSubsystem(actor, subsystem.id) ? workload : [],
       recentActivity,
     };
   }

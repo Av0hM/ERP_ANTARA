@@ -9,6 +9,14 @@ describe("HealthService", () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    // The suite's own heap pressure is not the system state under test.
+    jest.spyOn(process, "memoryUsage").mockReturnValue({
+      rss: 100_000_000,
+      heapTotal: 100_000_000,
+      heapUsed: 50_000_000,
+      external: 0,
+      arrayBuffers: 0,
+    });
     prisma = { $queryRaw: jest.fn() };
     redisCacheService = { ping: jest.fn() };
     configService = {
@@ -20,10 +28,30 @@ describe("HealthService", () => {
     configNoRedis = {
       get: jest.fn(() => undefined),
     };
-    service = new HealthService(prisma as never, configService as never, redisCacheService as never);
+    service = new HealthService(
+      prisma as never,
+      configService as never,
+      redisCacheService as never,
+    );
   });
 
+  afterEach(() => jest.restoreAllMocks());
+
   describe("checkHealth", () => {
+    it("returns degraded for actual high memory usage", async () => {
+      jest.spyOn(process, "memoryUsage").mockReturnValue({
+        rss: 100_000_000,
+        heapTotal: 100_000_000,
+        heapUsed: 95_000_000,
+        external: 0,
+        arrayBuffers: 0,
+      });
+      prisma.$queryRaw.mockResolvedValue(null);
+      redisCacheService.ping.mockResolvedValue("PONG");
+      const result = await service.checkHealth();
+      expect(result.status).toBe("degraded");
+      expect(result.checks.memory.percentage).toBe(95);
+    });
     it("returns healthy when all checks pass", async () => {
       prisma.$queryRaw.mockResolvedValue(null);
       redisCacheService.ping.mockResolvedValue("PONG");
@@ -49,7 +77,9 @@ describe("HealthService", () => {
 
     it("returns unhealthy when redis check fails", async () => {
       prisma.$queryRaw.mockResolvedValue(null);
-      redisCacheService.ping.mockRejectedValue(new Error("Redis connection failed"));
+      redisCacheService.ping.mockRejectedValue(
+        new Error("Redis connection failed"),
+      );
 
       const result = await service.checkHealth();
 
@@ -73,7 +103,11 @@ describe("HealthService", () => {
         get: jest.fn(() => undefined),
       } as never;
 
-      const serviceNoRedis = new HealthService(prisma as never, configNoRedis, redisCacheService as never);
+      const serviceNoRedis = new HealthService(
+        prisma as never,
+        configNoRedis,
+        redisCacheService as never,
+      );
       prisma.$queryRaw.mockResolvedValue(null);
 
       const result = await serviceNoRedis.checkHealth();
@@ -118,7 +152,11 @@ describe("HealthService", () => {
         get: jest.fn(() => undefined),
       } as never;
 
-      const serviceNoRedis = new HealthService(prisma as never, configNoRedis, redisCacheService as never);
+      const serviceNoRedis = new HealthService(
+        prisma as never,
+        configNoRedis,
+        redisCacheService as never,
+      );
 
       const result = await serviceNoRedis["checkRedis"]();
 

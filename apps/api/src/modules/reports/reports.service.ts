@@ -1,3 +1,4 @@
+import { CoreAuthorizationService } from "../../common/authorization/core-authorization.service";
 import { Injectable } from "@nestjs/common";
 import { TaskStatus } from "@antara/contracts";
 
@@ -13,6 +14,7 @@ interface HandoffPackage {
     generatedBy: string;
     clubName: string;
     semester: string;
+    historicalAnalytics: "UNAVAILABLE_PENDING_SCOPE_REVIEW";
   };
   clubHealth: {
     productivityIndex: number;
@@ -90,230 +92,251 @@ export class ReportsService {
     private readonly calendarService: CalendarService,
     private readonly tasksService: TasksService,
     private readonly auditService: AuditService,
+    private readonly core: CoreAuthorizationService,
   ) {}
 
-  async generateHandoffPackage(actorId: string): Promise<HandoffPackage> {
+  async generateHandoffPackage(
+    actorId: string,
+    subsystemId?: string,
+  ): Promise<HandoffPackage> {
+    const actor = await this.core.actor(actorId);
+    const scope = this.core.managementScope(actor, subsystemId);
+    const ids = scope.kind === "SCOPED" ? [...scope.ids] : [];
+    const placement =
+      scope.kind === "GLOBAL" ? {} : { subsystemId: { in: ids } };
+    const [identity, subsystems, users, tasks, decisions, events] =
+      await Promise.all([
+        this.prisma.user.findUniqueOrThrow({
+          where: { id: actorId },
+          select: { name: true },
+        }),
+        this.prisma.subsystem.findMany({
+          where: scope.kind === "GLOBAL" ? {} : { id: { in: ids } },
+          select: { id: true, name: true, slug: true, color: true },
+        }),
+        this.prisma.user.findMany({
+          where: {
+            isActive: true,
+            deletedAt: null,
+            ...(scope.kind === "GLOBAL"
+              ? {}
+              : { memberships: { some: { subsystemId: { in: ids } } } }),
+          },
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            role: true,
+            memberships: {
+              where:
+                scope.kind === "GLOBAL" ? {} : { subsystemId: { in: ids } },
+              select: {
+                subsystemId: true,
+                accessLevel: true,
+                subsystem: { select: { name: true } },
+              },
+            },
+          },
+        }),
+        this.prisma.task.findMany({
+          where: { ...placement, deletedAt: null, isArchived: false },
+          include: { subsystem: { select: { name: true } } },
+        }),
+        this.prisma.decisionRecord.findMany({
+          where: {
+            AND: [this.core.decisionWhere(actor), placement],
+            status: { in: ["PROPOSED", "ACCEPTED"] },
+          },
+          select: {
+            id: true,
+            title: true,
+            status: true,
+            context: true,
+            decision: true,
+            rationale: true,
+            createdAt: true,
+            subsystem: { select: { name: true } },
+          },
+          orderBy: { createdAt: "desc" },
+          take: 20,
+        }),
+        this.prisma.calendarEvent.findMany({
+          where: { ...placement, startsAt: { gte: new Date() } },
+          select: {
+            title: true,
+            startsAt: true,
+            subsystem: { select: { name: true } },
+          },
+          orderBy: { startsAt: "asc" },
+          take: 10,
+        }),
+      ]);
     const now = new Date();
-    const actor = await this.prisma.user.findUnique({
-      where: { id: actorId },
-      select: { name: true, email: true, role: true },
-    });
-
-    const [
-      analytics,
-      aiBundle,
-      subsystems,
-      users,
-      decisions,
-      calendarEvents,
-    ] = await Promise.all([
-      this.prisma.analyticsSnapshot.findFirst({
-        where: { scope: "GLOBAL" },
-        orderBy: { createdAt: "desc" },
-      }),
-      this.aiService.getBundle(),
-      this.prisma.subsystem.findMany({
-        include: { users: { select: { id: true, name: true, email: true, role: true } } },
-      }),
-      this.prisma.user.findMany({
-        where: { isActive: true },
-        select: { id: true, name: true, email: true, role: true, subsystemId: true, subsystem: { select: { name: true } } },
-      }),
-      this.prisma.decisionRecord.findMany({
-        where: { status: { in: ["PROPOSED", "ACCEPTED"] } },
-        include: { subsystem: { select: { name: true } }, author: { select: { name: true } } },
-        orderBy: { createdAt: "desc" },
-        take: 20,
-      }),
-      this.prisma.calendarEvent.findMany({
-        where: { startsAt: { gte: new Date() } },
-        include: { subsystem: { select: { name: true } } },
-        orderBy: { startsAt: "asc" },
-        take: 10,
-      }),
-    ]);
-
-    const allTasks = await this.prisma.task.findMany({
-      where: { deletedAt: null, isArchived: false },
-      include: { subsystem: true, assignedTo: { select: { name: true, email: true } } },
-    });
-
-    const semester = this.getCurrentSemester();
-
+    const completed = tasks.filter((t) => t.status === "COMPLETED").length;
+    const overdue = tasks.filter(
+      (t) => t.status !== "COMPLETED" && t.deadline < now,
+    ).length;
+    const contacts = users.filter(
+      (u) =>
+        u.role === "OWNER" ||
+        u.memberships.some((m) => m.accessLevel === "ADMIN"),
+    );
     const handoff: HandoffPackage = {
       metadata: {
         generatedAt: now,
-        generatedBy: actor?.name ?? "Unknown",
+        generatedBy: identity.name,
         clubName: "ANTARA CubeSat Team",
-        semester,
+        semester: `${now.getMonth() >= 7 ? "Fall" : now.getMonth() >= 1 ? "Spring" : "Winter"} ${now.getFullYear()}`,
+        historicalAnalytics: "UNAVAILABLE_PENDING_SCOPE_REVIEW",
       },
-      clubHealth: this.buildClubHealth(analytics, allTasks, users),
-      subsystemStatus: this.buildSubsystemStatus(subsystems, allTasks, users),
-      riskRegister: this.buildRiskRegister(aiBundle),
-      openDecisions: this.buildOpenDecisions(decisions),
-      milestoneTracker: this.buildMilestoneTracker(calendarEvents, allTasks),
-      keyContacts: this.buildKeyContacts(users),
+      clubHealth: {
+        productivityIndex: tasks.length
+          ? Math.min(
+              99,
+              Math.round(
+                (completed / tasks.length) * 100 +
+                  (tasks.length - completed) * 1.5,
+              ),
+            )
+          : 0,
+        subsystemVelocity: tasks.length
+          ? Math.min(
+              99,
+              Math.round(
+                (completed / tasks.length) * 100 +
+                  (tasks.length - completed) * 1.5,
+              ),
+            )
+          : 0,
+        overdueRate: tasks.length ? (overdue / tasks.length) * 100 : 0,
+        clubHealthScore: tasks.length
+          ? Math.min(99, Math.round(75 + (completed / tasks.length) * 20))
+          : 0,
+        memberCount: users.length,
+        activeTaskCount: tasks.length - completed,
+      },
+      subsystemStatus: subsystems.map((subsystem) => {
+        const relevant = tasks.filter((t) => t.subsystemId === subsystem.id);
+        const members = users.filter((u) =>
+          u.memberships.some((m) => m.subsystemId === subsystem.id),
+        );
+        const done = relevant.filter((t) => t.status === "COMPLETED").length;
+        const late = relevant.filter(
+          (t) => t.status !== "COMPLETED" && t.deadline < now,
+        ).length;
+        return {
+          name: subsystem.name,
+          slug: subsystem.slug,
+          color: subsystem.color,
+          memberCount: members.length,
+          activeTasks: relevant.length - done,
+          completedTasks: done,
+          overdueTasks: late,
+          blockedTasks: relevant.filter((t) => t.status === "BLOCKED").length,
+          velocity: relevant.length
+            ? Math.min(
+                99,
+                Math.round(55 + done * 6 + (relevant.length - done) * 2),
+              )
+            : 0,
+          riskScore: relevant.length
+            ? Math.min(
+                99,
+                Math.round(
+                  20 +
+                    late * 12 +
+                    relevant.filter((t) => t.status === "BLOCKED").length * 10 +
+                    (relevant.length - done) * 3 +
+                    relevant.reduce(
+                      (sum, t) => sum + Number(t.estimatedHours ?? 0),
+                      0,
+                    ) /
+                      2,
+                ),
+              )
+            : 0,
+          upcomingDeadlines: relevant
+            .filter((t) => t.status !== "COMPLETED" && t.deadline >= now)
+            .sort((a, b) => a.deadline.getTime() - b.deadline.getTime())
+            .slice(0, 5)
+            .map((t) => ({
+              id: t.id,
+              title: t.title,
+              deadline: t.deadline,
+              priority: t.priority,
+            })),
+          keyContacts: members
+            .filter(
+              (u) =>
+                u.role === "OWNER" ||
+                u.memberships.some(
+                  (m) =>
+                    m.subsystemId === subsystem.id && m.accessLevel === "ADMIN",
+                ),
+            )
+            .map((u) => ({
+              name: u.name,
+              email: u.email,
+              role: u.role,
+              subsystem: subsystem.name,
+            })),
+        };
+      }),
+      // Historical prose/snapshots lack provenance; never import global history into a scoped export.
+      riskRegister: [],
+      openDecisions: decisions.map((d) => ({
+        ...d,
+        subsystem: d.subsystem?.name ?? "Global",
+      })),
+      milestoneTracker: events.map((e) => ({
+        name: e.title,
+        date: e.startsAt,
+        type: "meeting",
+        subsystem: e.subsystem?.name ?? "Unscoped",
+        requiredTasks: [],
+        status: "pending",
+      })),
+      keyContacts: contacts.map((u) => ({
+        name: u.name,
+        email: u.email,
+        role: u.role,
+        subsystem:
+          u.memberships.map((m) => m.subsystem.name).join(", ") || "Global",
+      })),
     };
-
+    for (const task of tasks
+      .filter((t) => t.priority === "CRITICAL" && t.status !== "COMPLETED")
+      .sort((a, b) => a.deadline.getTime() - b.deadline.getTime())
+      .slice(0, 5)) {
+      handoff.milestoneTracker.push({
+        name: `Critical: ${task.title}`,
+        date: task.deadline,
+        type: "deadline",
+        subsystem: task.subsystem.name,
+        requiredTasks: [task.id],
+        status: "pending",
+      });
+    }
+    handoff.milestoneTracker.sort(
+      (a, b) => a.date.getTime() - b.date.getTime(),
+    );
     await this.auditService.log({
       action: "HANDOFF_PACKAGE_GENERATED",
       entityType: "Report",
       entityId: `handoff-${now.getTime()}`,
       actorId,
-      payload: { subsystemCount: subsystems.length, taskCount: allTasks.length },
+      payload: { subsystemCount: subsystems.length, taskCount: tasks.length },
     });
-
     return handoff;
   }
 
-  private getCurrentSemester(): string {
-    const now = new Date();
-    const month = now.getMonth();
-    const year = now.getFullYear();
-    if (month >= 7) return `Fall ${year}`;
-    if (month >= 1) return `Spring ${year}`;
-    return `Winter ${year}`;
-  }
-
-  private buildClubHealth(analytics: any, tasks: any[], users: any[]) {
-    const totalTasks = tasks.length;
-    const completed = tasks.filter((t) => t.status === TaskStatus.COMPLETED).length;
-    const overdue = tasks.filter((t) => t.status === TaskStatus.OVERDUE || (t.deadline < new Date() && t.status !== TaskStatus.COMPLETED)).length;
-    const active = tasks.filter((t) => t.status !== TaskStatus.COMPLETED).length;
-
-    return {
-      productivityIndex: analytics?.productivityIndex ?? Math.min(99, Math.round((completed / (totalTasks || 1)) * 100 + active * 1.5)),
-      subsystemVelocity: analytics?.subsystemVelocity ?? Math.min(99, Math.round((completed / (totalTasks || 1)) * 100 + active * 1.5)),
-      overdueRate: totalTasks > 0 ? Number(((overdue / totalTasks) * 100).toFixed(1)) : 0,
-      clubHealthScore: analytics?.clubHealth ?? Math.min(99, Math.round(75 + (completed / (totalTasks || 1)) * 20)),
-      memberCount: users.length,
-      activeTaskCount: active,
-    };
-  }
-
-  private buildSubsystemStatus(subsystems: any[], tasks: any[], users: any[]) {
-    return subsystems.map((subsystem) => {
-      const relevantTasks = tasks.filter((t) => t.subsystemId === subsystem.id);
-      const subsystemUsers = users.filter((u) => u.subsystemId === subsystem.id);
-      const completed = relevantTasks.filter((t) => t.status === TaskStatus.COMPLETED).length;
-      const overdue = relevantTasks.filter((t) => t.status === TaskStatus.OVERDUE || (t.deadline < new Date() && t.status !== TaskStatus.COMPLETED)).length;
-      const blocked = relevantTasks.filter((t) => t.status === TaskStatus.BLOCKED).length;
-      const active = relevantTasks.filter((t) => t.status !== TaskStatus.COMPLETED).length;
-      const totalHours = relevantTasks.reduce((sum, t) => sum + Number(t.estimatedHours ?? 0), 0);
-
-      const keyContacts = subsystemUsers
-        .filter((u) => u.role === "ADMIN" || u.role === "OWNER")
-        .map((u) => ({
-          name: u.name,
-          email: u.email,
-          role: u.role,
-          subsystem: subsystem.name,
-        }));
-
-      const upcomingDeadlines = relevantTasks
-        .filter((t) => t.status !== TaskStatus.COMPLETED && t.deadline > new Date())
-        .sort((a, b) => a.deadline.getTime() - b.deadline.getTime())
-        .slice(0, 5)
-        .map((t) => ({
-          id: t.id,
-          title: t.title,
-          deadline: t.deadline,
-          priority: t.priority,
-        }));
-
-      return {
-        name: subsystem.name,
-        slug: subsystem.slug,
-        color: subsystem.color,
-        memberCount: subsystemUsers.length,
-        activeTasks: active,
-        completedTasks: completed,
-        overdueTasks: overdue,
-        blockedTasks: blocked,
-        velocity: Math.min(99, Math.round(55 + completed * 6 + active * 2)),
-        riskScore: Math.min(99, Math.round(20 + overdue * 12 + blocked * 10 + active * 3 + totalHours / 2)),
-        upcomingDeadlines,
-        keyContacts,
-      };
-    });
-  }
-
-  private buildRiskRegister(aiBundle: any) {
-    return (aiBundle?.insights ?? []).map((insight: any) => ({
-      id: insight.id,
-      title: insight.title,
-      severity: insight.severity,
-      subsystem: insight.subsystem,
-      summary: insight.summary,
-      recommendation: insight.recommendation,
-      riskScore: insight.riskScore,
-    }));
-  }
-
-  private buildOpenDecisions(decisions: any[]) {
-    return decisions.map((d) => ({
-      id: d.id,
-      title: d.title,
-      status: d.status,
-      subsystem: d.subsystem?.name ?? "General",
-      context: d.context,
-      decision: d.decision,
-      rationale: d.rationale,
-      createdAt: d.createdAt,
-    }));
-  }
-
-private buildMilestoneTracker(events: any[], tasks: any[]) {
-    const milestones: Array<{
-      name: string;
-      date: Date;
-      type: string;
-      subsystem: string;
-      requiredTasks: string[];
-      status: "pending" | "in-progress" | "completed";
-    }> = events.map((e) => ({
-      name: e.title,
-      date: new Date(e.startsAt),
-      type: "meeting",
-      subsystem: e.subsystem?.name ?? "General",
-      requiredTasks: [],
-      status: "pending" as const,
-    }));
-
-    // Add task-based milestones
-    const criticalTasks = tasks
-      .filter((t) => t.priority === "CRITICAL" && t.status !== TaskStatus.COMPLETED)
-      .sort((a, b) => a.deadline.getTime() - b.deadline.getTime())
-      .slice(0, 5);
-
-    for (const task of criticalTasks) {
-      milestones.push({
-        name: `Critical: ${task.title}`,
-        date: task.deadline,
-        type: "deadline",
-        subsystem: task.subsystem?.name ?? "Unknown",
-        requiredTasks: [task.id],
-        status: "pending" as const,
-      });
-    }
-
-    return milestones.sort((a, b) => a.date.getTime() - b.date.getTime());
-  }
-
-  private buildKeyContacts(users: any[]) {
-    return users
-      .filter((u) => u.role === "OWNER" || u.role === "ADMIN")
-      .map((u) => ({
-        name: u.name,
-        email: u.email,
-        role: u.role,
-        subsystem: u.subsystem?.name ?? "General",
-      }));
-  }
-
-  async generateMarkdownHandoff(actorId: string): Promise<string> {
-    const handoff = await this.generateHandoffPackage(actorId);
-    return this.renderMarkdownHandoff(handoff);
+  async generateMarkdownHandoff(
+    actorId: string,
+    subsystemId?: string,
+  ): Promise<string> {
+    return this.renderMarkdownHandoff(
+      await this.generateHandoffPackage(actorId, subsystemId),
+    );
   }
 
   private renderMarkdownHandoff(handoff: HandoffPackage): string {
@@ -322,6 +345,7 @@ private buildMilestoneTracker(events: any[], tasks: any[]) {
     md += `**Generated By:** ${handoff.metadata.generatedBy}\n`;
     md += `**Semester:** ${handoff.metadata.semester}\n\n`;
 
+    md += `Historical analytics unavailable pending scope review. Metrics below use only current authorized records.\n\n`;
     md += `## 📊 Club Health Overview\n\n`;
     md += `| Metric | Value |\n|--------|-------|\n`;
     md += `| Productivity Index | ${handoff.clubHealth.productivityIndex} |\n`;

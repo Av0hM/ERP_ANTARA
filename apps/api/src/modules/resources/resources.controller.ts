@@ -1,4 +1,14 @@
-import { Controller, Get, Param, Patch, Body, Query, Req, UseGuards } from "@nestjs/common";
+import { CurrentUser } from "../../common/decorators/current-user.decorator";
+import {
+  Controller,
+  Get,
+  Param,
+  Patch,
+  Body,
+  Query,
+  Req,
+  UseGuards,
+} from "@nestjs/common";
 
 import { Roles } from "../../common/decorators/roles.decorator";
 import { RolesGuard } from "../../common/guards/roles.guard";
@@ -16,15 +26,18 @@ export class ResourcesController {
 
   @Get("allocation-board")
   @Roles("OWNER", "ADMIN", "MEMBER")
-  async getAllocationBoard(@Query("horizonWeeks") horizonWeeks?: string) {
+  async getAllocationBoard(
+    @CurrentUser() actor: { id: string },
+    @Query("horizonWeeks") horizonWeeks?: string,
+  ) {
     const weeks = horizonWeeks ? parseInt(horizonWeeks, 10) : 4;
-    return this.resourcesService.getResourceAllocationBoard(weeks);
+    return this.resourcesService.getResourceAllocationBoard(weeks, actor.id);
   }
 
   @Get("suggested-moves")
   @Roles("OWNER", "ADMIN")
-  async getSuggestedMoves() {
-    return this.resourcesService.getSuggestedMoves();
+  async getSuggestedMoves(@CurrentUser() actor: { id: string }) {
+    return this.resourcesService.getSuggestedMoves(actor.id);
   }
 
   @Patch("tasks/:id/assign")

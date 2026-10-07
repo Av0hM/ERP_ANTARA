@@ -134,7 +134,7 @@ describe("AnalyticsService", () => {
       }),
     );
     expect(cache.getJson).toHaveBeenCalledWith(
-      "analytics:overview:v4a:OWNER_SUBSYSTEM:software",
+      "analytics:overview:v4b:OWNER_SUBSYSTEM:software",
     );
   });
 
@@ -154,7 +154,7 @@ describe("AnalyticsService", () => {
       }),
     );
     expect(cache.getJson).toHaveBeenCalledWith(
-      "analytics:overview:v4a:PERSONAL:member",
+      "analytics:overview:v4b:PERSONAL:member",
     );
   });
 
@@ -164,7 +164,7 @@ describe("AnalyticsService", () => {
       service.getVelocityTrend({ kind: "PERSONAL", id: "member" }),
     ).resolves.toEqual([]);
     expect(prisma.analyticsSnapshot.findMany).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { scope: "v4a:PERSONAL:member" } }),
+      expect.objectContaining({ where: { scope: "v4b:PERSONAL:member" } }),
     );
   });
 
@@ -197,9 +197,9 @@ describe("AnalyticsService", () => {
     prisma.analyticsSnapshot.findMany.mockResolvedValue([]);
     await service.refreshAnalyticsSnapshot();
     const expectedScopes = [
-      "v4a:OWNER_GLOBAL",
-      'v4a:ADMIN:["software"]',
-      "v4a:PERSONAL:member",
+      "v4b:OWNER_GLOBAL",
+      'v4b:ADMIN:["software"]',
+      "v4b:PERSONAL:member",
     ];
     expect(
       prisma.analyticsSnapshot.create.mock.calls.map(

@@ -1,3 +1,4 @@
+import { AuthorizationModule } from "../../common/authorization/authorization.module";
 import { Module } from "@nestjs/common";
 
 import { PrismaModule } from "../../common/prisma/prisma.module";
@@ -6,7 +7,7 @@ import { CalendarController } from "./calendar.controller";
 import { CalendarService } from "./calendar.service";
 
 @Module({
-  imports: [PrismaModule],
+  imports: [AuthorizationModule, PrismaModule],
   controllers: [CalendarController],
   providers: [CalendarService, GoogleIntegrationService],
   exports: [CalendarService],

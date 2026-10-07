@@ -1,3 +1,7 @@
+import { SessionService } from "../../../common/sessions/session.service";
+import { CoreAuthorizationService } from "../../../common/authorization/core-authorization.service";
+import { WsJwtAuthGuard } from "../../auth/guards/ws-jwt-auth.guard";
+import { fixtureCore } from "../../../../test/authorization.fixture";
 import { INestApplication } from "@nestjs/common";
 import { Test } from "@nestjs/testing";
 import { JwtService, JwtSignOptions } from "@nestjs/jwt";
@@ -13,8 +17,33 @@ describe("TaskCollaborationGateway (e2e)", () => {
   let serverUrl: string;
 
   beforeAll(async () => {
+    const fixture = await fixtureCore();
     const moduleRef = await Test.createTestingModule({
-      providers: [TaskCollaborationGateway, JwtService, ConfigService],
+      providers: [
+        TaskCollaborationGateway,
+        JwtService,
+        ConfigService,
+        WsJwtAuthGuard,
+        { provide: CoreAuthorizationService, useValue: fixture.core },
+        {
+          provide: SessionService,
+          useValue: {
+            authenticateAccess: async (claims: Record<string, unknown>) => {
+              if (
+                claims.sid !== "active-fixture-session" ||
+                typeof claims.id !== "string"
+              )
+                throw new Error("Invalid session");
+              return {
+                id: claims.id,
+                email: "fixture@example.invalid",
+                name: "Current DB user",
+                role: "MEMBER",
+              };
+            },
+          },
+        },
+      ],
     }).compile();
 
     app = moduleRef.createNestApplication();
@@ -22,21 +51,34 @@ describe("TaskCollaborationGateway (e2e)", () => {
 
     jwtService = app.get(JwtService);
     const configService = app.get(ConfigService);
-    accessSecret = configService.get<string>("auth.accessSecret") ?? "dev-access-secret";
+    accessSecret =
+      configService.get<string>("auth.accessSecret") ?? "dev-access-secret";
 
-    await app.listen(0);
-    const address = app.getHttpServer().address();
-    serverUrl = `http://localhost:${address.port}`;
+    await app.listen(0, "127.0.0.1");
+    serverUrl = await app.getUrl();
   });
 
   afterAll(async () => {
-    await app.close();
+    await app?.close();
   });
 
-  const createToken = (overrides: Record<string, unknown> = {}, opts: { secret?: string; expiresIn?: JwtSignOptions["expiresIn"] } = {}) =>
+  const createToken = (
+    overrides: Record<string, unknown> = {},
+    opts: { secret?: string; expiresIn?: JwtSignOptions["expiresIn"] } = {},
+  ) =>
     jwtService.signAsync(
-      { id: "user-1", email: "test@example.com", name: "Test User", role: "MEMBER", ...overrides },
-      { secret: opts.secret ?? accessSecret, expiresIn: opts.expiresIn ?? "15m" },
+      {
+        id: "user-1",
+        sid: "active-fixture-session",
+        email: "test@example.com",
+        name: "Test User",
+        role: "MEMBER",
+        ...overrides,
+      },
+      {
+        secret: opts.secret ?? accessSecret,
+        expiresIn: opts.expiresIn ?? "15m",
+      },
     );
 
   const connect = (token?: string): Promise<Socket> =>
@@ -48,7 +90,10 @@ describe("TaskCollaborationGateway (e2e)", () => {
         reconnection: false,
       });
 
-      const timeout = setTimeout(() => reject(new Error("timed out waiting for connect/disconnect")), 4000);
+      const timeout = setTimeout(
+        () => reject(new Error("timed out waiting for connect/disconnect")),
+        4000,
+      );
 
       socket.on("presence.connected", () => {
         clearTimeout(timeout);
@@ -80,6 +125,12 @@ describe("TaskCollaborationGateway (e2e)", () => {
   it("disconnects a client with an expired token", async () => {
     const expiredToken = await createToken({}, { expiresIn: "-10s" });
     const socket = await connect(expiredToken);
+    expect(socket.connected).toBe(false);
+    socket.close();
+  });
+
+  it("disconnects a correctly signed token with a revoked database session", async () => {
+    const socket = await connect(await createToken({ sid: "revoked-fixture" }));
     expect(socket.connected).toBe(false);
     socket.close();
   });

@@ -1,3 +1,4 @@
+import { CurrentUser } from "../../common/decorators/current-user.decorator";
 import { Body, Controller, Get, Post, UseGuards } from "@nestjs/common";
 
 import { Roles } from "../../common/decorators/roles.decorator";
@@ -13,13 +14,16 @@ export class CalendarController {
 
   @Get("events")
   @Roles("OWNER", "ADMIN", "MEMBER")
-  list() {
-    return this.calendarService.list();
+  list(@CurrentUser() actor: { id: string }) {
+    return this.calendarService.list(actor.id);
   }
 
   @Post("events")
   @Roles("OWNER", "ADMIN")
-  create(@Body() payload: CreateCalendarEventDto) {
-    return this.calendarService.create(payload);
+  create(
+    @Body() payload: CreateCalendarEventDto,
+    @CurrentUser() actor: { id: string },
+  ) {
+    return this.calendarService.create(payload, actor.id);
   }
 }

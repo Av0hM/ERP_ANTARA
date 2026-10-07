@@ -1,3 +1,4 @@
+import { fixtureCore } from "../../../test/authorization.fixture";
 import { FilesService } from "./files.service";
 
 describe("FilesService", () => {
@@ -12,6 +13,7 @@ describe("FilesService", () => {
 
   const googleIntegration = {
     uploadDriveFile: jest.fn(),
+    isDriveConfigured: jest.fn(() => true),
   };
 
   const auditService = {
@@ -19,10 +21,18 @@ describe("FilesService", () => {
   };
 
   let service: FilesService;
+  let auditCreate: jest.Mock;
 
-  beforeEach(() => {
+  beforeEach(async () => {
     jest.clearAllMocks();
-    service = new FilesService(prisma as never, googleIntegration as never, auditService as never);
+    const fixture = await fixtureCore(prisma);
+    auditCreate = fixture.db.auditLog.create;
+    service = new FilesService(
+      fixture.prisma,
+      googleIntegration as never,
+      auditService as never,
+      fixture.core,
+    );
   });
 
   it("creates a drive-backed attachment when content is provided", async () => {
@@ -36,15 +46,17 @@ describe("FilesService", () => {
       storageUrl: "https://drive.google.com/file/d/drive-file-1/view",
     });
 
-    const result = await service.create({
-      name: "thermal-review.pdf",
-      mimeType: "application/pdf",
-      sizeBytes: 1024,
-      taskId: "task-1",
-      uploadedById: "user-1",
-      tags: ["thermal", "review"],
-      contentBase64: "cGRm",
-    });
+    const result = await service.create(
+      {
+        name: "thermal-review.pdf",
+        mimeType: "application/pdf",
+        sizeBytes: 1024,
+        taskId: "task-1",
+        tags: ["thermal", "review"],
+        contentBase64: "cGRm",
+      },
+      "user-1",
+    );
 
     expect(googleIntegration.uploadDriveFile).toHaveBeenCalled();
     expect(prisma.attachment.create).toHaveBeenCalledWith(
@@ -70,15 +82,17 @@ describe("FilesService", () => {
 
     const result = await service.delete("attachment-1", "user-1");
 
-    expect(prisma.attachment.delete).toHaveBeenCalledWith({ where: { id: "attachment-1" } });
-    expect(auditService.log).toHaveBeenCalledWith(
-      expect.objectContaining({
+    expect(prisma.attachment.delete).toHaveBeenCalledWith({
+      where: { id: "attachment-1" },
+    });
+    expect(auditCreate).toHaveBeenCalledWith({
+      data: expect.objectContaining({
         action: "DELETE",
         entityType: "Attachment",
         entityId: "attachment-1",
         actorId: "user-1",
       }),
-    );
+    });
     expect(result.deleted).toBe(true);
   });
 });

@@ -1,3 +1,4 @@
+import { CurrentUser } from "../../common/decorators/current-user.decorator";
 import { Controller, Get, Query, UseGuards } from "@nestjs/common";
 
 import { Roles } from "../../common/decorators/roles.decorator";
@@ -11,8 +12,11 @@ export class AuditController {
   constructor(private readonly auditService: AuditService) {}
 
   @Get()
-  @Roles("OWNER", "ADMIN")
-  list(@Query("limit") limit?: string) {
-    return this.auditService.findAll(limit ? parseInt(limit, 10) : 100);
+  @Roles("OWNER")
+  list(@CurrentUser() actor: { id: string }, @Query("limit") limit?: string) {
+    return this.auditService.findAll(
+      limit ? parseInt(limit, 10) : 100,
+      actor.id,
+    );
   }
 }

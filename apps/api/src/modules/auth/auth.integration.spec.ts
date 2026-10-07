@@ -231,7 +231,10 @@ integration("Phase 2 authentication: isolated PostgreSQL", () => {
           provide: UsersService,
           useValue: new UsersService(
             db as PrismaService,
-            new AuditService(db as PrismaService),
+            new AuditService(
+              db as PrismaService,
+              new CoreAuthorizationService(db as PrismaService, authorization),
+            ),
             new CoreAuthorizationService(db as PrismaService, authorization),
           ),
         },

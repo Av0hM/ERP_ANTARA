@@ -1,3 +1,4 @@
+import { AuthorizationModule } from "../../common/authorization/authorization.module";
 import { Module } from "@nestjs/common";
 import { BullModule } from "@nestjs/bullmq";
 
@@ -8,6 +9,7 @@ import { NotificationEmailProcessor } from "./processors/notification-email.proc
 
 @Module({
   imports: [
+    AuthorizationModule,
     PrismaModule,
     BullModule.registerQueue({
       name: "notification-email",

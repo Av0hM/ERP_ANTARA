@@ -1,3 +1,4 @@
+import { fixtureCore } from "../../../test/authorization.fixture";
 import { PrismaService } from "../../common/prisma/prisma.service";
 
 import { AuditService } from "./audit.service";
@@ -8,13 +9,14 @@ describe("AuditService", () => {
       create: jest.fn(),
       findMany: jest.fn(),
     },
-  } as unknown as PrismaService;
+  };
 
   let service: AuditService;
 
-  beforeEach(() => {
+  beforeEach(async () => {
     jest.clearAllMocks();
-    service = new AuditService(prisma);
+    const fixture = await fixtureCore(prisma);
+    service = new AuditService(fixture.prisma, fixture.core);
   });
 
   it("logs an audit entry", async () => {
@@ -70,11 +72,16 @@ describe("AuditService", () => {
         entityId: "user-1",
         actorId: "user-1",
         createdAt: new Date(),
-        actor: { id: "user-1", name: "Test User", email: "test@example.com", role: "MEMBER" },
+        actor: {
+          id: "user-1",
+          name: "Test User",
+          email: "test@example.com",
+          role: "MEMBER",
+        },
       },
     ]);
 
-    const result = await service.findAll(50);
+    const result = await service.findAll(50, "owner");
 
     expect(prisma.auditLog.findMany).toHaveBeenCalledWith({
       orderBy: { createdAt: "desc" },
@@ -91,7 +98,7 @@ describe("AuditService", () => {
   it("defaults to 100 limit when not specified", async () => {
     prisma.auditLog.findMany.mockResolvedValue([]);
 
-    await service.findAll();
+    await service.findAll(undefined, "owner");
 
     expect(prisma.auditLog.findMany).toHaveBeenCalledWith(
       expect.objectContaining({ take: 100 }),

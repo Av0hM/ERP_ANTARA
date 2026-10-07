@@ -125,42 +125,52 @@ export class TasksService {
   }
 
   async create(payload: CreateTaskDto, actorId: string) {
-    const task = await this.core.withActor(actorId, async (tx, actor) => {
-      if (!canManageSubsystem(actor, payload.subsystemId))
-        throw new ForbiddenException("Task creation denied");
-      const dependencies = [...new Set(payload.dependencyIds ?? [])];
-      if (
-        (await this.core.visibleTaskIds(actor, dependencies, tx)).length !==
-        dependencies.length
-      )
-        throw new ForbiddenException("Dependency access denied");
-      const task = await tx.task.create({
-        data: {
-          title: payload.title,
-          description: payload.description,
-          priority: payload.priority,
-          status: payload.status ?? TaskStatus.TODO,
-          estimatedHours: payload.estimatedHours,
-          deadline: new Date(payload.deadline),
-          tags: payload.tags ?? [],
-          dependencyIds: dependencies,
-          subsystemId: payload.subsystemId,
-          assignedById: actorId,
-          assignedToId: payload.assignedToId,
-        },
-        include: taskInclude,
-      });
-      await tx.auditLog.create({
-        data: {
-          action: "CREATE",
-          entityType: "Task",
-          entityId: task.id,
-          actorId,
-          payload: { title: task.title },
-        },
-      });
-      return this.redactDependencies(task, actor, tx);
-    });
+    const task = await this.core.withActor(
+      actorId,
+      async (tx, actor) => {
+        if (!canManageSubsystem(actor, payload.subsystemId))
+          throw new ForbiddenException("Task creation denied");
+        if (payload.assignedToId)
+          await this.core.assertAssignee(
+            tx,
+            payload.assignedToId,
+            payload.subsystemId,
+          );
+        const dependencies = [...new Set(payload.dependencyIds ?? [])];
+        if (
+          (await this.core.visibleTaskIds(actor, dependencies, tx)).length !==
+          dependencies.length
+        )
+          throw new ForbiddenException("Dependency access denied");
+        const task = await tx.task.create({
+          data: {
+            title: payload.title,
+            description: payload.description,
+            priority: payload.priority,
+            status: payload.status ?? TaskStatus.TODO,
+            estimatedHours: payload.estimatedHours,
+            deadline: new Date(payload.deadline),
+            tags: payload.tags ?? [],
+            dependencyIds: dependencies,
+            subsystemId: payload.subsystemId,
+            assignedById: actorId,
+            assignedToId: payload.assignedToId,
+          },
+          include: taskInclude,
+        });
+        await tx.auditLog.create({
+          data: {
+            action: "CREATE",
+            entityType: "Task",
+            entityId: task.id,
+            actorId,
+            payload: { title: task.title },
+          },
+        });
+        return this.redactDependencies(task, actor, tx);
+      },
+      payload.assignedToId ? [payload.assignedToId] : [],
+    );
     this.taskEvents.emitTaskUpdated({ type: "created", task });
     return task;
   }
@@ -171,25 +181,32 @@ export class TasksService {
     action: "manage" | "status",
     data: Prisma.TaskUncheckedUpdateInput,
     auditAction: string,
+    assigneeId?: string | null,
   ) {
-    const task = await this.core.withActor(actorId, async (tx, actor) => {
-      await this.core.lockTasks(tx, [taskId]);
-      await this.core.task(actor, taskId, action, tx);
-      const task = await tx.task.update({
-        where: { id: taskId },
-        data,
-        include: taskInclude,
-      });
-      await tx.auditLog.create({
-        data: {
-          action: auditAction,
-          entityType: "Task",
-          entityId: taskId,
-          actorId,
-        },
-      });
-      return this.redactDependencies(task, actor, tx);
-    });
+    const task = await this.core.withActor(
+      actorId,
+      async (tx, actor) => {
+        await this.core.lockTasks(tx, [taskId]);
+        const persisted = await this.core.task(actor, taskId, action, tx);
+        if (assigneeId)
+          await this.core.assertAssignee(tx, assigneeId, persisted.subsystemId);
+        const task = await tx.task.update({
+          where: { id: taskId },
+          data,
+          include: taskInclude,
+        });
+        await tx.auditLog.create({
+          data: {
+            action: auditAction,
+            entityType: "Task",
+            entityId: taskId,
+            actorId,
+          },
+        });
+        return this.redactDependencies(task, actor, tx);
+      },
+      assigneeId ? [assigneeId] : [],
+    );
     this.taskEvents.emitTaskUpdated({ type: auditAction, task });
     return task;
   }
@@ -204,7 +221,14 @@ export class TasksService {
     );
   }
   reassign(taskId: string, assignedToId: string | null, actorId: string) {
-    return this.mutate(taskId, actorId, "manage", { assignedToId }, "REASSIGN");
+    return this.mutate(
+      taskId,
+      actorId,
+      "manage",
+      { assignedToId },
+      "REASSIGN",
+      assignedToId,
+    );
   }
   async delete(taskId: string, actorId: string) {
     await this.mutate(

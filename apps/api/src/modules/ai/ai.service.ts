@@ -1,3 +1,7 @@
+import { CoreAuthorizationService } from "../../common/authorization/core-authorization.service";
+import { administeredSubsystemIds } from "../../common/authorization/authorization.policy";
+import { Prisma, Task, WorkLog, CalendarEvent } from "@prisma/client";
+import { ForbiddenException } from "@nestjs/common";
 import { Injectable } from "@nestjs/common";
 import { createHash } from "node:crypto";
 import { InsightSeverity, TaskPriority, TaskStatus } from "@antara/contracts";
@@ -63,23 +67,38 @@ type OpenAiInsight = {
   subsystem?: string;
 };
 
-function toTaskSnapshot(task: any): TaskSnapshot {
+function toTaskSnapshot(
+  task: Task & {
+    subsystem: { name: string };
+    assignedTo?: {
+      id?: string;
+      name: string;
+      availabilityScore?: number;
+    } | null;
+  },
+): TaskSnapshot {
   return {
     id: task.id,
     title: task.title,
-    priority: task.priority as any,
-    status: task.status as any,
+    priority: task.priority as TaskPriority,
+    status: task.status as TaskStatus,
     deadline: task.deadline,
     dependencyIds: task.dependencyIds,
     estimatedHours: Number(task.estimatedHours ?? 0),
     subsystem: { name: task.subsystem?.name },
     assignedTo: task.assignedTo
-      ? { id: task.assignedTo.id, name: task.assignedTo.name, availabilityScore: task.assignedTo.availabilityScore }
+      ? {
+          id: task.assignedTo.id ?? "",
+          name: task.assignedTo.name,
+          availabilityScore: task.assignedTo.availabilityScore ?? 0,
+        }
       : null,
   };
 }
 
-function toWorklogSnapshot(log: any): WorklogSnapshot {
+function toWorklogSnapshot(
+  log: WorkLog & { user: { name: string } },
+): WorklogSnapshot {
   return {
     durationMin: log.durationMin,
     userId: log.userId,
@@ -87,7 +106,9 @@ function toWorklogSnapshot(log: any): WorklogSnapshot {
   };
 }
 
-function toEventSnapshot(event: any): EventSnapshot {
+function toEventSnapshot(
+  event: CalendarEvent & { subsystem: { name: string } | null },
+): EventSnapshot {
   return {
     id: event.id,
     title: event.title,
@@ -103,17 +124,53 @@ export class AiService {
     private readonly prisma: PrismaService,
     private readonly openAiIntegration: OpenAiIntegrationService,
     private readonly cache: RedisCacheService,
+    private readonly core: CoreAuthorizationService,
   ) {}
 
+  private taskSnapshots(tasks: Parameters<typeof toTaskSnapshot>[0][]) {
+    const visible = new Set(tasks.map((task) => task.id));
+    return tasks.map((task) =>
+      toTaskSnapshot({
+        ...task,
+        dependencyIds: task.dependencyIds.filter((id) => visible.has(id)),
+      }),
+    );
+  }
+
+  private async scope(actorId: string) {
+    const actor = await this.core.actor(actorId);
+    const access = administeredSubsystemIds(actor);
+    const ids = access.kind === "SCOPED" ? [...access.ids].sort() : [];
+    const taskWhere: Prisma.TaskWhereInput = actor.globalAuthority
+      ? {}
+      : actor.role === "ADMIN"
+        ? { subsystemId: { in: ids } }
+        : { AND: [this.core.taskWhere(actor), { assignedToId: actorId }] };
+    return {
+      actor,
+      taskWhere,
+      ids,
+      key: `v4b:${actor.userId}:${actor.role}:${JSON.stringify(ids)}:${JSON.stringify(actor.readableSubsystemIds)}`,
+    };
+  }
+
   async summarizeText(input: { text: string; context?: string }) {
-    const cacheKey = `ai:summarize:${createHash("sha1").update(`${input.context ?? ""}:${input.text}`).digest("hex")}`;
-    const cached = await this.cache.getJson<{ summary: string; source: "openai" | "local" }>(cacheKey);
+    const cacheKey = `ai:summarize:${createHash("sha1")
+      .update(`${input.context ?? ""}:${input.text}`)
+      .digest("hex")}`;
+    const cached = await this.cache.getJson<{
+      summary: string;
+      source: "openai" | "local";
+    }>(cacheKey);
     if (cached) {
       return cached;
     }
 
     try {
-      const summary = await this.openAiIntegration.summarize(input.text, input.context);
+      const summary = await this.openAiIntegration.summarize(
+        input.text,
+        input.context,
+      );
       if (summary) {
         const payload = {
           summary,
@@ -134,8 +191,14 @@ export class AiService {
     return payload;
   }
 
-  async getInsights() {
-    const cacheKey = "ai:insights";
+  async getInsights(actorId: string) {
+    const scope = await this.scope(actorId);
+    if (
+      !scope.actor.globalAuthority &&
+      (scope.actor.role !== "ADMIN" || !scope.ids.length)
+    )
+      return [];
+    const cacheKey = `ai:insights:${scope.key}`;
     const cached = await this.cache.getJson<GeneratedInsight[]>(cacheKey);
     if (cached) {
       return cached;
@@ -146,62 +209,69 @@ export class AiService {
       const dayStart = new Date(now);
       dayStart.setHours(0, 0, 0, 0);
 
-      const [tasks, storedInsights, recentWorklogs, subsystems] = await Promise.all([
-        this.prisma.task.findMany({
-          where: {
-            deletedAt: null,
-            isArchived: false,
-            status: { not: TaskStatus.COMPLETED },
-          },
-          include: {
-            subsystem: { select: { name: true } },
-            assignedTo: { select: { id: true, name: true, availabilityScore: true } },
-          },
-        }),
-        this.prisma.aIInsight.findMany({
-          take: 3,
-          orderBy: { createdAt: "desc" },
-          include: {
-            subsystem: { select: { name: true } },
-          },
-        }),
-        this.prisma.workLog.findMany({
-          where: {
-            startedAt: {
-              gte: new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000),
+      const [tasks, storedInsights, recentWorklogs, subsystems] =
+        await Promise.all([
+          this.prisma.task.findMany({
+            where: {
+              ...scope.taskWhere,
+              deletedAt: null,
+              isArchived: false,
+              status: { not: TaskStatus.COMPLETED },
             },
-          },
-          include: {
-            user: { select: { name: true } },
-          },
-        }),
-        this.prisma.subsystem.findMany({
-          select: {
-            id: true,
-            name: true,
-          },
-        }),
-      ]);
+            include: {
+              subsystem: { select: { name: true } },
+              assignedTo: {
+                select: { id: true, name: true, availabilityScore: true },
+              },
+            },
+          }),
+          this.prisma.aIInsight.findMany({
+            where: scope.actor.globalAuthority ? {} : { id: { in: [] } },
+            take: 3,
+            orderBy: { createdAt: "desc" },
+            include: {
+              subsystem: { select: { name: true } },
+            },
+          }),
+          this.prisma.workLog.findMany({
+            where: {
+              ...(scope.actor.globalAuthority ? {} : { id: { in: [] } }),
+              startedAt: {
+                gte: new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000),
+              },
+            },
+            include: {
+              user: { select: { name: true } },
+            },
+          }),
+          this.prisma.subsystem.findMany({
+            where: scope.actor.globalAuthority ? {} : { id: { in: scope.ids } },
+            select: {
+              id: true,
+              name: true,
+            },
+          }),
+        ]);
 
       // Try OpenAI function calling first
       let derivedInsights: GeneratedInsight[] = [];
       try {
         derivedInsights = await this.generateInsightsWithOpenAI(
-          tasks.map(toTaskSnapshot),
+          this.taskSnapshots(tasks),
           recentWorklogs.map(toWorklogSnapshot),
           now,
         );
       } catch {
         // Fallback to deterministic heuristics
         derivedInsights = this.buildInsights(
-          tasks.map(toTaskSnapshot),
+          this.taskSnapshots(tasks),
           recentWorklogs.map(toWorklogSnapshot),
           now,
         );
       }
 
-      const normalizedStoredInsights: PersistedInsight[] =
-        storedInsights.map((insight) => ({
+      const normalizedStoredInsights: PersistedInsight[] = storedInsights.map(
+        (insight) => ({
           id: insight.id,
           title: insight.title,
           summary: insight.summary,
@@ -210,9 +280,16 @@ export class AiService {
           riskScore: Number(insight.riskScore),
           subsystem: insight.subsystem,
           createdAt: insight.createdAt,
-        }));
+        }),
+      );
 
-      await this.persistInsights(derivedInsights, normalizedStoredInsights, subsystems, dayStart);
+      if (scope.actor.globalAuthority)
+        await this.persistInsights(
+          derivedInsights,
+          normalizedStoredInsights,
+          subsystems,
+          dayStart,
+        );
 
       const persisted = normalizedStoredInsights.map((insight) => ({
         id: insight.id,
@@ -228,11 +305,11 @@ export class AiService {
         .sort((left, right) => right.riskScore - left.riskScore)
         .slice(0, 6);
 
-      const payload = insights.length ? insights : this.getSeedInsights();
+      const payload = insights.length ? insights : [];
       await this.cache.setJson(cacheKey, payload, 300);
       return payload;
     } catch {
-      const payload = this.getSeedInsights();
+      const payload: [] = [];
       await this.cache.setJson(cacheKey, payload, 120);
       return payload;
     }
@@ -244,11 +321,21 @@ export class AiService {
     now: Date,
   ): Promise<GeneratedInsight[]> {
     const activeTasks = tasks.filter((t) => t.status !== TaskStatus.COMPLETED);
-    const overdueTasks = activeTasks.filter((t) => t.deadline.getTime() < now.getTime());
-    const blockedTasks = activeTasks.filter((t) => t.status === TaskStatus.BLOCKED);
-    const highPriorityTasks = activeTasks.filter((t) => t.priority === TaskPriority.CRITICAL || t.priority === TaskPriority.HIGH);
+    const overdueTasks = activeTasks.filter(
+      (t) => t.deadline.getTime() < now.getTime(),
+    );
+    const blockedTasks = activeTasks.filter(
+      (t) => t.status === TaskStatus.BLOCKED,
+    );
+    const highPriorityTasks = activeTasks.filter(
+      (t) =>
+        t.priority === TaskPriority.CRITICAL ||
+        t.priority === TaskPriority.HIGH,
+    );
 
-    const workloadByUser = recentWorklogs.reduce<Record<string, { name: string; minutes: number }>>((acc, log) => {
+    const workloadByUser = recentWorklogs.reduce<
+      Record<string, { name: string; minutes: number }>
+    >((acc, log) => {
       const current = acc[log.userId] ?? { name: log.user.name, minutes: 0 };
       current.minutes += log.durationMin;
       acc[log.userId] = current;
@@ -259,13 +346,19 @@ export class AiService {
       .map(([userId, entry]) => ({
         id: userId,
         ...entry,
-        activeTasks: tasks.filter((task) => task.assignedTo?.id === userId).length,
+        activeTasks: tasks.filter((task) => task.assignedTo?.id === userId)
+          .length,
       }))
       .sort((left, right) => right.minutes - left.minutes)
       .slice(0, 5);
 
-    const subsystemWorkload = activeTasks.reduce<Record<string, { taskCount: number; totalHours: number }>>((acc, task) => {
-      const current = acc[task.subsystem.name] ?? { taskCount: 0, totalHours: 0 };
+    const subsystemWorkload = activeTasks.reduce<
+      Record<string, { taskCount: number; totalHours: number }>
+    >((acc, task) => {
+      const current = acc[task.subsystem.name] ?? {
+        taskCount: 0,
+        totalHours: 0,
+      };
       current.taskCount += 1;
       current.totalHours += Number(task.estimatedHours ?? 0);
       acc[task.subsystem.name] = current;
@@ -296,14 +389,22 @@ High priority (CRITICAL/HIGH): ${highPriorityTasks.length}
 Task details:
 ${activeTasks
   .slice(0, 20)
-  .map((t) => `- ${t.title} [${t.subsystem.name}] ${t.status} ${t.priority} deadline:${t.deadline.toISOString().split("T")[0]} est:${t.estimatedHours}h deps:${t.dependencyIds.length} assignee:${t.assignedTo?.name ?? "unassigned"}`)
+  .map(
+    (t) =>
+      `- ${t.title} [${t.subsystem.name}] ${t.status} ${t.priority} deadline:${t.deadline.toISOString().split("T")[0]} est:${t.estimatedHours}h deps:${t.dependencyIds.length} assignee:${t.assignedTo?.name ?? "unassigned"}`,
+  )
   .join("\n")}
 
 Recent worklogs (7 days):
 ${topWorklogUsers.map((u) => `- ${u.name}: ${Math.round(u.minutes / 60)}h across ${u.activeTasks} tasks`).join("\n")}
 
 Subsystem workload:
-${Object.entries(subsystemWorkload).map(([name, s]) => `- ${name}: ${s.taskCount} tasks, ${Math.round(s.totalHours)}h`).join("\n")}
+${Object.entries(subsystemWorkload)
+  .map(
+    ([name, s]) =>
+      `- ${name}: ${s.taskCount} tasks, ${Math.round(s.totalHours)}h`,
+  )
+  .join("\n")}
 
 Generate insights as a function call to "generate_insights".`;
 
@@ -322,12 +423,22 @@ Generate insights as a function call to "generate_insights".`;
                   id: { type: "string" },
                   title: { type: "string" },
                   summary: { type: "string" },
-                  severity: { type: "string", enum: ["INFO", "WARNING", "CRITICAL"] },
+                  severity: {
+                    type: "string",
+                    enum: ["INFO", "WARNING", "CRITICAL"],
+                  },
                   recommendation: { type: "string" },
                   riskScore: { type: "number", minimum: 0, maximum: 99 },
                   subsystem: { type: "string" },
                 },
-                required: ["id", "title", "summary", "severity", "recommendation", "riskScore"],
+                required: [
+                  "id",
+                  "title",
+                  "summary",
+                  "severity",
+                  "recommendation",
+                  "riskScore",
+                ],
               },
             },
           },
@@ -345,7 +456,9 @@ Generate insights as a function call to "generate_insights".`;
       });
 
       if (result.functionCall) {
-        const parsed = JSON.parse(result.functionCall.arguments) as { insights: OpenAiInsight[] };
+        const parsed = JSON.parse(result.functionCall.arguments) as {
+          insights: OpenAiInsight[];
+        };
         return parsed.insights.map((insight) => ({
           id: insight.id,
           title: insight.title,
@@ -364,9 +477,13 @@ Generate insights as a function call to "generate_insights".`;
     return this.buildInsights(tasks, recentWorklogs, now);
   }
 
-  async getSmartReminders() {
-    const cacheKey = "ai:reminders";
-    const cached = await this.cache.getJson<Array<{ id: string; message: string; priority: string }>>(cacheKey);
+  async getSmartReminders(actorId: string) {
+    const scope = await this.scope(actorId);
+    const cacheKey = `ai:reminders:${scope.key}`;
+    const cached =
+      await this.cache.getJson<
+        Array<{ id: string; message: string; priority: string }>
+      >(cacheKey);
     if (cached) {
       return cached;
     }
@@ -376,6 +493,7 @@ Generate insights as a function call to "generate_insights".`;
       const soon = new Date(now.getTime() + 48 * 60 * 60 * 1000);
       const tasks = await this.prisma.task.findMany({
         where: {
+          ...scope.taskWhere,
           deletedAt: null,
           isArchived: false,
           status: {
@@ -391,9 +509,14 @@ Generate insights as a function call to "generate_insights".`;
         take: 6,
       });
 
-      const reminders = tasks.map(toTaskSnapshot).map((task: TaskSnapshot) => {
+      const reminders = this.taskSnapshots(tasks).map((task: TaskSnapshot) => {
         const overdue = task.deadline.getTime() < now.getTime();
-        const dueHours = Math.max(1, Math.round((task.deadline.getTime() - now.getTime()) / (60 * 60 * 1000)));
+        const dueHours = Math.max(
+          1,
+          Math.round(
+            (task.deadline.getTime() - now.getTime()) / (60 * 60 * 1000),
+          ),
+        );
         const dependencyNote = task.dependencyIds.length
           ? ` ${task.dependencyIds.length} dependency link${task.dependencyIds.length > 1 ? "s are" : " is"} in play.`
           : "";
@@ -412,19 +535,28 @@ Generate insights as a function call to "generate_insights".`;
         };
       });
 
-      const payload = reminders.length ? reminders : this.getSeedReminders();
+      const payload = reminders.length ? reminders : [];
       await this.cache.setJson(cacheKey, payload, 300);
       return payload;
     } catch {
-      const payload = this.getSeedReminders();
+      const payload: [] = [];
       await this.cache.setJson(cacheKey, payload, 120);
       return payload;
     }
   }
 
-  async getSchedulingRecommendations() {
-    const cacheKey = "ai:schedule";
-    const cached = await this.cache.getJson<Array<{ id: string; title: string; reason: string }>>(cacheKey);
+  async getSchedulingRecommendations(actorId: string) {
+    const scope = await this.scope(actorId);
+    if (
+      !scope.actor.globalAuthority &&
+      (scope.actor.role !== "ADMIN" || !scope.ids.length)
+    )
+      return [];
+    const cacheKey = `ai:schedule:${scope.key}`;
+    const cached =
+      await this.cache.getJson<
+        Array<{ id: string; title: string; reason: string }>
+      >(cacheKey);
     if (cached) {
       return cached;
     }
@@ -435,6 +567,9 @@ Generate insights as a function call to "generate_insights".`;
       const [events, dueTasks] = await Promise.all([
         this.prisma.calendarEvent.findMany({
           where: {
+            ...(scope.actor.globalAuthority
+              ? {}
+              : { subsystemId: { in: scope.ids } }),
             startsAt: { gte: now, lte: horizon },
           },
           orderBy: { startsAt: "asc" },
@@ -445,6 +580,7 @@ Generate insights as a function call to "generate_insights".`;
         }),
         this.prisma.task.findMany({
           where: {
+            ...scope.taskWhere,
             deletedAt: null,
             isArchived: false,
             status: { not: TaskStatus.COMPLETED },
@@ -460,22 +596,31 @@ Generate insights as a function call to "generate_insights".`;
 
       const recommendations = this.buildScheduleRecommendations(
         events.map(toEventSnapshot),
-        dueTasks.map(toTaskSnapshot),
+        this.taskSnapshots(dueTasks),
       );
 
-      const payload = recommendations.length ? recommendations : this.getSeedSchedule();
+      const payload = recommendations.length ? recommendations : [];
       await this.cache.setJson(cacheKey, payload, 300);
       return payload;
     } catch {
-      const payload = this.getSeedSchedule();
+      const payload: [] = [];
       await this.cache.setJson(cacheKey, payload, 120);
       return payload;
     }
   }
 
-  async getWorkloadSuggestions() {
-    const cacheKey = "ai:workload";
-    const cached = await this.cache.getJson<Array<{ id: string; from: string; to: string; reason: string }>>(cacheKey);
+  async getWorkloadSuggestions(actorId: string) {
+    const scope = await this.scope(actorId);
+    if (
+      !scope.actor.globalAuthority &&
+      (scope.actor.role !== "ADMIN" || !scope.ids.length)
+    )
+      return [];
+    const cacheKey = `ai:workload:${scope.key}`;
+    const cached =
+      await this.cache.getJson<
+        Array<{ id: string; from: string; to: string; reason: string }>
+      >(cacheKey);
     if (cached) {
       return cached;
     }
@@ -483,6 +628,7 @@ Generate insights as a function call to "generate_insights".`;
     try {
       const tasks = await this.prisma.task.findMany({
         where: {
+          ...scope.taskWhere,
           deletedAt: null,
           isArchived: false,
           status: {
@@ -491,27 +637,31 @@ Generate insights as a function call to "generate_insights".`;
         },
         include: {
           subsystem: { select: { name: true } },
-          assignedTo: { select: { id: true, name: true, availabilityScore: true } },
+          assignedTo: {
+            select: { id: true, name: true, availabilityScore: true },
+          },
         },
       });
 
-      const suggestions = this.buildWorkloadSuggestions(tasks.map(toTaskSnapshot));
-      const payload = suggestions.length ? suggestions : this.getSeedWorkload();
+      const suggestions = this.buildWorkloadSuggestions(
+        this.taskSnapshots(tasks),
+      );
+      const payload = suggestions.length ? suggestions : [];
       await this.cache.setJson(cacheKey, payload, 300);
       return payload;
     } catch {
-      const payload = this.getSeedWorkload();
+      const payload: [] = [];
       await this.cache.setJson(cacheKey, payload, 120);
       return payload;
     }
   }
 
-  async getBundle() {
+  async getBundle(actorId: string) {
     const [insights, reminders, schedule, workload] = await Promise.all([
-      this.getInsights(),
-      this.getSmartReminders(),
-      this.getSchedulingRecommendations(),
-      this.getWorkloadSuggestions(),
+      this.getInsights(actorId),
+      this.getSmartReminders(actorId),
+      this.getSchedulingRecommendations(actorId),
+      this.getWorkloadSuggestions(actorId),
     ]);
 
     return { insights, reminders, schedule, workload };
@@ -528,17 +678,24 @@ Generate insights as a function call to "generate_insights".`;
         .filter((insight) => insight.createdAt >= dayStart)
         .map((insight) => `${insight.title}::${insight.subsystem?.name ?? ""}`),
     );
-    const subsystemMap = new Map(subsystems.map((subsystem) => [subsystem.name, subsystem.id]));
+    const subsystemMap = new Map(
+      subsystems.map((subsystem) => [subsystem.name, subsystem.id]),
+    );
 
     const records = insights
-      .filter((insight) => !existingKeys.has(`${insight.title}::${insight.subsystem ?? ""}`))
+      .filter(
+        (insight) =>
+          !existingKeys.has(`${insight.title}::${insight.subsystem ?? ""}`),
+      )
       .map((insight) => ({
         title: insight.title,
         summary: insight.summary,
         severity: insight.severity,
         recommendation: insight.recommendation,
         riskScore: insight.riskScore,
-        subsystemId: insight.subsystem ? subsystemMap.get(insight.subsystem) ?? null : null,
+        subsystemId: insight.subsystem
+          ? (subsystemMap.get(insight.subsystem) ?? null)
+          : null,
         actorId: null,
       }));
 
@@ -551,12 +708,20 @@ Generate insights as a function call to "generate_insights".`;
     });
   }
 
-  private buildInsights(tasks: TaskSnapshot[], recentWorklogs: WorklogSnapshot[], now: Date) {
+  private buildInsights(
+    tasks: TaskSnapshot[],
+    recentWorklogs: WorklogSnapshot[],
+    now: Date,
+  ) {
     const insights: GeneratedInsight[] = [];
 
     const overdueTasks = tasks
       .filter((task) => task.deadline.getTime() < now.getTime())
-      .sort((left, right) => this.priorityWeight(right.priority) - this.priorityWeight(left.priority));
+      .sort(
+        (left, right) =>
+          this.priorityWeight(right.priority) -
+          this.priorityWeight(left.priority),
+      );
 
     if (overdueTasks.length) {
       const top = overdueTasks[0];
@@ -566,17 +731,26 @@ Generate insights as a function call to "generate_insights".`;
       insights.push({
         id: `overdue-${top.id}`,
         title: `${top.subsystem.name} deadline slip risk`,
-        severity: top.priority === TaskPriority.CRITICAL ? InsightSeverity.CRITICAL : InsightSeverity.WARNING,
+        severity:
+          top.priority === TaskPriority.CRITICAL
+            ? InsightSeverity.CRITICAL
+            : InsightSeverity.WARNING,
         summary: `${overdueTasks.length} active task${overdueTasks.length > 1 ? "s are" : " is"} already past deadline, led by "${top.title}".`,
-        recommendation: "Recover schedule by narrowing scope, reassigning verification support, and revising the next integration checkpoint.",
-        riskScore: Math.min(99, 68 + overdueTasks.length * 8 + this.priorityWeight(top.priority) * 4),
+        recommendation:
+          "Recover schedule by narrowing scope, reassigning verification support, and revising the next integration checkpoint.",
+        riskScore: Math.min(
+          99,
+          68 + overdueTasks.length * 8 + this.priorityWeight(top.priority) * 4,
+        ),
         subsystem: top.subsystem.name,
       });
     }
 
     const blockedTasks = tasks
       .filter((task) => task.status === TaskStatus.BLOCKED)
-      .sort((left, right) => right.dependencyIds.length - left.dependencyIds.length);
+      .sort(
+        (left, right) => right.dependencyIds.length - left.dependencyIds.length,
+      );
 
     if (blockedTasks.length) {
       const top = blockedTasks[0];
@@ -586,10 +760,19 @@ Generate insights as a function call to "generate_insights".`;
       insights.push({
         id: `blocked-${top.id}`,
         title: "Dependency chain blockage detected",
-        severity: top.dependencyIds.length >= 2 ? InsightSeverity.CRITICAL : InsightSeverity.WARNING,
+        severity:
+          top.dependencyIds.length >= 2
+            ? InsightSeverity.CRITICAL
+            : InsightSeverity.WARNING,
         summary: `"${top.title}" is blocked with ${top.dependencyIds.length || 1} dependency gate${top.dependencyIds.length === 1 ? "" : "s"} still unresolved.`,
-        recommendation: "Convert blocked dependencies into named owners and clear the highest-impact prerequisite before the next subsystem sync.",
-        riskScore: Math.min(96, 62 + top.dependencyIds.length * 10 + this.priorityWeight(top.priority) * 3),
+        recommendation:
+          "Convert blocked dependencies into named owners and clear the highest-impact prerequisite before the next subsystem sync.",
+        riskScore: Math.min(
+          96,
+          62 +
+            top.dependencyIds.length * 10 +
+            this.priorityWeight(top.priority) * 3,
+        ),
         subsystem: top.subsystem.name,
       });
     }
@@ -598,7 +781,11 @@ Generate insights as a function call to "generate_insights".`;
     const overloaded = workload[0];
     const underloaded = workload[workload.length - 1];
 
-    if (overloaded && underloaded && overloaded.activeTasks - underloaded.activeTasks >= 2) {
+    if (
+      overloaded &&
+      underloaded &&
+      overloaded.activeTasks - underloaded.activeTasks >= 2
+    ) {
       insights.push({
         id: `imbalance-${overloaded.id}`,
         title: "Contributor load imbalance",
@@ -609,7 +796,9 @@ Generate insights as a function call to "generate_insights".`;
       });
     }
 
-    const worklogByUser = recentWorklogs.reduce<Record<string, { name: string; minutes: number }>>((acc, log) => {
+    const worklogByUser = recentWorklogs.reduce<
+      Record<string, { name: string; minutes: number }>
+    >((acc, log) => {
       const current = acc[log.userId] ?? { name: log.user.name, minutes: 0 };
       current.minutes += log.durationMin;
       acc[log.userId] = current;
@@ -620,35 +809,60 @@ Generate insights as a function call to "generate_insights".`;
       .map(([userId, entry]) => ({
         id: userId,
         ...entry,
-        activeTasks: tasks.filter((task) => task.assignedTo?.id === userId).length,
+        activeTasks: tasks.filter((task) => task.assignedTo?.id === userId)
+          .length,
       }))
       .sort((left, right) => right.minutes - left.minutes)[0];
 
-    if (burnoutCandidate && burnoutCandidate.minutes >= 480 && burnoutCandidate.activeTasks >= 2) {
+    if (
+      burnoutCandidate &&
+      burnoutCandidate.minutes >= 480 &&
+      burnoutCandidate.activeTasks >= 2
+    ) {
       insights.push({
         id: `burnout-${burnoutCandidate.id}`,
         title: "Burnout indicator rising",
         severity: InsightSeverity.WARNING,
         summary: `${burnoutCandidate.name} logged ${Math.round(burnoutCandidate.minutes / 60)}h this week across ${burnoutCandidate.activeTasks} active tasks.`,
-        recommendation: "Protect integration quality by redistributing one task and keeping the next review scoped to blocker resolution only.",
-        riskScore: Math.min(92, 50 + Math.round(burnoutCandidate.minutes / 30) + burnoutCandidate.activeTasks * 4),
+        recommendation:
+          "Protect integration quality by redistributing one task and keeping the next review scoped to blocker resolution only.",
+        riskScore: Math.min(
+          92,
+          50 +
+            Math.round(burnoutCandidate.minutes / 30) +
+            burnoutCandidate.activeTasks * 4,
+        ),
       });
     }
 
     return insights;
   }
 
-  private buildScheduleRecommendations(events: EventSnapshot[], dueTasks: TaskSnapshot[]) {
-    const recommendations: Array<{ id: string; title: string; reason: string }> = [];
+  private buildScheduleRecommendations(
+    events: EventSnapshot[],
+    dueTasks: TaskSnapshot[],
+  ) {
+    const recommendations: Array<{
+      id: string;
+      title: string;
+      reason: string;
+    }> = [];
 
-    const byDay = events.reduce<Record<string, EventSnapshot[]>>((acc, event) => {
-      const key = event.startsAt.toISOString().slice(0, 10);
-      acc[key] = [...(acc[key] ?? []), event];
-      return acc;
-    }, {});
+    const byDay = events.reduce<Record<string, EventSnapshot[]>>(
+      (acc, event) => {
+        const key = event.startsAt.toISOString().slice(0, 10);
+        acc[key] = [...(acc[key] ?? []), event];
+        return acc;
+      },
+      {},
+    );
 
     const overloadedDay = Object.entries(byDay)
-      .map(([day, dayEvents]) => ({ day, count: dayEvents.length, events: dayEvents }))
+      .map(([day, dayEvents]) => ({
+        day,
+        count: dayEvents.length,
+        events: dayEvents,
+      }))
       .sort((left, right) => right.count - left.count)[0];
 
     if (overloadedDay && overloadedDay.count >= 2) {
@@ -664,8 +878,14 @@ Generate insights as a function call to "generate_insights".`;
     }
 
     const criticalDue = dueTasks
-      .filter((task) => task.priority === TaskPriority.CRITICAL || task.priority === TaskPriority.HIGH)
-      .sort((left, right) => left.deadline.getTime() - right.deadline.getTime())[0];
+      .filter(
+        (task) =>
+          task.priority === TaskPriority.CRITICAL ||
+          task.priority === TaskPriority.HIGH,
+      )
+      .sort(
+        (left, right) => left.deadline.getTime() - right.deadline.getTime(),
+      )[0];
 
     if (criticalDue) {
       recommendations.push({
@@ -679,8 +899,13 @@ Generate insights as a function call to "generate_insights".`;
   }
 
   private buildWorkloadSuggestions(tasks: TaskSnapshot[]) {
-    const bySubsystem = tasks.reduce<Record<string, { totalHours: number; taskCount: number }>>((acc, task) => {
-      const current = acc[task.subsystem.name] ?? { totalHours: 0, taskCount: 0 };
+    const bySubsystem = tasks.reduce<
+      Record<string, { totalHours: number; taskCount: number }>
+    >((acc, task) => {
+      const current = acc[task.subsystem.name] ?? {
+        totalHours: 0,
+        taskCount: 0,
+      };
       current.totalHours += Number(task.estimatedHours ?? 0);
       current.taskCount += 1;
       acc[task.subsystem.name] = current;
@@ -692,13 +917,13 @@ Generate insights as a function call to "generate_insights".`;
       .sort((left, right) => right.totalHours - left.totalHours);
 
     if (ranked.length < 2) {
-      return this.getSeedWorkload();
+      return [];
     }
 
     const heaviest = ranked[0];
     const lightest = ranked[ranked.length - 1];
     if (!heaviest || !lightest) {
-      return this.getSeedWorkload();
+      return [];
     }
 
     return [
@@ -711,20 +936,31 @@ Generate insights as a function call to "generate_insights".`;
     ];
   }
 
-  async getScheduleRisk(horizonDays = 14, simulations = 1000) {
-    const cacheKey = `ai:schedule-risk:${horizonDays}:${simulations}`;
-    const cached = await this.cache.getJson<any>(cacheKey);
+  async getScheduleRisk(horizonDays = 14, simulations = 1000, actorId: string) {
+    const scope = await this.scope(actorId);
+    if (!scope.actor.globalAuthority && scope.actor.role !== "ADMIN")
+      throw new ForbiddenException("Administrative schedule risk denied");
+    if (!scope.actor.globalAuthority && !scope.ids.length)
+      return this.getSeedScheduleRisk();
+    const cacheKey = `ai:schedule-risk:${scope.key}:${horizonDays}:${simulations}`;
+    const cached =
+      await this.cache.getJson<
+        ReturnType<AiService["runMonteCarloScheduleRisk"]>
+      >(cacheKey);
     if (cached) {
       return cached;
     }
 
     try {
       const now = new Date();
-      const horizon = new Date(now.getTime() + horizonDays * 24 * 60 * 60 * 1000);
+      const horizon = new Date(
+        now.getTime() + horizonDays * 24 * 60 * 60 * 1000,
+      );
 
       const [tasks, worklogs] = await Promise.all([
         this.prisma.task.findMany({
           where: {
+            ...scope.taskWhere,
             deletedAt: null,
             isArchived: false,
             status: { not: TaskStatus.COMPLETED },
@@ -732,12 +968,15 @@ Generate insights as a function call to "generate_insights".`;
           },
           include: {
             subsystem: { select: { name: true } },
-            assignedTo: { select: { id: true, name: true, availabilityScore: true } },
+            assignedTo: {
+              select: { id: true, name: true, availabilityScore: true },
+            },
           },
           orderBy: [{ priority: "desc" }, { deadline: "asc" }],
         }),
         this.prisma.workLog.findMany({
           where: {
+            ...(scope.actor.globalAuthority ? {} : { id: { in: [] } }),
             startedAt: {
               gte: new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000),
             },
@@ -760,7 +999,7 @@ Generate insights as a function call to "generate_insights".`;
       }));
 
       const riskResult = this.runMonteCarloScheduleRisk(
-        tasks.map(toTaskSnapshot),
+        this.taskSnapshots(tasks),
         normalizedWorklogs,
         now,
         horizon,
@@ -787,26 +1026,29 @@ Generate insights as a function call to "generate_insights".`;
     simulations: number,
   ) {
     // Calculate historical velocity variance per user
-    const userVelocity = historicalWorklogs.reduce<Record<string, { durations: number[]; estimatedHours: number[] }>>(
-      (acc, log) => {
-        if (!log.task?.estimatedHours) return acc;
-        const estimated = Number(log.task.estimatedHours);
-        const actual = log.durationMin / 60;
-        const current = acc[log.userId] ?? { durations: [], estimatedHours: [] };
-        current.durations.push(actual);
-        current.estimatedHours.push(estimated);
-        acc[log.userId] = current;
-        return acc;
-      },
-      {},
-    );
+    const userVelocity = historicalWorklogs.reduce<
+      Record<string, { durations: number[]; estimatedHours: number[] }>
+    >((acc, log) => {
+      if (!log.task?.estimatedHours) return acc;
+      const estimated = Number(log.task.estimatedHours);
+      const actual = log.durationMin / 60;
+      const current = acc[log.userId] ?? { durations: [], estimatedHours: [] };
+      current.durations.push(actual);
+      current.estimatedHours.push(estimated);
+      acc[log.userId] = current;
+      return acc;
+    }, {});
 
     const userVariance: Record<string, number> = {};
     for (const [userId, data] of Object.entries(userVelocity)) {
       if (data.durations.length >= 2) {
-        const ratios = data.durations.map((d, i) => d / (data.estimatedHours[i] || 1));
+        const ratios = data.durations.map(
+          (d, i) => d / (data.estimatedHours[i] || 1),
+        );
         const mean = ratios.reduce((a, b) => a + b, 0) / ratios.length;
-        const variance = ratios.reduce((sum, r) => sum + Math.pow(r - mean, 2), 0) / ratios.length;
+        const variance =
+          ratios.reduce((sum, r) => sum + Math.pow(r - mean, 2), 0) /
+          ratios.length;
         userVariance[userId] = Math.max(0.1, Math.min(2.0, variance));
       } else {
         userVariance[userId] = 0.3; // Default variance
@@ -821,7 +1063,8 @@ Generate insights as a function call to "generate_insights".`;
 
       // Sort tasks by priority and deadline for scheduling order
       const sortedTasks = [...tasks].sort((a, b) => {
-        const priorityDiff = this.priorityWeight(b.priority) - this.priorityWeight(a.priority);
+        const priorityDiff =
+          this.priorityWeight(b.priority) - this.priorityWeight(a.priority);
         if (priorityDiff !== 0) return priorityDiff;
         return a.deadline.getTime() - b.deadline.getTime();
       });
@@ -829,11 +1072,14 @@ Generate insights as a function call to "generate_insights".`;
       for (const task of sortedTasks) {
         const estimatedHours = Number(task.estimatedHours ?? 1);
         const assignee = task.assignedTo?.id;
-        const variance = assignee && userVariance[assignee] ? userVariance[assignee] : 0.3;
-        
+        const variance =
+          assignee && userVariance[assignee] ? userVariance[assignee] : 0.3;
+
         // Sample from log-normal distribution for task duration
         const meanLog = Math.log(estimatedHours) - 0.5 * variance * variance;
-        const sampledHours = Math.exp(meanLog + Math.sqrt(variance) * this.boxMuller());
+        const sampledHours = Math.exp(
+          meanLog + Math.sqrt(variance) * this.boxMuller(),
+        );
         const taskDurationMs = Math.max(0.5, sampledHours) * 60 * 60 * 1000;
 
         // Account for dependencies
@@ -865,32 +1111,48 @@ Generate insights as a function call to "generate_insights".`;
     }
 
     // Calculate percentiles
-    const results = Object.entries(taskCompletionTimes).map(([taskId, times]) => {
-      const sorted = times.sort((a, b) => a - b);
-      const p50 = sorted[Math.floor(sorted.length * 0.5)];
-      const p90 = sorted[Math.floor(sorted.length * 0.9)];
-      const overdueProb = times.filter((t) => t > horizon.getTime()).length / times.length;
-      
-      const task = tasks.find((t) => t.id === taskId);
-      return {
-        taskId,
-        title: task?.title ?? "Unknown",
-        subsystem: task?.subsystem.name ?? "Unknown",
-        priority: task?.priority ?? TaskPriority.MEDIUM,
-        deadline: task?.deadline.toISOString(),
-        p50Completion: p50 ? new Date(p50).toISOString() : null,
-        p90Completion: p90 ? new Date(p90).toISOString() : null,
-        overdueProbability: Math.round(overdueProb * 100),
-        riskLevel: overdueProb > 0.5 ? "CRITICAL" : overdueProb > 0.2 ? "HIGH" : overdueProb > 0.05 ? "MEDIUM" : "LOW",
-      };
-    });
+    const results = Object.entries(taskCompletionTimes).map(
+      ([taskId, times]) => {
+        const sorted = times.sort((a, b) => a - b);
+        const p50 = sorted[Math.floor(sorted.length * 0.5)];
+        const p90 = sorted[Math.floor(sorted.length * 0.9)];
+        const overdueProb =
+          times.filter((t) => t > horizon.getTime()).length / times.length;
+
+        const task = tasks.find((t) => t.id === taskId);
+        return {
+          taskId,
+          title: task?.title ?? "Unknown",
+          subsystem: task?.subsystem.name ?? "Unknown",
+          priority: task?.priority ?? TaskPriority.MEDIUM,
+          deadline: task?.deadline.toISOString(),
+          p50Completion: p50 ? new Date(p50).toISOString() : null,
+          p90Completion: p90 ? new Date(p90).toISOString() : null,
+          overdueProbability: Math.round(overdueProb * 100),
+          riskLevel:
+            overdueProb > 0.5
+              ? "CRITICAL"
+              : overdueProb > 0.2
+                ? "HIGH"
+                : overdueProb > 0.05
+                  ? "MEDIUM"
+                  : "LOW",
+        };
+      },
+    );
 
     // Overall project risk
-    const totalOverdue = results.filter((r) => r.overdueProbability > 50).length;
-    const highRiskCount = results.filter((r) => r.riskLevel === "CRITICAL" || r.riskLevel === "HIGH").length;
+    const totalOverdue = results.filter(
+      (r) => r.overdueProbability > 50,
+    ).length;
+    const highRiskCount = results.filter(
+      (r) => r.riskLevel === "CRITICAL" || r.riskLevel === "HIGH",
+    ).length;
 
     return {
-      taskRisks: results.sort((a, b) => b.overdueProbability - a.overdueProbability),
+      taskRisks: results.sort(
+        (a, b) => b.overdueProbability - a.overdueProbability,
+      ),
       summary: {
         totalTasks: results.length,
         tasksAtRisk: totalOverdue,
@@ -902,7 +1164,9 @@ Generate insights as a function call to "generate_insights".`;
     };
   }
 
-  private getOverallP50(taskCompletionTimes: Record<string, number[]>): string | null {
+  private getOverallP50(
+    taskCompletionTimes: Record<string, number[]>,
+  ): string | null {
     const allEndTimes = Object.values(taskCompletionTimes).flat();
     if (allEndTimes.length === 0) return null;
     const sorted = allEndTimes.sort((a, b) => a - b);
@@ -910,7 +1174,9 @@ Generate insights as a function call to "generate_insights".`;
     return median ? new Date(median).toISOString() : null;
   }
 
-  private getOverallP90(taskCompletionTimes: Record<string, number[]>): string | null {
+  private getOverallP90(
+    taskCompletionTimes: Record<string, number[]>,
+  ): string | null {
     const allEndTimes = Object.values(taskCompletionTimes).flat();
     if (allEndTimes.length === 0) return null;
     const sorted = allEndTimes.sort((a, b) => a - b);
@@ -941,16 +1207,26 @@ Generate insights as a function call to "generate_insights".`;
 
   private aggregateAssigneeLoad(tasks: TaskSnapshot[]) {
     return Object.values(
-      tasks.reduce<Record<string, { id: string; name: string; activeTasks: number; availabilityScore: number }>>((acc, task) => {
+      tasks.reduce<
+        Record<
+          string,
+          {
+            id: string;
+            name: string;
+            activeTasks: number;
+            availabilityScore: number;
+          }
+        >
+      >((acc, task) => {
         if (!task.assignedTo) {
           return acc;
         }
 
         const current = acc[task.assignedTo.id] ?? {
-          id: task.assignedTo.id,
+          id: task.assignedTo.id ?? "",
           name: task.assignedTo.name,
           activeTasks: 0,
-          availabilityScore: task.assignedTo.availabilityScore,
+          availabilityScore: task.assignedTo.availabilityScore ?? 0,
         };
 
         current.activeTasks += 1;
@@ -985,8 +1261,10 @@ Generate insights as a function call to "generate_insights".`;
         id: "ai-1",
         title: "Telemetry integration delay risk",
         severity: InsightSeverity.WARNING,
-        summary: "Firmware validation is now on the critical path for avionics-to-ground station verification.",
-        recommendation: "Reassign one ground station operator to firmware review and move rehearsal one day later.",
+        summary:
+          "Firmware validation is now on the critical path for avionics-to-ground station verification.",
+        recommendation:
+          "Reassign one ground station operator to firmware review and move rehearsal one day later.",
         riskScore: 74,
         subsystem: "Avionics",
       },
@@ -994,8 +1272,10 @@ Generate insights as a function call to "generate_insights".`;
         id: "ai-2",
         title: "Workload imbalance detected",
         severity: InsightSeverity.INFO,
-        summary: "Payload tasks are concentrated around two contributors. Reassignment could improve schedule resilience.",
-        recommendation: "Shift documentation and test prep from payload to structures for one sprint.",
+        summary:
+          "Payload tasks are concentrated around two contributors. Reassignment could improve schedule resilience.",
+        recommendation:
+          "Shift documentation and test prep from payload to structures for one sprint.",
         riskScore: 51,
         subsystem: "Payload",
       },
@@ -1006,12 +1286,14 @@ Generate insights as a function call to "generate_insights".`;
     return [
       {
         id: "r1",
-        message: "Telemetry integration depends on your firmware task. Delay risk detected.",
+        message:
+          "Telemetry integration depends on your firmware task. Delay risk detected.",
         priority: "HIGH",
       },
       {
         id: "r2",
-        message: "Payload review is 24 hours away and one prerequisite CAD note is still open.",
+        message:
+          "Payload review is 24 hours away and one prerequisite CAD note is still open.",
         priority: "MEDIUM",
       },
     ];
@@ -1022,12 +1304,14 @@ Generate insights as a function call to "generate_insights".`;
       {
         id: "s1",
         title: "Move payload review to Thursday 5:00 PM",
-        reason: "This is the earliest slot with software, payload, and faculty mentor overlap.",
+        reason:
+          "This is the earliest slot with software, payload, and faculty mentor overlap.",
       },
       {
         id: "s2",
         title: "Pull ground station rehearsal forward by 1 day",
-        reason: "Comms risk is low and it opens buffer before integration review.",
+        reason:
+          "Comms risk is low and it opens buffer before integration review.",
       },
     ];
   }
@@ -1038,21 +1322,25 @@ Generate insights as a function call to "generate_insights".`;
         id: "w1",
         from: "Payload",
         to: "Structures",
-        reason: "Structures has spare capacity and compatible documentation bandwidth.",
+        reason:
+          "Structures has spare capacity and compatible documentation bandwidth.",
       },
       {
         id: "w2",
         from: "Software",
         to: "Ground Station",
-        reason: "Ground station can absorb verification scripting with lower deadline pressure.",
+        reason:
+          "Ground station can absorb verification scripting with lower deadline pressure.",
       },
     ];
   }
 
   private buildSeedSummary(text: string, context?: string) {
     const trimmed = text.trim().replace(/\s+/g, " ");
-    const excerpt = trimmed.length > 220 ? `${trimmed.slice(0, 220)}...` : trimmed;
-    return [context ? `Context: ${context}.` : null, `Summary: ${excerpt}`].filter(Boolean).join(" ");
+    const excerpt =
+      trimmed.length > 220 ? `${trimmed.slice(0, 220)}...` : trimmed;
+    return [context ? `Context: ${context}.` : null, `Summary: ${excerpt}`]
+      .filter(Boolean)
+      .join(" ");
   }
 }
-

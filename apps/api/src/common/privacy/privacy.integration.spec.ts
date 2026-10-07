@@ -258,7 +258,12 @@ integration("Phase 3 real PostgreSQL and authenticated HTTP", () => {
         {
           provide: NotificationsService,
           useFactory: (queue: Queue) =>
-            new NotificationsService(db, config, queue),
+            new NotificationsService(
+              db,
+              config,
+              queue,
+              new CoreAuthorizationService(db, new AuthorizationService(db)),
+            ),
           inject: ["test-email-queue"],
         },
         { provide: PrismaService, useValue: db },
@@ -304,6 +309,24 @@ integration("Phase 3 real PostgreSQL and authenticated HTTP", () => {
     await root?.$disconnect();
     if (temp) rmSync(temp, { recursive: true, force: true });
   });
+
+  async function rejectingWrite(
+    table: "WorkLog" | "Attachment" | "CalendarEvent",
+    run: () => Promise<void>,
+  ) {
+    await db.$executeRawUnsafe(
+      `CREATE FUNCTION "${schema}".reject_write() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'private database failure'; END; $$`,
+    );
+    await db.$executeRawUnsafe(
+      `CREATE TRIGGER privacy_reject BEFORE INSERT OR UPDATE ON "${table}" FOR EACH ROW EXECUTE FUNCTION "${schema}".reject_write()`,
+    );
+    try {
+      await run();
+    } finally {
+      await db.$executeRawUnsafe(`DROP TRIGGER privacy_reject ON "${table}"`);
+      await db.$executeRawUnsafe(`DROP FUNCTION "${schema}".reject_write()`);
+    }
+  }
 
   it.each(["assignedById", "createdById", "actorId"])(
     "rejects task spoof field %s",
@@ -401,33 +424,42 @@ integration("Phase 3 real PostgreSQL and authenticated HTTP", () => {
     ).toBe(200);
   });
   it.each(["/worklogs", "/worklogs/start"])(
-    "real FK failure at %s returns non-success and no row",
+    "real database failure at %s returns non-success and no row",
     async (route) => {
       const before = await db.workLog.count();
-      const input = route.endsWith("start")
-        ? { taskId: "missing" }
-        : { ...worklogInput(), taskId: "missing" };
-      const res = await request(route, "POST", input, memberToken);
-      expect(res.status).toBe(500);
-      expect(await res.json()).toEqual({
-        statusCode: 500,
-        message: "Internal server error",
+      await rejectingWrite("WorkLog", async () => {
+        const res = await request(
+          route,
+          "POST",
+          route.endsWith("start") ? { taskId } : worklogInput(),
+          memberToken,
+        );
+        expect(res.status).toBe(500);
+        expect(await res.json()).toEqual({
+          statusCode: 500,
+          message: "Internal server error",
+        });
       });
       expect(await db.workLog.count()).toBe(before);
     },
   );
   it("stop database failure is not success", async () => {
-    jest
-      .spyOn(db.workLog, "update")
-      .mockRejectedValueOnce(new Error("secret connection string"));
-    const res = await request(
-      `/worklogs/${taskId}/stop`,
-      "PATCH",
-      { endedAt: new Date().toISOString(), durationMin: 1 },
-      memberToken,
-    );
-    expect(res.status).toBe(500);
-    expect(await res.text()).not.toContain("secret");
+    const log = await db.workLog.create({
+      data: { userId: "member", taskId, durationMin: 1, startedAt: new Date() },
+    });
+    await rejectingWrite("WorkLog", async () => {
+      const res = await request(
+        `/worklogs/${log.id}/stop`,
+        "PATCH",
+        { endedAt: new Date().toISOString(), durationMin: 1 },
+        memberToken,
+      );
+      expect(res.status).toBe(500);
+      expect(await res.text()).not.toContain("private");
+    });
+    expect(
+      (await db.workLog.findUniqueOrThrow({ where: { id: log.id } })).endedAt,
+    ).toBeNull();
   });
   it.each(["/tasks", "/worklogs"])(
     "safe nested response at %s",
@@ -519,16 +551,13 @@ integration("Phase 3 real PostgreSQL and authenticated HTTP", () => {
     expect(await res.text()).not.toContain("secret");
     expect(await db.attachment.count()).toBe(before);
   });
-  it("metadata FK failure compensates successful upload and leaves no row", async () => {
+  it("metadata DB failure compensates successful upload and leaves no row", async () => {
     const before = await db.attachment.count();
-    expect(
-      (
-        await request("/files/attachments", "POST", {
-          ...fileInput,
-          taskId: "missing",
-        })
-      ).status,
-    ).toBe(500);
+    await rejectingWrite("Attachment", async () => {
+      expect(
+        (await request("/files/attachments", "POST", fileInput)).status,
+      ).toBe(500);
+    });
     expect(google.deleteDriveFile).toHaveBeenCalledWith("stored-drive-file");
     expect(await db.attachment.count()).toBe(before);
   });
@@ -571,12 +600,11 @@ integration("Phase 3 real PostgreSQL and authenticated HTTP", () => {
   });
   it("Calendar DB failure is non-success and compensates provider event", async () => {
     google.isCalendarConfigured.mockReturnValue(true);
-    jest
-      .spyOn(db.calendarEvent, "create")
-      .mockRejectedValueOnce(new Error("DB failed"));
-    expect(
-      (await request("/calendar/events", "POST", calendarInput)).status,
-    ).toBe(500);
+    await rejectingWrite("CalendarEvent", async () => {
+      expect(
+        (await request("/calendar/events", "POST", calendarInput)).status,
+      ).toBe(500);
+    });
     expect(google.deleteCalendarEvent).toHaveBeenCalledWith("stored-event");
   });
   it("configured Calendar success links the real provider record", async () => {
@@ -601,7 +629,7 @@ integration("Phase 3 real PostgreSQL and authenticated HTTP", () => {
             method === "PATCH" ? { isRead: true } : undefined,
           )
         ).status,
-      ).toBe(500);
+      ).toBe(404);
     },
   );
   it("metrics requires current OWNER session", async () => {

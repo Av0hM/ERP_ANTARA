@@ -10,7 +10,7 @@ import { TasksService } from "./tasks.service";
 
 describe("TasksService", () => {
   const prisma = {
-    user: { findUnique: jest.fn() },
+    user: { findUnique: jest.fn(), findFirst: jest.fn() },
     $transaction: jest.fn(),
     $queryRaw: jest.fn(),
     auditLog: { create: jest.fn() },
@@ -39,6 +39,7 @@ describe("TasksService", () => {
 
   beforeEach(async () => {
     jest.clearAllMocks();
+    prisma.user.findFirst.mockResolvedValue({ id: "member-1" });
     prisma.user.findUnique.mockResolvedValue({
       id: "owner",
       role: "OWNER",

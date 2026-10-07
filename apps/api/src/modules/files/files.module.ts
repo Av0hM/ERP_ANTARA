@@ -1,3 +1,4 @@
+import { AuthorizationModule } from "../../common/authorization/authorization.module";
 import { Module } from "@nestjs/common";
 
 import { PrismaModule } from "../../common/prisma/prisma.module";
@@ -7,7 +8,7 @@ import { FilesController } from "./files.controller";
 import { FilesService } from "./files.service";
 
 @Module({
-  imports: [PrismaModule, AuditModule],
+  imports: [AuthorizationModule, PrismaModule, AuditModule],
   controllers: [FilesController],
   providers: [FilesService, GoogleIntegrationService],
   exports: [FilesService],

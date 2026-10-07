@@ -10,6 +10,7 @@ import { lockAccounts } from "../sessions/session.service";
 import { AuthorizationService } from "./authorization.service";
 import { ActorContext } from "./authorization.types";
 import {
+  administeredSubsystemIds,
   canManageSubsystem,
   canReadSubsystem,
   isActiveActor,
@@ -36,6 +37,43 @@ export class CoreAuthorizationService {
     return scope.kind === "GLOBAL"
       ? {}
       : { subsystemId: { in: [...scope.ids] } };
+  }
+
+  managementScope(actor: ActorContext, subsystemId?: string) {
+    const scope = administeredSubsystemIds(actor);
+    if (!actor.globalAuthority && actor.role !== "ADMIN")
+      throw new ForbiddenException("Administrative scope required");
+    if (subsystemId) {
+      if (!canManageSubsystem(actor, subsystemId))
+        throw new ForbiddenException("Subsystem management denied");
+      return { kind: "SCOPED" as const, ids: [subsystemId] };
+    }
+    return scope;
+  }
+
+  async assertAssignee(
+    tx: Prisma.TransactionClient,
+    userId: string,
+    subsystemId: string,
+  ) {
+    // Caller holds the target User lock before the Task lock. Membership writers
+    // must hold that same User lock through membership/role synchronization.
+    const target = await tx.user.findFirst({
+      where: {
+        id: userId,
+        isActive: true,
+        deletedAt: null,
+        memberships: {
+          some: { subsystemId, accessLevel: { in: ["MEMBER", "ADMIN"] } },
+        },
+      },
+      select: { id: true },
+    });
+    if (!target)
+      throw new ForbiddenException({
+        code: "INVALID_TASK_ASSIGNEE",
+        message: "Assignee must be active and belong to the task subsystem",
+      });
   }
 
   decisionWhere(actor: ActorContext): Prisma.DecisionRecordWhereInput {

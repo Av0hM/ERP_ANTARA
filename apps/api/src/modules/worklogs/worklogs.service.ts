@@ -1,3 +1,4 @@
+import { CoreAuthorizationService } from "../../common/authorization/core-authorization.service";
 import { Prisma } from "@prisma/client";
 import { safeUserSelect } from "../../common/prisma/safe-user.select";
 import { Injectable, NotFoundException } from "@nestjs/common";
@@ -10,21 +11,39 @@ import { StopWorklogSessionDto } from "./dto/stop-worklog-session.dto";
 
 @Injectable()
 export class WorklogsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly core: CoreAuthorizationService,
+  ) {}
 
-  async list() {
-    return await this.prisma.workLog.findMany({
+  async list(actorId: string) {
+    const actor = await this.core.actor(actorId);
+    const logs = await this.prisma.workLog.findMany({
+      where: actor.globalAuthority ? {} : { userId: actorId },
       include: {
-        task: true,
+        task: { select: { id: true, title: true } },
         user: { select: safeUserSelect },
       },
       orderBy: { startedAt: "desc" },
       take: 50,
     });
+    const visible = new Set(
+      await this.core.visibleTaskIds(
+        actor,
+        logs.flatMap((log) => (log.taskId ? [log.taskId] : [])),
+      ),
+    );
+    return logs.map((log) => ({
+      ...log,
+      taskId: log.taskId && visible.has(log.taskId) ? log.taskId : null,
+      task: log.taskId && visible.has(log.taskId) ? log.task : null,
+    }));
   }
 
-  async summary() {
+  async summary(actorId: string) {
+    const actor = await this.core.actor(actorId);
     const worklogs = await this.prisma.workLog.findMany({
+      where: actor.globalAuthority ? {} : { userId: actorId },
       select: {
         durationMin: true,
       },
@@ -43,29 +62,41 @@ export class WorklogsService {
   }
 
   async create(payload: CreateWorklogDto, actorId: string) {
-    return await this.prisma.workLog.create({
-      data: {
-        userId: actorId,
-        taskId: payload.taskId,
-        startedAt: new Date(payload.startedAt),
-        endedAt: payload.endedAt ? new Date(payload.endedAt) : null,
-        durationMin: payload.durationMin,
-        notes: payload.notes,
-        source: WorklogSource.MANUAL,
-      },
+    return this.core.withActor(actorId, async (tx, actor) => {
+      if (payload.taskId) {
+        await this.core.lockTasks(tx, [payload.taskId]);
+        await this.core.task(actor, payload.taskId, "read", tx);
+      }
+      return tx.workLog.create({
+        data: {
+          userId: actorId,
+          taskId: payload.taskId,
+          startedAt: new Date(payload.startedAt),
+          endedAt: payload.endedAt ? new Date(payload.endedAt) : null,
+          durationMin: payload.durationMin,
+          notes: payload.notes,
+          source: WorklogSource.MANUAL,
+        },
+      });
     });
   }
 
   async startSession(payload: StartWorklogSessionDto, actorId: string) {
-    return await this.prisma.workLog.create({
-      data: {
-        userId: actorId,
-        taskId: payload.taskId,
-        startedAt: new Date(),
-        durationMin: 1,
-        notes: payload.notes,
-        source: WorklogSource.TIMER,
-      },
+    return this.core.withActor(actorId, async (tx, actor) => {
+      if (payload.taskId) {
+        await this.core.lockTasks(tx, [payload.taskId]);
+        await this.core.task(actor, payload.taskId, "read", tx);
+      }
+      return tx.workLog.create({
+        data: {
+          userId: actorId,
+          taskId: payload.taskId,
+          startedAt: new Date(),
+          durationMin: 1,
+          notes: payload.notes,
+          source: WorklogSource.TIMER,
+        },
+      });
     });
   }
 
@@ -75,13 +106,26 @@ export class WorklogsService {
     actorId: string,
   ) {
     try {
-      return await this.prisma.workLog.update({
-        where: { id, userId: actorId },
-        data: {
-          endedAt: new Date(payload.endedAt),
-          durationMin: payload.durationMin,
-          notes: payload.notes,
-        },
+      return await this.core.withActor(actorId, async (tx) => {
+        await tx.$queryRaw`SELECT id FROM "WorkLog" WHERE id = ${id} FOR UPDATE`;
+        const log = await tx.workLog.update({
+          where: { id, userId: actorId },
+          data: {
+            endedAt: new Date(payload.endedAt),
+            durationMin: payload.durationMin,
+            notes: payload.notes,
+          },
+        });
+        // Personal session may be stopped even after its task membership is removed;
+        // do not return stale task references or notes through the mutation response.
+        return {
+          id: log.id,
+          userId: log.userId,
+          startedAt: log.startedAt,
+          endedAt: log.endedAt,
+          durationMin: log.durationMin,
+          source: log.source,
+        };
       });
     } catch (error) {
       if (

@@ -68,7 +68,7 @@ function assertProjected(model: string, args: unknown): void {
 
 describe("Phase 3 projections, identity and truthful errors", () => {
   const prisma = {
-    user: { findUnique: jest.fn() },
+    user: { findUnique: jest.fn(), findFirst: jest.fn() },
     $queryRaw: jest.fn(),
     $transaction: jest.fn(),
     auditLog: { create: jest.fn() },
@@ -94,6 +94,7 @@ describe("Phase 3 projections, identity and truthful errors", () => {
   beforeEach(async () => {
     jest.resetAllMocks();
     google.isDriveConfigured.mockReturnValue(true);
+    prisma.workLog.findMany.mockResolvedValue([]);
     prisma.user.findUnique.mockResolvedValue({
       id: "real",
       role: "OWNER",
@@ -101,6 +102,7 @@ describe("Phase 3 projections, identity and truthful errors", () => {
       deletedAt: null,
       memberships: [],
     });
+    prisma.user.findFirst.mockResolvedValue({ id: "assignee" });
     prisma.task.findUnique.mockResolvedValue({
       id: "t",
       subsystemId: "s",
@@ -214,8 +216,8 @@ describe("Phase 3 projections, identity and truthful errors", () => {
     );
   });
   it("worklog and file list projections are safe", async () => {
-    await worklogs.list();
-    await files.list();
+    await worklogs.list("real");
+    await files.list("real");
     assertProjected("WorkLog", prisma.workLog.findMany.mock.calls[0]?.[0]);
     assertProjected(
       "Attachment",
@@ -274,8 +276,8 @@ describe("Phase 3 projections, identity and truthful errors", () => {
         create: () => worklogs.create(input, "real"),
         start: () => worklogs.startSession(input, "real"),
         stop: () => worklogs.stopSession("w", input, "real"),
-        list: () => worklogs.list(),
-        summary: () => worklogs.summary(),
+        list: () => worklogs.list("real"),
+        summary: () => worklogs.summary("real"),
       };
       await expect(
         operations[operation as keyof typeof operations](),

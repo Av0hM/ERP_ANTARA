@@ -1,3 +1,10 @@
+import { canonicalSubsystems } from "@antara/contracts";
+import { CoreAuthorizationService } from "../../common/authorization/core-authorization.service";
+import {
+  canReadSubsystem,
+  canManageSubsystem,
+} from "../../common/authorization/authorization.policy";
+import { ForbiddenException } from "@nestjs/common";
 import { Injectable, OnModuleInit } from "@nestjs/common";
 import { TaskStatus } from "@prisma/client";
 
@@ -98,13 +105,17 @@ export class MeetingAutomationService implements OnModuleInit {
     private readonly prisma: PrismaService,
     private readonly calendarService: CalendarService,
     private readonly tasksService: TasksService,
+    private readonly core: CoreAuthorizationService,
   ) {}
 
   async onModuleInit() {
     // Could schedule automatic sync here
   }
 
-  async generateSubsystemSyncEvents(horizonWeeks = 4): Promise<
+  async generateSubsystemSyncEvents(
+    horizonWeeks = 4,
+    actorId: string,
+  ): Promise<
     Array<{
       subsystemId: string;
       subsystemName: string;
@@ -117,6 +128,11 @@ export class MeetingAutomationService implements OnModuleInit {
       }>;
     }>
   > {
+    const actor = await this.core.actor(actorId);
+    horizonWeeks = Math.max(
+      1,
+      Math.min(12, Number.isFinite(horizonWeeks) ? horizonWeeks : 4),
+    );
     const now = new Date();
     const horizon = new Date(
       now.getTime() + horizonWeeks * 7 * 24 * 60 * 60 * 1000,
@@ -125,8 +141,12 @@ export class MeetingAutomationService implements OnModuleInit {
     const results = [];
 
     for (const config of this.syncConfigs) {
-      const subsystem = await this.prisma.subsystem.findUnique({
-        where: { id: config.subsystemId },
+      if (!canReadSubsystem(actor, config.subsystemId)) continue;
+      const subsystem = await this.prisma.subsystem.findFirst({
+        where: {
+          id: config.subsystemId,
+          key: { in: canonicalSubsystems.map((subsystem) => subsystem.key) },
+        },
       });
       if (!subsystem) continue;
 
@@ -135,6 +155,7 @@ export class MeetingAutomationService implements OnModuleInit {
         subsystem,
         now,
         horizon,
+        actorId,
       );
       results.push({
         subsystemId: config.subsystemId,
@@ -158,6 +179,7 @@ export class MeetingAutomationService implements OnModuleInit {
     subsystem: { id: string; name: string; color: string },
     now: Date,
     horizon: Date,
+    actorId: string,
   ) {
     const events = [];
     let currentDate = new Date(now);
@@ -181,6 +203,7 @@ export class MeetingAutomationService implements OnModuleInit {
       const agenda = await this.generateMeetingAgenda(
         config.subsystemId,
         startsAt,
+        actorId,
       );
 
       events.push({
@@ -202,7 +225,11 @@ export class MeetingAutomationService implements OnModuleInit {
   async generateMeetingAgenda(
     subsystemId: string,
     meetingDate: Date,
+    actorId: string,
   ): Promise<MeetingAgenda> {
+    const actor = await this.core.actor(actorId);
+    if (!canReadSubsystem(actor, subsystemId))
+      throw new ForbiddenException("Meeting access denied");
     const now = new Date();
     const weekAhead = new Date(meetingDate.getTime() + 7 * 24 * 60 * 60 * 1000);
 
@@ -210,18 +237,6 @@ export class MeetingAutomationService implements OnModuleInit {
     const tasks = await this.prisma.task.findMany({
       where: {
         subsystemId,
-        deletedAt: null,
-        isArchived: false,
-        status: { not: TaskStatus.COMPLETED },
-      },
-      include: {
-        subsystem: { select: { name: true } },
-        assignedTo: { select: { id: true, name: true } },
-      },
-    });
-
-    const allTasks = await this.prisma.task.findMany({
-      where: {
         deletedAt: null,
         isArchived: false,
         status: { not: TaskStatus.COMPLETED },
@@ -297,23 +312,36 @@ export class MeetingAutomationService implements OnModuleInit {
     horizonWeeks = 4,
     actorId: string,
   ) {
-    const results = await this.generateSubsystemSyncEvents(4);
+    const actor = await this.core.actor(actorId);
+    if (!canManageSubsystem(actor, subsystemId))
+      throw new ForbiddenException("Meeting management denied");
+    const results = await this.generateSubsystemSyncEvents(
+      horizonWeeks,
+      actorId,
+    );
     const subsystemResult = results.find((r) => r.subsystemId === subsystemId);
 
     if (!subsystemResult || subsystemResult.events.length === 0) {
-      return { created: 0, events: [] };
+      return {
+        created: 0,
+        events: [],
+        unavailable: "REVIEWED_SYNC_SCHEDULE_REQUIRED",
+      };
     }
 
     const created: Array<{ id: string; title: string }> = [];
     for (const event of subsystemResult.events) {
       {
-        const createdEvent = await this.calendarService.create({
-          title: event.title,
-          description: event.agenda.description,
-          startsAt: event.startsAt.toISOString(),
-          endsAt: event.endsAt.toISOString(),
-          subsystemId,
-        });
+        const createdEvent = await this.calendarService.create(
+          {
+            title: event.title,
+            description: event.agenda.description,
+            startsAt: event.startsAt.toISOString(),
+            endsAt: event.endsAt.toISOString(),
+            subsystemId,
+          },
+          actorId,
+        );
         created.push(createdEvent);
       }
     }

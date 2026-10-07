@@ -1,3 +1,5 @@
+import { PrismaService } from "../../../common/prisma/prisma.service";
+import { genericNotification } from "../notifications.service";
 import { Injectable } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { Resend } from "resend";
@@ -19,10 +21,16 @@ export class NotificationEmailProcessor extends WorkerHost {
   private readonly enabled: boolean;
   private readonly fromEmail: string;
 
-  constructor(private readonly configService: ConfigService) {
+  constructor(
+    private readonly configService: ConfigService,
+    private readonly prisma: PrismaService,
+  ) {
     super();
-    this.enabled = this.configService.get<string>("NOTIFICATIONS_EMAIL_ENABLED") === "true";
-    this.fromEmail = this.configService.get<string>("NOTIFICATIONS_FROM_EMAIL") ?? "noreply@antaraerp.local";
+    this.enabled =
+      this.configService.get<string>("NOTIFICATIONS_EMAIL_ENABLED") === "true";
+    this.fromEmail =
+      this.configService.get<string>("NOTIFICATIONS_FROM_EMAIL") ??
+      "noreply@antaraerp.local";
 
     const apiKey = this.configService.get<string>("RESEND_API_KEY");
     if (this.enabled && apiKey) {
@@ -30,12 +38,24 @@ export class NotificationEmailProcessor extends WorkerHost {
     }
   }
 
-  async process(job: Job<NotificationEmailJob>): Promise<boolean> {
+  async process(
+    job: Pick<Job<NotificationEmailJob>, "data">,
+  ): Promise<boolean> {
     if (!this.enabled || !this.resend) {
       return false;
     }
 
-    const { email, title, body } = job.data;
+    const notification = await this.prisma.notification.findFirst({
+      where: {
+        id: job.data.notificationId,
+        userId: job.data.userId,
+        user: { isActive: true, deletedAt: null },
+      },
+      select: { user: { select: { email: true } } },
+    });
+    if (!notification) return false;
+    const email = notification.user.email;
+    const { title, body } = genericNotification;
 
     try {
       await this.resend.emails.send({
