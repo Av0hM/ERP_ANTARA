@@ -5,6 +5,7 @@ import {
   Delete,
   Get,
   Param,
+  Query,
   Patch,
   UseGuards,
 } from "@nestjs/common";
@@ -24,6 +25,21 @@ export class NotificationsController {
   @Roles("OWNER", "ADMIN", "MEMBER")
   list(@CurrentUser() actor: { id: string }) {
     return this.notificationsService.list(actor.id);
+  }
+
+  @Get("history")
+  @Roles("OWNER", "ADMIN", "MEMBER")
+  history(
+    @CurrentUser() actor: { id: string },
+    @Query("cursor") cursor?: string,
+  ) {
+    return this.notificationsService.history(actor.id, cursor);
+  }
+
+  @Patch("read-all")
+  @Roles("OWNER", "ADMIN", "MEMBER")
+  markAllRead(@CurrentUser() actor: { id: string }) {
+    return this.notificationsService.markAllRead(actor.id);
   }
 
   @Patch(":id")

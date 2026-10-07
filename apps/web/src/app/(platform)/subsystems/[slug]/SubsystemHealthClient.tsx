@@ -1,8 +1,20 @@
 "use client";
 
+import { useShell } from "@/components/layout/app-shell";
 import { useEffect, useState } from "react";
 import { TaskPriority, TaskStatus } from "@antara/contracts";
-import { AlertTriangle, Clock, Users, TrendingUp, Zap, ArrowLeftRight, ArrowRight, ArrowLeft, FileText, MessageSquare } from "lucide-react";
+import {
+  AlertTriangle,
+  Clock,
+  Users,
+  TrendingUp,
+  Zap,
+  ArrowLeftRight,
+  ArrowRight,
+  ArrowLeft,
+  FileText,
+  MessageSquare,
+} from "lucide-react";
 
 import { useSubsystemHealth } from "@/hooks/use-operations";
 import { MetricCard } from "@/components/dashboard/metric-card";
@@ -14,6 +26,10 @@ interface SubsystemHealthClientProps {
 }
 
 export function SubsystemHealthClient({ slug }: SubsystemHealthClientProps) {
+  const { data: shell } = useShell();
+  const canManage = shell.contexts.some(
+    (context) => context.slug === slug && context.canManage,
+  );
   const { data, isLoading, error } = useSubsystemHealth(slug);
 
   if (isLoading) {
@@ -25,7 +41,10 @@ export function SubsystemHealthClient({ slug }: SubsystemHealthClientProps) {
         </div>
         <div className="grid gap-4 md:grid-cols-4">
           {[1, 2, 3, 4].map((i) => (
-            <div key={i} className="card-dark rounded-[1.25rem] p-6 animate-pulse">
+            <div
+              key={i}
+              className="card-dark rounded-[1.25rem] p-6 animate-pulse"
+            >
               <div className="h-4 w-24 bg-white/10 rounded-xl" />
               <div className="mt-3 h-10 w-16 bg-white/10 rounded-xl" />
             </div>
@@ -39,12 +58,21 @@ export function SubsystemHealthClient({ slug }: SubsystemHealthClientProps) {
     return (
       <div className="section-dark grid-texture-dark rounded-[2rem] p-8 text-center">
         <AlertTriangle className="size-12 text-red-400 mx-auto" />
-        <p className="mt-4 text-lg text-muted">Failed to load subsystem health</p>
+        <p className="mt-4 text-lg text-muted">
+          Failed to load subsystem health
+        </p>
       </div>
     );
   }
 
-  const { subsystem, metrics, incomingBlockers, outgoingBlockers, workload, recentActivity } = data;
+  const {
+    subsystem,
+    metrics,
+    incomingBlockers,
+    outgoingBlockers,
+    workload,
+    recentActivity,
+  } = data;
 
   const criticalPathCount = 0; // Would come from dependency graph
 
@@ -60,9 +88,13 @@ export function SubsystemHealthClient({ slug }: SubsystemHealthClientProps) {
               {subsystem.name.charAt(0)}
             </div>
             <div>
-              <p className="text-xs uppercase tracking-[0.28em] text-saffron">Subsystem Command Center</p>
+              <p className="text-xs uppercase tracking-[0.28em] text-saffron">
+                Subsystem overview
+              </p>
               <h1 className="mt-1 text-3xl font-semibold">{subsystem.name}</h1>
-              <p className="mt-1 text-sm text-muted">{subsystem.memberCount} members</p>
+              <p className="mt-1 text-sm text-muted">
+                {subsystem.memberCount} members
+              </p>
             </div>
           </div>
         </div>
@@ -107,10 +139,14 @@ export function SubsystemHealthClient({ slug }: SubsystemHealthClientProps) {
           <article className="card-dark rounded-[1.25rem] p-6">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-lg font-semibold">Upcoming Deadlines</h2>
-              <span className="text-xs text-saffron">{metrics.upcomingDeadlines.length} tasks</span>
+              <span className="text-xs text-saffron">
+                {metrics.upcomingDeadlines.length} tasks
+              </span>
             </div>
             {metrics.upcomingDeadlines.length === 0 ? (
-              <p className="text-sm text-muted">No upcoming deadlines in the next 7 days</p>
+              <p className="text-sm text-muted">
+                No upcoming deadlines in the next 7 days
+              </p>
             ) : (
               <div className="space-y-3">
                 {metrics.upcomingDeadlines.map((task) => (
@@ -118,18 +154,24 @@ export function SubsystemHealthClient({ slug }: SubsystemHealthClientProps) {
                     key={task.id}
                     className={cn(
                       "rounded-xl border border-steel/30 bg-white/5 p-4 flex items-center justify-between",
-                      task.priority === TaskPriority.CRITICAL && "border-red-500/30",
-                      task.priority === TaskPriority.HIGH && "border-amber-500/30",
+                      task.priority === TaskPriority.CRITICAL &&
+                        "border-red-500/30",
+                      task.priority === TaskPriority.HIGH &&
+                        "border-amber-500/30",
                     )}
                   >
                     <div className="flex items-center gap-3">
                       <span
                         className={cn(
                           "text-xs font-medium px-2 py-0.5 rounded-full",
-                          task.priority === TaskPriority.CRITICAL && "bg-red-500/20 text-red-400",
-                          task.priority === TaskPriority.HIGH && "bg-amber-500/20 text-amber-400",
-                          task.priority === TaskPriority.MEDIUM && "bg-blue-500/20 text-blue-400",
-                          task.priority === TaskPriority.LOW && "bg-slate-500/20 text-slate-400",
+                          task.priority === TaskPriority.CRITICAL &&
+                            "bg-red-500/20 text-red-400",
+                          task.priority === TaskPriority.HIGH &&
+                            "bg-amber-500/20 text-amber-400",
+                          task.priority === TaskPriority.MEDIUM &&
+                            "bg-blue-500/20 text-blue-400",
+                          task.priority === TaskPriority.LOW &&
+                            "bg-slate-500/20 text-slate-400",
                         )}
                       >
                         {task.priority}
@@ -168,8 +210,10 @@ export function SubsystemHealthClient({ slug }: SubsystemHealthClientProps) {
                       <div
                         className={cn(
                           "flex size-8 items-center justify-center rounded-xl shrink-0",
-                          activity.type === "worklog" && "bg-blue-500/20 text-blue-400",
-                          activity.type === "comment" && "bg-purple-500/20 text-purple-400",
+                          activity.type === "worklog" &&
+                            "bg-blue-500/20 text-blue-400",
+                          activity.type === "comment" &&
+                            "bg-purple-500/20 text-purple-400",
                         )}
                       >
                         {activity.type === "worklog" ? (
@@ -181,12 +225,15 @@ export function SubsystemHealthClient({ slug }: SubsystemHealthClientProps) {
                       <div className="flex-1 min-w-0">
                         <p className="text-sm text-text">{activity.summary}</p>
                         <p className="mt-1 text-xs text-muted">
-                          {new Date(activity.timestamp).toLocaleString("en-US", {
-                            month: "short",
-                            day: "numeric",
-                            hour: "2-digit",
-                            minute: "2-digit",
-                          })}
+                          {new Date(activity.timestamp).toLocaleString(
+                            "en-US",
+                            {
+                              month: "short",
+                              day: "numeric",
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            },
+                          )}
                         </p>
                       </div>
                     </div>
@@ -222,8 +269,14 @@ export function SubsystemHealthClient({ slug }: SubsystemHealthClientProps) {
                   >
                     <p className="font-medium text-sm">{blocker.title}</p>
                     <p className="text-xs text-muted mt-1">
-                      Blocked by <span className="text-red-400">{blocker.blockingTask}</span> in{" "}
-                      <span className="font-medium">{blocker.fromSubsystem}</span>
+                      Blocked by{" "}
+                      <span className="text-red-400">
+                        {blocker.blockingTask}
+                      </span>{" "}
+                      in{" "}
+                      <span className="font-medium">
+                        {blocker.fromSubsystem}
+                      </span>
                     </p>
                   </div>
                 ))}
@@ -243,7 +296,11 @@ export function SubsystemHealthClient({ slug }: SubsystemHealthClientProps) {
                   >
                     <p className="font-medium text-sm">{blocker.title}</p>
                     <p className="text-xs text-muted mt-1">
-                      Blocking <span className="text-blue-400">{blocker.dependentTask}</span> in{" "}
+                      Blocking{" "}
+                      <span className="text-blue-400">
+                        {blocker.dependentTask}
+                      </span>{" "}
+                      in{" "}
                       <span className="font-medium">{blocker.toSubsystem}</span>
                     </p>
                   </div>
@@ -251,7 +308,7 @@ export function SubsystemHealthClient({ slug }: SubsystemHealthClientProps) {
               </div>
             )}
 
-            {(incomingBlockers.length === 0 && outgoingBlockers.length === 0) && (
+            {incomingBlockers.length === 0 && outgoingBlockers.length === 0 && (
               <div className="text-center py-8 text-muted">
                 <ArrowLeftRight className="size-12 mx-auto mb-3 opacity-30" />
                 <p>No cross-subsystem blockers detected</p>
@@ -259,49 +316,59 @@ export function SubsystemHealthClient({ slug }: SubsystemHealthClientProps) {
             )}
           </article>
 
-          <article className="card-dark rounded-[1.25rem] p-6">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-semibold flex items-center gap-2">
-                <Users className="size-5 text-saffron" />
-                Workload Balance
-              </h2>
-              <span className="text-xs text-saffron">{workload.length} members</span>
-            </div>
-            {workload.length === 0 ? (
-              <p className="text-sm text-muted text-center py-4">No members in this subsystem</p>
-            ) : (
-              <div className="space-y-3">
-                {workload.map((member) => (
-                  <div
-                    key={member.memberId}
-                    className="rounded-xl border border-steel/30 bg-white/5 p-3"
-                  >
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-full bg-saffron/20 flex items-center justify-center text-saffron text-sm font-medium">
-                          {member.name.charAt(0)}
-                        </div>
-                        <div>
-                          <p className="font-medium text-sm">{member.name}</p>
-                          <p className="text-xs text-muted">{member.activeTasks} active tasks</p>
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        <p className="text-lg font-semibold text-saffron">{member.availabilityScore}%</p>
-                        <p className="text-xs text-muted">Availability</p>
-                      </div>
-                    </div>
-                    <div className="mt-2 h-2 bg-white/10 rounded-full overflow-hidden">
-                      <div
-                        className="h-full bg-saffron/50 rounded-full transition-all"
-                        style={{ width: `${member.availabilityScore}%` }}
-                      />
-                    </div>
-                  </div>
-                ))}
+          {canManage && (
+            <article className="card-dark rounded-[1.25rem] p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-lg font-semibold flex items-center gap-2">
+                  <Users className="size-5 text-saffron" />
+                  Workload Balance
+                </h2>
+                <span className="text-xs text-saffron">
+                  {workload.length} members
+                </span>
               </div>
-            )}
-          </article>
+              {workload.length === 0 ? (
+                <p className="text-sm text-muted text-center py-4">
+                  No members in this subsystem
+                </p>
+              ) : (
+                <div className="space-y-3">
+                  {workload.map((member) => (
+                    <div
+                      key={member.memberId}
+                      className="rounded-xl border border-steel/30 bg-white/5 p-3"
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 rounded-full bg-saffron/20 flex items-center justify-center text-saffron text-sm font-medium">
+                            {member.name.charAt(0)}
+                          </div>
+                          <div>
+                            <p className="font-medium text-sm">{member.name}</p>
+                            <p className="text-xs text-muted">
+                              {member.activeTasks} active tasks
+                            </p>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-lg font-semibold text-saffron">
+                            {member.availabilityScore}%
+                          </p>
+                          <p className="text-xs text-muted">Availability</p>
+                        </div>
+                      </div>
+                      <div className="mt-2 h-2 bg-white/10 rounded-full overflow-hidden">
+                        <div
+                          className="h-full bg-saffron/50 rounded-full transition-all"
+                          style={{ width: `${member.availabilityScore}%` }}
+                        />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </article>
+          )}
         </div>
       </section>
     </div>

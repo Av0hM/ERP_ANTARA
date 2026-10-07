@@ -1,35 +1,41 @@
 "use client";
-
-import { AppRole } from "@antara/contracts";
-
+import { useShell } from "@/components/layout/app-shell";
 import { DashboardLive } from "@/components/dashboard/dashboard-live";
-import { useActorProfile } from "@/hooks/use-actor-profile";
-
-const roleGreeting: Record<AppRole, string> = {
-  OWNER: "Mission control view across the entire club",
-  ADMIN: "Subsystem command center for engineering execution",
-  MEMBER: "Your personal engineering operations feed",
-};
-
+import { SubsystemHealthClient } from "../subsystems/[slug]/SubsystemHealthClient";
 export default function DashboardPage() {
-  const actor = useActorProfile();
-
-  if (!actor) {
-    return null;
-  }
-
-  const { role, name } = actor;
-
+  const { data, current } = useShell();
+  if (current.view === "SUBSYSTEM" && current.slug)
+    return (
+      <main>
+        <p className="mb-4 text-sm text-muted">
+          Readable subsystem context · administrative analytics are not
+          available in this context.
+        </p>
+        <SubsystemHealthClient slug={current.slug} />
+      </main>
+    );
+  if (current.view === "EMPTY")
+    return (
+      <main>
+        <h1 className="text-2xl">{current.label}</h1>
+        <p className="mt-4">
+          No administrative subsystem access. Ask an OWNER to review your
+          memberships.
+        </p>
+      </main>
+    );
   return (
     <main className="space-y-6">
-      <section className="section-dark grid-texture-dark rounded-[2rem] p-8">
-        <p className="text-xs uppercase tracking-[0.28em] text-saffron">{role}</p>
-        <h1 className="mt-3 text-4xl font-semibold">Mission control dashboard</h1>
-        <p className="mt-3 max-w-2xl text-muted">
-          {name}, {roleGreeting[role]}. This dashboard reshapes itself around your responsibilities instead of showing everyone the same view.
+      <section className="section-dark rounded-2xl p-6">
+        <p className="text-sm text-muted">Welcome, {data.user.name}</p>
+        <h1 className="mt-2 text-3xl font-semibold">{current.label}</h1>
+        <p className="mt-2 text-muted">
+          {current.canManage
+            ? "Authorized operational overview"
+            : "Your assigned work and personal progress"}
         </p>
       </section>
-      <DashboardLive role={role} />
+      <DashboardLive />
     </main>
   );
 }

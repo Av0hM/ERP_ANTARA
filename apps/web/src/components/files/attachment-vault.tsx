@@ -1,7 +1,15 @@
 "use client";
+import { useShell } from "@/components/layout/app-shell";
 
 import { useEffect, useMemo, useState, type ChangeEvent } from "react";
-import { Copy, FileText, FileUp, Image as ImageIcon, Loader2, Paperclip } from "lucide-react";
+import {
+  Copy,
+  FileText,
+  FileUp,
+  Image as ImageIcon,
+  Loader2,
+  Paperclip,
+} from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { useActorProfile } from "@/hooks/use-actor-profile";
@@ -25,13 +33,15 @@ function toBase64(file: File) {
 
 export function AttachmentVault() {
   const actor = useActorProfile();
+  const shell = useShell();
 
   if (!actor) {
     return null;
   }
 
   const { attachments, createAttachment, isCreating } = useAttachmentVault();
-  const { data: taskData = [] } = useTaskCatalog();
+  const { data: tasks = [] } = useTaskCatalog();
+  const taskData = tasks.filter((task) => task.permissions?.canManage);
   const [taskId, setTaskId] = useState("");
   const [tags, setTags] = useState("drive, review");
   const [selectedName, setSelectedName] = useState("");
@@ -76,19 +86,22 @@ export function AttachmentVault() {
       return;
     }
 
-    createAttachment({
-      name: selectedName,
-      mimeType: selectedMimeType,
-      sizeBytes: selectedSize,
-      taskId: taskId.trim() || undefined,
-      tags: tags
-        .split(",")
-        .map((tag) => tag.trim())
-        .filter(Boolean),
-      contentBase64: selectedContent,
-    }, {
-      onSuccess: () => resetSelection(),
-    });
+    createAttachment(
+      {
+        name: selectedName,
+        mimeType: selectedMimeType,
+        sizeBytes: selectedSize,
+        taskId: taskId.trim() || undefined,
+        tags: tags
+          .split(",")
+          .map((tag) => tag.trim())
+          .filter(Boolean),
+        contentBase64: selectedContent,
+      },
+      {
+        onSuccess: () => resetSelection(),
+      },
+    );
   };
 
   const fileIcon =
@@ -105,71 +118,93 @@ export function AttachmentVault() {
       <div className="flex items-center gap-3">
         <Paperclip className="size-5 text-saffron" />
         <div>
-          <p className="text-xs uppercase tracking-[0.24em] text-saffron">Attachments</p>
+          <p className="text-xs uppercase tracking-[0.24em] text-saffron">
+            Attachments
+          </p>
           <h2 className="text-xl font-semibold">Drive-backed file vault</h2>
         </div>
       </div>
 
       <div className="mt-5 grid gap-4 xl:grid-cols-[0.95fr_1.05fr]">
-        <div className="space-y-4">
-          <label className="block">
-            <span className="mb-2 block text-sm text-muted">Link to task</span>
-            <select
-              value={taskId}
-              onChange={(event) => setTaskId(event.target.value)}
-              className="input-field"
-            >
-              <option value="" disabled>
-                Select a task (optional)...
-              </option>
-              {taskData.map((task) => (
-                <option key={task.id} value={task.id}>
-                  {task.title}
+        {shell.data.permissions.manageOperations && (
+          <div className="space-y-4">
+            <label className="block">
+              <span className="mb-2 block text-sm text-muted">
+                Link to task
+              </span>
+              <select
+                value={taskId}
+                onChange={(event) => setTaskId(event.target.value)}
+                className="input-field"
+              >
+                <option value="" disabled>
+                  Select a task (optional)...
                 </option>
-              ))}
-            </select>
-          </label>
+                {taskData.map((task) => (
+                  <option key={task.id} value={task.id}>
+                    {task.title}
+                  </option>
+                ))}
+              </select>
+            </label>
 
-          <label className="block">
-            <span className="mb-2 block text-sm text-muted">Tags</span>
-            <input
-              value={tags}
-              onChange={(event) => setTags(event.target.value)}
-              className="input-field"
-              placeholder="CAD, review, thermal"
-            />
-          </label>
+            <label className="block">
+              <span className="mb-2 block text-sm text-muted">Tags</span>
+              <input
+                value={tags}
+                onChange={(event) => setTags(event.target.value)}
+                className="input-field"
+                placeholder="CAD, review, thermal"
+              />
+            </label>
 
-          <label className="block">
-            <span className="mb-2 block text-sm text-muted">File</span>
-            <input
-              type="file"
-              onChange={handleFile}
-              className="w-full rounded-xl border border-steel/30 bg-white/5 px-4 py-3 text-sm outline-none file:mr-4 file:rounded-full file:border-0 file:bg-saffron/10 file:px-4 file:py-2 file:text-saffron"
-            />
-          </label>
+            <label className="block">
+              <span className="mb-2 block text-sm text-muted">File</span>
+              <input
+                type="file"
+                onChange={handleFile}
+                className="w-full rounded-xl border border-steel/30 bg-white/5 px-4 py-3 text-sm outline-none file:mr-4 file:rounded-full file:border-0 file:bg-saffron/10 file:px-4 file:py-2 file:text-saffron"
+              />
+            </label>
 
-          <div className="rounded-xl border border-steel/30 bg-white/5 p-4 text-sm text-muted">
-            <div className="flex items-center gap-2">
-              {fileIcon}
-              <p className="font-medium text-text">Selected file</p>
+            <div className="rounded-xl border border-steel/30 bg-white/5 p-4 text-sm text-muted">
+              <div className="flex items-center gap-2">
+                {fileIcon}
+                <p className="font-medium text-text">Selected file</p>
+              </div>
+              <p className="mt-1">{selectedLabel}</p>
             </div>
-            <p className="mt-1">{selectedLabel}</p>
+
+            <Button
+              className="w-full gap-2"
+              onClick={handleUpload}
+              disabled={
+                isCreating ||
+                !selectedContent ||
+                (!taskId && !shell.data.globalAuthority)
+              }
+            >
+              {isCreating ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : (
+                <FileUp className="size-4" />
+              )}
+              {isCreating ? "Uploading..." : "Upload Attachment"}
+            </Button>
+
+            <p className="text-xs text-muted">
+              Uploaded by <span className="text-saffron">{actor.name}</span>.
+              Uploads require configured storage and confirmed persistence.
+            </p>
           </div>
-
-          <Button className="w-full gap-2" onClick={handleUpload} disabled={isCreating || !selectedContent}>
-            {isCreating ? <Loader2 className="size-4 animate-spin" /> : <FileUp className="size-4" />}
-            {isCreating ? "Uploading..." : "Upload Attachment"}
-          </Button>
-
-          <p className="text-xs text-muted">
-            Uploaded by <span className="text-saffron">{actor.name}</span>. If Google Drive credentials are present, the file is mirrored there automatically.
-          </p>
-        </div>
+        )}
 
         <div className="space-y-3">
           {attachments.map((item) => (
-            <article key={item.id} className="rounded-xl border border-steel/30 bg-white/5 p-4">
+            <article
+              key={item.id}
+              className="rounded-xl border border-steel/30 bg-white/5 p-4"
+            >
               <div className="flex items-start justify-between gap-3">
                 <div className="flex items-start gap-2">
                   {item.mimeType === "application/pdf" ? (
@@ -180,26 +215,37 @@ export function AttachmentVault() {
                     <Paperclip className="mt-1 size-4 text-muted" />
                   )}
                   <div>
-                  <h3 className="font-medium">{item.name}</h3>
-                  <p className="mt-1 text-xs text-muted">{item.mimeType}</p>
+                    <h3 className="font-medium">{item.name}</h3>
+                    <p className="mt-1 text-xs text-muted">{item.mimeType}</p>
+                  </div>
                 </div>
-                </div>
-                <span className="text-xs text-saffron">{Math.round(item.sizeBytes / 1024)} KB</span>
+                <span className="text-xs text-saffron">
+                  {Math.round(item.sizeBytes / 1024)} KB
+                </span>
               </div>
               <p className="mt-3 text-sm text-muted">
-                {item.task?.title ? `Linked to ${item.task.title}` : "Not linked to a task yet"}
+                {item.task?.title
+                  ? `Linked to ${item.task.title}`
+                  : "Not linked to a task yet"}
               </p>
               <div className="mt-3 flex items-center justify-between text-xs text-muted">
                 <span>{item.uploadedBy?.name ?? "Mission Member"}</span>
                 {item.storageUrl.startsWith("http") ? (
-                  <a className="text-saffron" href={item.storageUrl} target="_blank" rel="noreferrer">
+                  <a
+                    className="text-saffron"
+                    href={item.storageUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
                     Open file
                   </a>
                 ) : (
                   <button
                     type="button"
                     className="inline-flex items-center gap-1 text-saffron"
-                    onClick={() => void navigator.clipboard.writeText(item.storageUrl)}
+                    onClick={() =>
+                      void navigator.clipboard.writeText(item.storageUrl)
+                    }
                   >
                     <Copy className="size-3" />
                     Copy path

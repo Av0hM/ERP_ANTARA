@@ -1,3 +1,4 @@
+import { rejectApiResponse } from "./http-error";
 import { TaskCard, TaskStatus } from "@antara/contracts";
 
 import {
@@ -84,7 +85,7 @@ async function request<T>(
   });
 
   if (!response.ok) {
-    throw new Error(`Request failed: ${response.status}`);
+    rejectApiResponse(response.status);
   }
 
   return response.json() as Promise<T>;

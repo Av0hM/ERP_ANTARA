@@ -1,4 +1,5 @@
 "use client";
+import { useShell } from "@/components/layout/app-shell";
 
 import { useEffect, useMemo, useState } from "react";
 import FullCalendar from "@fullcalendar/react";
@@ -13,15 +14,21 @@ import { useCalendarData, useSubsystemCatalog } from "@/hooks/use-operations";
 
 export function CalendarWorkspace() {
   const actor = useActorProfile();
+  const shell = useShell();
   const { events, createEvent, isCreating } = useCalendarData();
-  const { data: subsystemData = [] } = useSubsystemCatalog();
+  const subsystemData = shell.data.contexts
+    .filter((context) => context.subsystemId && context.canManage)
+    .map((context) => ({ id: context.subsystemId!, name: context.label }));
   const [title, setTitle] = useState("");
   const [startsAt, setStartsAt] = useState("");
   const [endsAt, setEndsAt] = useState("");
-  const [subsystemId, setSubsystemId] = useState("Software");
+  const [subsystemId, setSubsystemId] = useState("");
 
   useEffect(() => {
-    if (subsystemData[0] && subsystemId === "Software") {
+    if (
+      subsystemData[0] &&
+      !subsystemData.some((subsystem) => subsystem.id === subsystemId)
+    ) {
       setSubsystemId(subsystemData[0].id);
     }
   }, [subsystemData, subsystemId]);
@@ -56,64 +63,86 @@ export function CalendarWorkspace() {
           </div>
 
           <div className="space-y-4">
-            {canManageOperations(actor?.role) && <div className="card-dark rounded-[1.25rem] p-5">
-              <p className="text-xs uppercase tracking-[0.2em] text-saffron">Create Event</p>
-              <div className="mt-4 space-y-3">
-                <input
-                  value={title}
-                  onChange={(event) => setTitle(event.target.value)}
-                  placeholder="Integration review"
-                  className="input-field"
-                />
-                <input
-                  type="datetime-local"
-                  value={startsAt}
-                  onChange={(event) => setStartsAt(event.target.value)}
-                  className="input-field"
-                />
-                <input
-                  type="datetime-local"
-                  value={endsAt}
-                  onChange={(event) => setEndsAt(event.target.value)}
-                  className="input-field"
-                />
-                <select
-                  value={subsystemId}
-                  onChange={(event) => setSubsystemId(event.target.value)}
-                  className="input-field"
-                >
-                  {subsystemData.map((subsystem) => (
-                    <option key={subsystem.id} value={subsystem.id}>
-                      {subsystem.name}
-                    </option>
-                  ))}
-                </select>
-                <Button
-                  className="w-full"
-                  onClick={() =>
-                    createEvent({
-                      title,
-                      startsAt: new Date(startsAt).toISOString(),
-                      endsAt: new Date(endsAt).toISOString(),
-                      subsystemId,
-                    })
-                  }
-                  disabled={isCreating || !title || !startsAt || !endsAt}
-                >
-                  {isCreating ? "Scheduling..." : "Schedule Event"}
-                </Button>
+            {shell.data.permissions.manageOperations && (
+              <div className="card-dark rounded-[1.25rem] p-5">
+                <p className="text-xs uppercase tracking-[0.2em] text-saffron">
+                  Create Event
+                </p>
+                <div className="mt-4 space-y-3">
+                  <input
+                    value={title}
+                    onChange={(event) => setTitle(event.target.value)}
+                    placeholder="Integration review"
+                    className="input-field"
+                  />
+                  <input
+                    type="datetime-local"
+                    value={startsAt}
+                    onChange={(event) => setStartsAt(event.target.value)}
+                    className="input-field"
+                  />
+                  <input
+                    type="datetime-local"
+                    value={endsAt}
+                    onChange={(event) => setEndsAt(event.target.value)}
+                    className="input-field"
+                  />
+                  <select
+                    value={subsystemId}
+                    onChange={(event) => setSubsystemId(event.target.value)}
+                    className="input-field"
+                  >
+                    {subsystemData.map((subsystem) => (
+                      <option key={subsystem.id} value={subsystem.id}>
+                        {subsystem.name}
+                      </option>
+                    ))}
+                  </select>
+                  <Button
+                    className="w-full"
+                    onClick={() =>
+                      createEvent({
+                        title,
+                        startsAt: new Date(startsAt).toISOString(),
+                        endsAt: new Date(endsAt).toISOString(),
+                        subsystemId,
+                      })
+                    }
+                    disabled={
+                      isCreating ||
+                      !title ||
+                      !startsAt ||
+                      !endsAt ||
+                      !subsystemId
+                    }
+                  >
+                    {isCreating ? "Scheduling..." : "Schedule Event"}
+                  </Button>
+                </div>
               </div>
-            </div>}
+            )}
 
             <div className="card-dark rounded-[1.25rem] p-5">
-              <p className="text-xs uppercase tracking-[0.2em] text-saffron">Upcoming Milestones</p>
+              <p className="text-xs uppercase tracking-[0.2em] text-saffron">
+                Upcoming Milestones
+              </p>
               <div className="mt-4 space-y-3">
                 {events.slice(0, 4).map((event) => (
-                  <div key={event.id} className="rounded-xl border border-steel/30 bg-white/5 p-4">
+                  <div
+                    key={event.id}
+                    className="rounded-xl border border-steel/30 bg-white/5 p-4"
+                  >
                     <p className="font-medium">{event.title}</p>
-                    <p className="mt-1 text-sm text-muted">{event.description}</p>
+                    <p className="mt-1 text-sm text-muted">
+                      {event.description}
+                    </p>
                     <p className="mt-2 text-xs text-muted">
-                      {new Date(event.startsAt).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}
+                      {new Date(event.startsAt).toLocaleString("en-US", {
+                        month: "short",
+                        day: "numeric",
+                        hour: "numeric",
+                        minute: "2-digit",
+                      })}
                     </p>
                   </div>
                 ))}

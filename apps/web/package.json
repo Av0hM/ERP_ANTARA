@@ -8,7 +8,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "tsc -p tsconfig.json --noEmit",
-    "test": "playwright test"
+    "test": "playwright test",
+    "test:shell": "playwright test --config playwright.shell.config.ts"
   },
   "dependencies": {
     "@antara/contracts": "0.1.0",

@@ -1,3 +1,5 @@
+import type { UiContext } from "@antara/contracts";
+import { rejectApiResponse } from "./http-error";
 import {
   DashboardMetric,
   InsightSeverity,
@@ -47,23 +49,29 @@ async function request<T>(
     },
   });
   if (!response.ok) {
-    throw new Error(`Request failed: ${response.status}`);
+    rejectApiResponse(response.status);
   }
   return response.json() as Promise<T>;
 }
 
-export async function fetchNotifications(
+export function fetchUiContext(accessToken: string) {
+  return request<UiContext>("/ui/context", { cache: "no-store" }, accessToken);
+}
+export function markAllNotificationsRead(accessToken: string) {
+  return request<{ count: number }>(
+    "/notifications/read-all",
+    { method: "PATCH" },
+    accessToken,
+  );
+}
+export function fetchNotifications(
   accessToken?: string,
 ): Promise<NotificationRecord[]> {
-  try {
-    return await request<NotificationRecord[]>(
-      "/notifications",
-      undefined,
-      accessToken,
-    );
-  } catch {
-    return [];
-  }
+  return request<NotificationRecord[]>(
+    "/notifications",
+    undefined,
+    accessToken,
+  );
 }
 
 export async function updateNotification(
@@ -370,10 +378,11 @@ export async function updateTaskAssignee(
 
 export async function fetchAnalyticsBundle(
   accessToken?: string,
+  subsystemId?: string,
 ): Promise<AnalyticsBundle> {
   try {
     return await request<AnalyticsBundle>(
-      "/analytics/bundle",
+      `/analytics/bundle${subsystemId ? `?subsystemId=${encodeURIComponent(subsystemId)}` : ""}`,
       undefined,
       accessToken,
     );
@@ -430,11 +439,10 @@ export async function fetchMembers(accessToken?: string): Promise<
 
 export async function fetchDashboardBundle(
   accessToken?: string,
+  subsystemId?: string,
 ): Promise<DashboardBundle> {
-  const [analytics, notifications] = await Promise.all([
-    fetchAnalyticsBundle(accessToken),
-    fetchNotifications(accessToken),
-  ]);
+  const analytics = await fetchAnalyticsBundle(accessToken, subsystemId);
+  const notifications: NotificationRecord[] = [];
   const { overview, velocity, scope } = analytics;
   const insights =
     scope === "GLOBAL"
@@ -456,24 +464,24 @@ export async function fetchDashboardBundle(
       label: "Productivity Index",
       value: `${overview.productivityIndex}`,
       delta: scopeLabel,
-      direction: "up",
+      direction: "flat",
     },
     {
       label: "Subsystem Velocity",
       value: `${overview.subsystemVelocity}%`,
-      delta: "Trend improving",
-      direction: "up",
+      delta: scopeLabel,
+      direction: "flat",
     },
     {
       label: "Overdue Rate",
       value: `${overview.overdueRate}%`,
-      delta: "Keep below 10%",
-      direction: "down",
+      delta: scopeLabel,
+      direction: "flat",
     },
     {
       label: scope === "GLOBAL" ? "Club Health" : "Workload Health",
       value: `${overview.clubHealth}`,
-      delta: "AI composite",
+      delta: scopeLabel,
       direction: "flat",
     },
   ];
@@ -695,4 +703,20 @@ export async function applyResourceMove(
   } catch (error) {
     throw error;
   }
+}
+
+export function fetchHandoff(accessToken: string, subsystemId?: string) {
+  return request<{ markdown: string }>(
+    `/reports/handoff/markdown${subsystemId ? `?subsystemId=${encodeURIComponent(subsystemId)}` : ""}`,
+    undefined,
+    accessToken,
+  );
+}
+
+export function fetchNotificationHistory(accessToken: string, cursor?: string) {
+  return request<{ items: NotificationRecord[]; nextCursor?: string }>(
+    `/notifications/history${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ""}`,
+    undefined,
+    accessToken,
+  );
 }

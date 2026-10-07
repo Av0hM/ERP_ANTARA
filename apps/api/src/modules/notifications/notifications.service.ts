@@ -45,6 +45,42 @@ export class NotificationsService implements OnModuleInit {
     }));
   }
 
+  async history(actorId: string, cursor?: string) {
+    await this.core.actor(actorId);
+    if (
+      cursor &&
+      !(await this.prisma.notification.findFirst({
+        where: { id: cursor, userId: actorId },
+        select: { id: true },
+      }))
+    )
+      throw new NotFoundException("Notification not found");
+    const rows = await this.prisma.notification.findMany({
+      where: { userId: actorId },
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+      take: 21,
+      ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
+    });
+    const items = rows
+      .slice(0, 20)
+      .map((item) => ({ ...item, ...genericNotification, taskId: null }));
+    return {
+      items,
+      nextCursor: rows.length > 20 ? items[items.length - 1]?.id : undefined,
+    };
+  }
+
+  async markAllRead(actorId: string) {
+    return this.prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM "User" WHERE id = ${actorId} FOR UPDATE`;
+      await this.core.actor(actorId, tx);
+      return tx.notification.updateMany({
+        where: { userId: actorId, isRead: false },
+        data: { isRead: true },
+      });
+    });
+  }
+
   async createAndNotify(
     userId: string,
     title: string,

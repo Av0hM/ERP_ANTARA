@@ -1,3 +1,4 @@
+import { UiContextModule } from "./modules/ui-context/ui-context.module";
 import { Module } from "@nestjs/common";
 import { ConfigModule, ConfigService } from "@nestjs/config";
 import { ThrottlerModule } from "@nestjs/throttler";
@@ -76,6 +77,7 @@ function buildRedisConnection(configService: ConfigService) {
         limit: 120,
       },
     ]),
+    UiContextModule,
     AuthModule,
     UsersModule,
     TasksModule,

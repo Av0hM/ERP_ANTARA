@@ -3,10 +3,12 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { InsightCard } from "@antara/contracts";
 
+import { useShell } from "@/components/layout/app-shell";
 import { canManageOperations } from "@/lib/permissions";
 import { useToast } from "@/components/ui/toast";
 import { useActorProfile } from "@/hooks/use-actor-profile";
 import {
+  markAllNotificationsRead,
   applyResourceMove,
   createAttachment,
   createCalendarEvent,
@@ -52,34 +54,38 @@ import { fetchTasks } from "@/lib/task-api";
 
 export function useDashboardData() {
   const actor = useActorProfile();
+  const { current } = useShell();
   return useQuery({
-    queryKey: ["dashboard-bundle", actor?.accessToken],
-    queryFn: () => fetchDashboardBundle(actor!.accessToken),
-    enabled: !!actor,
+    queryKey: ["dashboard-bundle", actor?.accessToken, current.id],
+    queryFn: () =>
+      fetchDashboardBundle(actor!.accessToken, current.subsystemId),
+    enabled: !!actor && current.view === "ANALYTICS",
   });
 }
 
 export function useAnalyticsData() {
   const actor = useActorProfile();
+  const { current } = useShell();
   const analytics = useQuery({
-    queryKey: ["analytics-bundle", actor?.accessToken],
+    queryKey: ["analytics-bundle", actor?.accessToken, current.id],
     queryFn: async () => {
-      const analyticsBundle = await fetchAnalyticsBundle(actor!.accessToken);
-      const aiBundle =
-        analyticsBundle.scope === "GLOBAL"
+      const analytics = await fetchAnalyticsBundle(
+        actor!.accessToken,
+        current.subsystemId,
+      );
+      const ai =
+        analytics.scope === "GLOBAL"
           ? await fetchAiBundle(actor!.accessToken)
           : {
-              insights: analyticsBundle.insights,
+              insights: analytics.insights,
               reminders: [],
               schedule: [],
               workload: [],
             };
-
-      return { ...analyticsBundle, ...aiBundle };
+      return { ...analytics, ...ai };
     },
-    enabled: !!actor,
+    enabled: !!actor && current.view === "ANALYTICS",
   });
-
   return {
     overview: analytics.data?.overview,
     velocity: analytics.data?.velocity ?? [],
@@ -94,98 +100,55 @@ export function useAnalyticsData() {
     schedule: analytics.data?.schedule ?? [],
     workload: analytics.data?.workload ?? [],
     isLoading: analytics.isLoading,
+    error: analytics.error,
   };
 }
 
 export function useNotificationCenter() {
   const actor = useActorProfile();
-  const queryClient = useQueryClient();
+  const client = useQueryClient();
   const { addToast } = useToast();
   const notifications = useQuery({
     queryKey: ["notifications", actor?.accessToken],
     queryFn: () => fetchNotifications(actor!.accessToken),
     enabled: !!actor,
+    refetchInterval: 60_000,
+    refetchIntervalInBackground: false,
+    refetchOnWindowFocus: true,
   });
-
-  const markRead = useMutation({
-    mutationFn: ({ id, isRead }: { id: string; isRead: boolean }) =>
-      updateNotification(id, isRead, actor!.accessToken),
-    onMutate: async ({ id, isRead }) => {
-      await queryClient.cancelQueries({
-        queryKey: ["notifications", actor?.accessToken],
-      });
-      const previous =
-        queryClient.getQueryData<NotificationRecord[]>([
-          "notifications",
-          actor?.accessToken,
-        ]) ?? [];
-      queryClient.setQueryData<NotificationRecord[]>(
-        ["notifications", actor?.accessToken],
-        (current = []) =>
-          current.map((item) => (item.id === id ? { ...item, isRead } : item)),
-      );
-      return { previous };
-    },
-    onError: (_error, _vars, context) => {
-      addToast("Unable to update notification", "error");
-      if (context?.previous) {
-        queryClient.setQueryData(
-          ["notifications", actor?.accessToken],
-          context.previous,
-        );
-      }
-    },
+  const invalidate = async () => {
+    await Promise.all([
+      client.invalidateQueries({ queryKey: ["notifications"] }),
+      client.invalidateQueries({ queryKey: ["ui-context"] }),
+    ]);
+  };
+  const update = useMutation({
+    mutationFn: (input: { id: string; isRead: boolean }) =>
+      updateNotification(input.id, input.isRead, actor!.accessToken),
+    onSuccess: invalidate,
+    onError: () => addToast("Unable to update notification", "error"),
   });
-
-  const deleteMutation = useMutation({
+  const remove = useMutation({
     mutationFn: (id: string) => deleteNotification(id, actor!.accessToken),
-    onMutate: async (id) => {
-      await queryClient.cancelQueries({
-        queryKey: ["notifications", actor?.accessToken],
-      });
-      const previous =
-        queryClient.getQueryData<NotificationRecord[]>([
-          "notifications",
-          actor?.accessToken,
-        ]) ?? [];
-      queryClient.setQueryData<NotificationRecord[]>(
-        ["notifications", actor?.accessToken],
-        (current = []) => current.filter((item) => item.id !== id),
-      );
-      return { previous };
-    },
-    onError: (_error, _id, context) => {
-      addToast("Unable to delete notification", "error");
-      if (context?.previous) {
-        queryClient.setQueryData(
-          ["notifications", actor?.accessToken],
-          context.previous,
-        );
-      }
-    },
+    onSuccess: invalidate,
+    onError: () => addToast("Unable to delete notification", "error"),
   });
-
+  const all = useMutation({
+    mutationFn: () => markAllNotificationsRead(actor!.accessToken),
+    onSuccess: invalidate,
+    onError: () => addToast("Unable to mark notifications read", "error"),
+  });
   return {
-    notifications: notifications.data ?? [],
-    markRead: (id: string, isRead: boolean) => markRead.mutate({ id, isRead }),
-    deleteNotification: (id: string) => deleteMutation.mutate(id),
-    markAllAsRead: () => {
-      const unread = (notifications.data ?? []).filter((item) => !item.isRead);
-      if (!unread.length) {
-        return;
-      }
-      void Promise.all(
-        unread.map((item) =>
-          markRead.mutateAsync({ id: item.id, isRead: true }),
-        ),
-      )
-        .then(() => {
-          addToast("Notifications marked as read", "success");
-        })
-        .catch(() => {
-          /* Individual mutations display their errors. */
-        });
+    notifications: notifications.isError ? [] : (notifications.data ?? []),
+    isLoading: notifications.isLoading,
+    error: notifications.error,
+    retry: () => {
+      void notifications.refetch();
     },
+    isUpdating: update.isPending || remove.isPending || all.isPending,
+    markRead: (id: string, isRead: boolean) => update.mutate({ id, isRead }),
+    deleteNotification: (id: string) => remove.mutate(id),
+    markAllAsRead: () => all.mutate(),
   };
 }
 
