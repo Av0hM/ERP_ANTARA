@@ -1,35 +1,16 @@
-import { AiController } from "./ai.controller";
-
-describe("AiController", () => {
-  const aiService = {
-    getInsights: jest.fn(),
-    getSmartReminders: jest.fn(),
-    getSchedulingRecommendations: jest.fn(),
-    getWorkloadSuggestions: jest.fn(),
-    summarizeText: jest.fn(),
-  };
-
-  let controller: AiController;
-
-  beforeEach(() => {
-    jest.clearAllMocks();
-    controller = new AiController(aiService as never);
-  });
-
-  it("delegates summary requests to the AI service", async () => {
-    aiService.summarizeText.mockResolvedValue({
-      summary: "Condensed summary",
-      source: "openai",
-    });
-
+import { AiJobsController } from "./ai-jobs.controller";
+describe("AI submission controller", () => {
+  it("uses authenticated identity and returns queued state", async () => {
+    const jobs = {
+      submit: jest.fn().mockResolvedValue({ id: "job", status: "QUEUED" }),
+    };
+    const controller = new AiJobsController(jobs as never);
     await expect(
-      controller.summarize({
-        text: "Payload integration notes.",
-        context: "Subsystem sync",
-      }),
-    ).resolves.toEqual({
-      summary: "Condensed summary",
-      source: "openai",
+      controller.summarize({ id: "member" }, { text: "Notes" }),
+    ).resolves.toEqual({ id: "job", status: "QUEUED" });
+    expect(jobs.submit).toHaveBeenCalledWith("member", {
+      operation: "SUMMARY",
+      text: "Notes",
     });
   });
 });

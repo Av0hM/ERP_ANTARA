@@ -1,15 +1,12 @@
 name: Production Database Migration
 
 on:
-  push:
-    branches:
-      - main
-    paths:
-      - "apps/api/prisma/**"
-      - ".github/workflows/production-migrations.yml"
-      - "infra/scripts/migrate-with-retry.sh"
-
   workflow_dispatch:
+    inputs:
+      acknowledgement:
+        description: "Type BACKUP_VERIFIED_WRITERS_STOPPED after completing Phase 8 checkpoints"
+        required: true
+        type: string
 
 concurrency:
   group: production-database-migration
@@ -17,6 +14,8 @@ concurrency:
 
 jobs:
   migrate:
+    if: inputs.acknowledgement == 'BACKUP_VERIFIED_WRITERS_STOPPED'
+    environment: production
     name: Apply production migrations
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -48,11 +47,9 @@ jobs:
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           DIRECT_URL: ${{ secrets.DIRECT_URL }}
-          PRISMA_SCHEMA_DISABLE_ADVISORY_LOCK: "1"
 
       - name: Verify migration status
         run: npx prisma migrate status --schema apps/api/prisma/schema.prisma
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           DIRECT_URL: ${{ secrets.DIRECT_URL }}
-          PRISMA_SCHEMA_DISABLE_ADVISORY_LOCK: "1"

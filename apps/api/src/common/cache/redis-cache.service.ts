@@ -14,6 +14,8 @@ function parseRedisUrl(redisUrl: string) {
     tls: isTls ? {} : undefined,
     maxRetriesPerRequest: 1,
     lazyConnect: true,
+    connectTimeout: 3000,
+    commandTimeout: 3000,
   };
 }
 

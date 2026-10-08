@@ -52,6 +52,7 @@ npm run dev
 ```
 
 ### Access Points
+
 - **Frontend**: http://localhost:3000
 - **API**: http://localhost:4000/api
 - **Health Check**: http://localhost:4000/health
@@ -85,6 +86,7 @@ npm run dev
 ## Development
 
 ### Prerequisites
+
 - Node.js 22+
 - npm 10+
 - PostgreSQL 16+
@@ -218,6 +220,7 @@ docker compose exec api npm run prisma:migrate deploy
 ### Environment Variables (Production)
 
 Ensure all secrets are set:
+
 - `NEXTAUTH_SECRET`, `JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET`
 - `DATABASE_URL` (PostgreSQL connection string)
 - `REDIS_URL`
@@ -246,6 +249,7 @@ See [Architecture Decision Records](docs/adr/) for key technical decisions:
 ## Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines on:
+
 - Development workflow
 - Code style
 - Testing requirements
@@ -261,3 +265,7 @@ MIT License - see [LICENSE](LICENSE) for details.
 - **Issues**: [GitHub Issues](https://github.com/your-org/antara-erp/issues)
 - **Discussions**: [GitHub Discussions](https://github.com/your-org/antara-erp/discussions)
 - **Security**: Report vulnerabilities to security@your-org.com
+
+## v1 release operations
+
+Use the [Phase 8 runbook](docs/releases/v1.0.0/PHASE_8_RELEASE_HARDENING.md) and [operator checklist](docs/releases/v1.0.0/V1_RELEASE_CHECKLIST.md) for reviewed migration, explicit OWNER bootstrap, configuration and cutover. Ordinary startup never seeds or bootstraps production. Production deployment requires separate approval and passing release gates.

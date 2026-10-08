@@ -1,3 +1,5 @@
+import { validateEnvironment } from "./common/config/validate-environment";
+import { FileOutputsModule } from "./modules/files/file-outputs.module";
 import { UiContextModule } from "./modules/ui-context/ui-context.module";
 import { Module } from "@nestjs/common";
 import { ConfigModule, ConfigService } from "@nestjs/config";
@@ -63,6 +65,7 @@ function buildRedisConnection(configService: ConfigService) {
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
+      validate: validateEnvironment,
       load: [appConfig],
     }),
     BullModule.forRootAsync({
@@ -88,6 +91,7 @@ function buildRedisConnection(configService: ConfigService) {
     CalendarModule,
     WorklogsModule,
     FilesModule,
+    FileOutputsModule,
     AuditModule,
     DecisionsModule,
     MeetingsModule,

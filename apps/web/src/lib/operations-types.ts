@@ -140,8 +140,13 @@ export type AiBundle = {
 };
 
 export type AiSummaryResponse = {
-  summary: string;
-  source: "openai" | "local";
+  id: string;
+  status: "QUEUED" | "RUNNING" | "SUCCEEDED" | "FAILED" | "CANCELLED";
+  operation: "SUMMARY" | "INSIGHTS";
+  attempts: number;
+  errorCode: string | null;
+  result: { summary: string } | null;
+  source: "ollama";
 };
 
 export type AttachmentRecord = {
@@ -149,13 +154,21 @@ export type AttachmentRecord = {
   name: string;
   mimeType: string;
   sizeBytes: number;
-  storageUrl: string;
-  driveFileId?: string | null;
+  category:
+    "DOCUMENT" | "MEETING_REPORT" | "CAD" | "IMAGE" | "EXPORT" | "OTHER";
+  provider: "DRIVE" | "S3" | null;
+  provenance: "VERIFIED" | "LEGACY_UNVERIFIED";
+  integrity: string;
+  deletedAt: string | null;
+  purgeAfter: string | null;
+  permissions: { canManage: boolean };
+  scopeSubsystemIds: string[];
   tags: string[];
   createdAt: string;
   task?: {
     id: string;
     title: string;
+    subsystemId: string;
   } | null;
   uploadedBy?: {
     id: string;

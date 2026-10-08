@@ -131,7 +131,7 @@ EXPOSE 4000
 # ------------------------------------------------------------
 # START
 #
-# Prisma migrations run first.
-# If successful, NestJS starts.
+# Migrations/bootstrap are explicit maintenance-window operator steps.
+# Startup never migrates or seeds production.
 # ------------------------------------------------------------
 CMD ["node", "apps/api/dist/apps/api/src/main.js"]

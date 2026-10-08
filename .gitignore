@@ -15,3 +15,8 @@ apps/api/.local/demo-passwords.txt
 ERP.zip
 
 /dummy-credentials.local.json
+
+# Environment variants and immutable database backups contain secrets.
+.env.*
+!.env.example
+*.dump

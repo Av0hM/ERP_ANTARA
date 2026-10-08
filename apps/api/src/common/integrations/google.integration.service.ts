@@ -1,6 +1,6 @@
 import { Injectable } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
-import { createSign, randomUUID } from "node:crypto";
+import { createSign } from "node:crypto";
 
 type GoogleEventInput = {
   title: string;
@@ -8,18 +8,6 @@ type GoogleEventInput = {
   startsAt: string;
   endsAt: string;
   subsystemName?: string | null;
-};
-
-type GoogleDriveUploadInput = {
-  name: string;
-  mimeType: string;
-  contentBase64: string;
-  folderId?: string | null;
-};
-
-type GoogleDriveUploadResult = {
-  id: string;
-  webViewLink?: string;
 };
 
 type GoogleCalendarEventResult = {
@@ -49,14 +37,6 @@ export class GoogleIntegrationService {
   isCalendarConfigured() {
     return Boolean(
       this.getGoogleCalendarId() &&
-      this.getServiceAccountEmail() &&
-      this.getPrivateKey(),
-    );
-  }
-
-  isDriveConfigured() {
-    return Boolean(
-      this.getGoogleDriveRootFolderId() &&
       this.getServiceAccountEmail() &&
       this.getPrivateKey(),
     );
@@ -138,65 +118,6 @@ export class GoogleIntegrationService {
     return payload.items ?? [];
   }
 
-  async uploadDriveFile(input: GoogleDriveUploadInput) {
-    const folderId = input.folderId ?? this.getGoogleDriveRootFolderId();
-    if (!folderId || !this.isDriveConfigured()) {
-      return null;
-    }
-
-    const accessToken = await this.getAccessToken(
-      "https://www.googleapis.com/auth/drive.file",
-    );
-    const boundary = `antara-${randomUUID()}`;
-    const metadata = {
-      name: input.name,
-      parents: [folderId],
-    };
-
-    const contentBytes = Buffer.from(input.contentBase64, "base64");
-    const body = Buffer.concat([
-      Buffer.from(
-        `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(metadata)}\r\n`,
-      ),
-      Buffer.from(`--${boundary}\r\nContent-Type: ${input.mimeType}\r\n\r\n`),
-      contentBytes,
-      Buffer.from(`\r\n--${boundary}--`),
-    ]);
-
-    const response = await fetch(
-      "https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,webViewLink",
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          "Content-Type": `multipart/related; boundary=${boundary}`,
-        },
-        body,
-      },
-    );
-
-    if (!response.ok) {
-      throw new Error(`Google Drive upload failed: ${response.status}`);
-    }
-
-    return (await response.json()) as GoogleDriveUploadResult;
-  }
-
-  async deleteDriveFile(id: string) {
-    const token = await this.getAccessToken(
-      "https://www.googleapis.com/auth/drive.file",
-    );
-    const response = await fetch(
-      `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(id)}`,
-      {
-        method: "DELETE",
-        headers: { Authorization: `Bearer ${token}` },
-      },
-    );
-    if (!response.ok && response.status !== 404)
-      throw new Error("Drive cleanup failed");
-  }
-
   async deleteCalendarEvent(id: string) {
     const calendarId = this.getGoogleCalendarId();
     if (!calendarId) throw new Error("Calendar is not configured");
@@ -226,13 +147,6 @@ export class GoogleIntegrationService {
   private getGoogleCalendarId() {
     return (
       this.configService.get<string>("integrations.googleCalendarId") ?? null
-    );
-  }
-
-  private getGoogleDriveRootFolderId() {
-    return (
-      this.configService.get<string>("integrations.googleDriveRootFolderId") ??
-      null
     );
   }
 

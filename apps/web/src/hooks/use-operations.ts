@@ -262,45 +262,36 @@ export function useAiSummary() {
   };
 }
 
-export function useAttachmentVault() {
+export function useAttachmentVault(deleted = false) {
   const actor = useActorProfile();
   const queryClient = useQueryClient();
   const { addToast } = useToast();
   const attachments = useQuery({
-    queryKey: ["attachments", actor?.accessToken],
-    queryFn: () => fetchAttachments(actor!.accessToken),
+    queryKey: ["attachments", actor?.accessToken, deleted],
+    queryFn: () => fetchAttachments(actor!.accessToken, deleted),
     enabled: !!actor,
   });
 
   const create = useMutation({
     mutationFn: (input: {
-      name: string;
-      mimeType: string;
-      sizeBytes: number;
+      file: File;
+      category: AttachmentRecord["category"];
       taskId?: string;
-      tags?: string[];
-      contentBase64?: string;
-    }) =>
-      createAttachment(
-        {
-          ...input,
-        },
-        actor!.accessToken,
-      ),
-    onSuccess: (created) => {
-      queryClient.setQueryData<AttachmentRecord[]>(
-        ["attachments", actor?.accessToken],
-        (current = []) => [created, ...current],
-      );
+    }) => createAttachment(input, actor!.accessToken),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["attachments"] });
       addToast("File uploaded", "success");
     },
-    onError: () => {
-      addToast("Something went wrong. Please try again.", "error");
+    onError: (error) => {
+      addToast(error.message, "error");
     },
   });
 
   return {
     attachments: attachments.data ?? [],
+    isLoading: attachments.isLoading,
+    error: attachments.error,
+    refetch: attachments.refetch,
     createAttachment: create.mutate,
     isCreating: create.isPending,
   };

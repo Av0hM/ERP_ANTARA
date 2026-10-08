@@ -3,7 +3,8 @@ import { Request, Response, NextFunction } from "express";
 
 interface SecurityHeadersConfig {
   contentSecurityPolicy?: string | false;
-  hsts?: { maxAge: number; includeSubDomains: boolean; preload: boolean } | false;
+  hsts?:
+    { maxAge: number; includeSubDomains: boolean; preload: boolean } | false;
   xFrameOptions?: "DENY" | "SAMEORIGIN" | false;
   xContentTypeOptions?: boolean;
   xXssProtection?: boolean;
@@ -11,18 +12,20 @@ interface SecurityHeadersConfig {
   permissionsPolicy?: string | false;
   crossOriginEmbedderPolicy?: boolean;
   crossOriginOpenerPolicy?: boolean;
-  crossOriginResourcePolicy?: "same-origin" | "same-site" | "cross-origin" | false;
+  crossOriginResourcePolicy?:
+    "same-origin" | "same-site" | "cross-origin" | false;
 }
 
 const DEFAULT_CONFIG: Required<SecurityHeadersConfig> = {
   contentSecurityPolicy:
-    "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' wss: https:; frame-ancestors 'none'; base-uri 'self'; form-action 'self'",
-  hsts: { maxAge: 31536000, includeSubDomains: true, preload: true },
+    "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'",
+  hsts: { maxAge: 31536000, includeSubDomains: false, preload: false },
   xFrameOptions: "DENY",
   xContentTypeOptions: true,
   xXssProtection: true,
   referrerPolicy: "strict-origin-when-cross-origin",
-  permissionsPolicy: "accelerometer=(), camera=(), geolocation=(), gyroscope=(), magnetometer=(), microphone=(), payment=(), usb=()",
+  permissionsPolicy:
+    "accelerometer=(), camera=(), geolocation=(), gyroscope=(), magnetometer=(), microphone=(), payment=(), usb=()",
   crossOriginEmbedderPolicy: true,
   crossOriginOpenerPolicy: true,
   crossOriginResourcePolicy: "same-origin",
@@ -39,7 +42,10 @@ export class SecurityHeadersMiddleware implements NestMiddleware {
   use(req: Request, res: Response, next: NextFunction) {
     // Content Security Policy
     if (this.config.contentSecurityPolicy) {
-      res.setHeader("Content-Security-Policy", this.config.contentSecurityPolicy);
+      res.setHeader(
+        "Content-Security-Policy",
+        this.config.contentSecurityPolicy,
+      );
     }
 
     // Strict Transport Security
@@ -88,7 +94,10 @@ export class SecurityHeadersMiddleware implements NestMiddleware {
 
     // Cross-Origin Resource Policy
     if (this.config.crossOriginResourcePolicy) {
-      res.setHeader("Cross-Origin-Resource-Policy", this.config.crossOriginResourcePolicy);
+      res.setHeader(
+        "Cross-Origin-Resource-Policy",
+        this.config.crossOriginResourcePolicy,
+      );
     }
 
     // Remove server header

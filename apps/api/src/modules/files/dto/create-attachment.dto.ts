@@ -1,5 +1,7 @@
+import { FileCategory } from "@prisma/client";
 import {
   IsArray,
+  IsEnum,
   IsBase64,
   IsInt,
   IsOptional,
@@ -8,6 +10,10 @@ import {
 } from "class-validator";
 
 export class CreateAttachmentDto {
+  @IsOptional()
+  @IsEnum(FileCategory)
+  category?: FileCategory;
+
   @IsString()
   name!: string;
 

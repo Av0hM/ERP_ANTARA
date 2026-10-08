@@ -1,16 +1,16 @@
 services:
-
   - type: web
     name: antara-api
     runtime: docker
     plan: free
 
-    autoDeployTrigger: checksPass
+    autoDeployTrigger: off
 
     dockerfilePath: ./infra/docker/api.Dockerfile
     dockerContext: .
 
     healthCheckPath: /api/health
+    maxShutdownDelaySeconds: 240
 
     envVars:
       - key: DATABASE_URL
@@ -29,16 +29,25 @@ services:
         generateValue: true
 
       - key: FRONTEND_URL
-        value: https://antara-web.onrender.com
+        value: https://erp.project-antara.space
 
       - key: NODE_ENV
         value: production
 
-      - key: OPENAI_API_KEY
+      - key: AI_ENABLED
+        value: "false"
+
+      - key: STORAGE_DRIVE_ENABLED
+        value: "false"
+
+      - key: STORAGE_S3_ENABLED
+        value: "false"
+
+      - key: GOOGLE_CLIENT_ID
         sync: false
 
-      - key: OPENAI_MODEL
-        value: gpt-5-mini
+      - key: GOOGLE_ALLOWED_EMAILS
+        sync: false
 
       - key: GOOGLE_PROJECT_ID
         sync: false
@@ -64,9 +73,9 @@ services:
       - key: NOTIFICATIONS_FROM_EMAIL
         sync: false
 
-
   - type: web
     name: antara-web
+    autoDeployTrigger: off
     runtime: docker
     plan: free
 
@@ -84,7 +93,7 @@ services:
         value: https://antara-api-ev5f.onrender.com/api
 
       - key: NEXTAUTH_URL
-        value: https://antara-web.onrender.com
+        value: https://erp.project-antara.space
 
       - key: NEXTAUTH_SECRET
         generateValue: true

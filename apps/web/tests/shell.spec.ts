@@ -448,3 +448,205 @@ test("notification history paginates and mark-all includes older recipient rows"
     });
   }
 });
+
+test("Phase 6 Files: upload, authorized open, context filtering, delete and restore", async ({
+  page,
+}) => {
+  await login(page, "owner");
+  await page.goto("/files");
+  await page.getByLabel("Category", { exact: true }).selectOption("CAD");
+  const task = await db.task.findFirstOrThrow({ where: { subsystemId: adcs } });
+  await page.getByLabel("Destination task").selectOption(task.id);
+  await page.getByLabel("File", { exact: true }).setInputFiles({
+    name: "browser-part.step",
+    mimeType: "application/octet-stream",
+    buffer: Buffer.from("CAD fixture bytes"),
+  });
+  await page.getByRole("button", { name: "Upload file", exact: true }).click();
+  const card = page.locator("article").filter({ hasText: "browser-part.step" });
+  await expect(card).toBeVisible();
+  await expect(card).toContainText("S3");
+  const download = page.waitForEvent("download");
+  await card.getByRole("button", { name: "Open / download" }).click();
+  expect((await download).suggestedFilename()).toBe("browser-part.step");
+  await card.getByRole("button", { name: "Delete", exact: true }).click();
+  await expect(card).not.toBeVisible();
+  await page.getByLabel("Retained deleted files").check();
+  await expect(card).toBeVisible();
+  await card.getByRole("button", { name: "Restore", exact: true }).click();
+  await expect(card).not.toBeVisible();
+  await page.getByLabel("Retained deleted files").uncheck();
+  await expect(card).toBeVisible();
+  await choose(page, `subsystem:${payload}`);
+  await page.goto("/files");
+  await expect(page.getByRole("heading", { name: "ERP files" })).toBeVisible();
+  await expect(
+    page.locator("article").filter({ hasText: "browser-part.step" }),
+  ).not.toBeVisible();
+});
+
+test("Phase 6 MEMBER Files are read-only and have no permanent provider link", async ({
+  page,
+}) => {
+  await login(page, "member");
+  await page.goto("/files");
+  await expect(page.getByRole("heading", { name: "ERP files" })).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Upload file", exact: true }),
+  ).not.toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Delete", exact: true }),
+  ).not.toBeVisible();
+  expect(
+    await page
+      .locator('a[href*="drive.google.com"], a[href*="storage.fixture"]')
+      .count(),
+  ).toBe(0);
+});
+
+test("AI summary uses real session with queued, completion and notification states", async ({
+  page,
+}) => {
+  await login(page, "member");
+  await page.goto("/analytics");
+  const panel = page.getByRole("region", { name: "AI summarization" });
+  await expect(
+    panel.getByText("AI is available", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    panel.getByRole("button", { name: "Analyze authorized tasks" }),
+  ).toHaveCount(0);
+  await panel.getByLabel("Technical text").fill("Review antenna test notes");
+  const submitted = page.waitForResponse(
+    (response) =>
+      response.url().endsWith("/ai/summarize") &&
+      response.request().method() === "POST",
+  );
+  await panel.getByRole("button", { name: "Generate Summary" }).click();
+  const job = await (await submitted).json();
+  expect(job.status).toBe("QUEUED");
+  await expect(panel.getByText("Queued", { exact: true })).toBeVisible();
+  await expect(panel.getByText("Running", { exact: true })).toBeVisible({
+    timeout: 10000,
+  });
+  await expect(
+    panel.getByText("Offline fixture summary", { exact: true }),
+  ).toBeVisible({ timeout: 15000 });
+  const notification = await db.notification.findFirst({
+    where: { userId: "member", title: "AI analysis completed" },
+  });
+  expect(notification).not.toBeNull();
+  const response = await api(page, "/notifications");
+  expect(await response.text()).not.toContain("antenna test notes");
+});
+
+test("AI disabled and failed states do not fabricate summaries", async ({
+  page,
+}) => {
+  await login(page, "owner");
+  await page.route("**/ai/readiness", (route) =>
+    route.fulfill({ json: { status: "disabled" } }),
+  );
+  await page.goto("/analytics");
+  const panel = page.getByRole("region", { name: "AI summarization" });
+  await expect(
+    panel.getByText("AI is disabled", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    panel.getByRole("button", { name: "Generate Summary" }),
+  ).toBeDisabled();
+  await page.unroute("**/ai/readiness");
+  await page.reload();
+  await panel.getByLabel("Technical text").fill("fixture-fail");
+  await panel.getByRole("button", { name: "Generate Summary" }).click();
+  await expect(
+    panel.getByText("Analysis failed. You may submit again."),
+  ).toBeVisible({ timeout: 15000 });
+  await expect(panel.getByText("Offline fixture summary")).toHaveCount(0);
+});
+
+test("AI scoped job loses access after membership revocation without result flash", async ({
+  page,
+}) => {
+  await login(page, "admin");
+  await page.goto("/analytics");
+  const panel = page.getByRole("region", { name: "AI summarization" });
+  await expect(
+    panel.getByText("AI is available", { exact: true }),
+  ).toBeVisible();
+  const submitted = page.waitForResponse(
+    (response) =>
+      response.url().endsWith("/ai/jobs") &&
+      response.request().method() === "POST",
+  );
+  await panel.getByRole("button", { name: "Analyze authorized tasks" }).click();
+  const job = await (await submitted).json();
+  await db.subsystemMembership.delete({
+    where: { userId_subsystemId: { userId: "admin", subsystemId: adcs } },
+  });
+  await expect(panel.getByText("Offline fixture summary")).toHaveCount(0);
+  const response = await api(page, `/ai/jobs/${job.id}`);
+  expect(response.status()).toBe(403);
+  await page
+    .getByRole("button", { name: "Refresh available contexts" })
+    .click();
+  await expect(
+    panel.getByRole("button", { name: "Analyze authorized tasks" }),
+  ).toHaveCount(0);
+  await expect(panel.getByText("Offline fixture summary")).toHaveCount(0);
+});
+
+test("release OWNER task and decision persistence with direct-object denial", async ({
+  page,
+}) => {
+  await login(page, "owner");
+  const headers = { Authorization: `Bearer ${await token(page)}` };
+  const task = await page.request.post(`${origin}/tasks`, {
+    headers,
+    data: {
+      title: "Release smoke task",
+      description: "Offline release fixture",
+      priority: "MEDIUM",
+      subsystemId: payload,
+      estimatedHours: 1,
+      deadline: "2030-01-01T00:00:00.000Z",
+    },
+  });
+  expect(task.status()).toBe(201);
+  const createdTask: { id: string; assignedById: string } = await task.json();
+  expect(createdTask.assignedById).toBe("owner");
+  const decision = await page.request.post(`${origin}/decisions`, {
+    headers,
+    data: {
+      title: "Release smoke decision",
+      context: "Offline fixture",
+      decision: "Review",
+      rationale: "Smoke validation",
+      scope: "SUBSYSTEM",
+      authority: "OWNER",
+      subsystemId: payload,
+    },
+  });
+  expect(decision.status()).toBe(201);
+  const createdDecision: { id: string } = await decision.json();
+  expect(
+    (
+      await page.request.get(`${origin}/decisions/${createdDecision.id}`, {
+        headers,
+      })
+    ).status(),
+  ).toBe(200);
+  await page.context().clearCookies();
+  await login(page, "member");
+  expect(
+    (
+      await page.request.post(`${origin}/tasks/${createdTask.id}/comments`, {
+        headers: { Authorization: `Bearer ${await token(page)}` },
+        data: { content: "Forbidden" },
+      })
+    ).status(),
+  ).toBe(403);
+  expect((await api(page, `/decisions/${createdDecision.id}`)).status()).toBe(
+    403,
+  );
+});

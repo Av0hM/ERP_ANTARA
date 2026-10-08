@@ -1,3 +1,6 @@
+import { storageFixture } from "../../../test/storage.fixture";
+import { StorageRouter } from "../storage/storage.router";
+import { StorageConfig } from "../storage/storage.config";
 import { AuthorizationService } from "../authorization/authorization.service";
 import { CoreAuthorizationService } from "../authorization/core-authorization.service";
 import { ResourcesService } from "../../modules/resources/resources.service";
@@ -270,6 +273,11 @@ integration("Phase 3 real PostgreSQL and authenticated HTTP", () => {
         { provide: ConfigService, useValue: config },
         { provide: SessionService, useValue: sessions },
         { provide: GoogleIntegrationService, useValue: google },
+        {
+          provide: StorageRouter,
+          useFactory: () => storageFixture(google).router,
+        },
+        { provide: StorageConfig, useFactory: () => storageFixture().config },
         { provide: TaskEventsService, useValue: events },
         { provide: "test-email-queue", useValue: { add: jest.fn() } },
       ],
@@ -574,7 +582,7 @@ integration("Phase 3 real PostgreSQL and authenticated HTTP", () => {
     } = await res.json();
     expect(json.uploadedById).toBe("owner");
     expect(json.sizeBytes).toBe(5);
-    expect(json.storageUrl).not.toContain("local://");
+    expect(json).not.toHaveProperty("storageUrl");
     expectSafeUsers(json);
     expectSafeUsers(await (await request("/files/attachments")).json());
   });

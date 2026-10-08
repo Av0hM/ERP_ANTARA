@@ -1,3 +1,6 @@
+import { storageFixture } from "../../../test/storage.fixture";
+import { StorageRouter } from "../storage/storage.router";
+import { StorageConfig } from "../storage/storage.config";
 import { AuthorizationService } from "../authorization/authorization.service";
 import { CoreAuthorizationService } from "../authorization/core-authorization.service";
 import { Test } from "@nestjs/testing";
@@ -95,6 +98,7 @@ describe("Phase 3 projections, identity and truthful errors", () => {
     jest.resetAllMocks();
     google.isDriveConfigured.mockReturnValue(true);
     prisma.workLog.findMany.mockResolvedValue([]);
+    prisma.attachment.findMany.mockResolvedValue([]);
     prisma.user.findUnique.mockResolvedValue({
       id: "real",
       role: "OWNER",
@@ -128,6 +132,11 @@ describe("Phase 3 projections, identity and truthful errors", () => {
         },
         { provide: AuditService, useValue: { log: jest.fn() } },
         { provide: GoogleIntegrationService, useValue: google },
+        {
+          provide: StorageRouter,
+          useFactory: () => storageFixture(google).router,
+        },
+        { provide: StorageConfig, useFactory: () => storageFixture().config },
       ],
     }).compile();
     tasks = module.get(TasksService);

@@ -48,6 +48,8 @@ const migrations = [
   "20261005000000_dummy_seed_marker",
   "20261006000000_phase_1a_foundation",
   "20261007000000_phase_2_session_security",
+  "20261008000000_phase_6_storage",
+  "20261009000000_phase_7_ai_jobs",
 ] as const;
 const originalHashes = [
   "83d550d1662edac027948bcf48a8a2b15be300ea1f518e187cf374a6e3b5db52",
@@ -184,11 +186,12 @@ integration("Phase 2 authentication: isolated PostgreSQL", () => {
     });
     await db.$executeRaw`INSERT INTO "Session" (id, "refreshToken", "userId", "expiresAt") VALUES ('old-active', 'old-usable-refresh-jwt', 'legacy-history', NOW() + INTERVAL '7 days')`;
     await db.$executeRaw`INSERT INTO "Session" (id, "refreshToken", "userId", "expiresAt", "revokedAt") VALUES ('old-revoked', 'older-refresh-jwt', 'legacy-history', NOW() + INTERVAL '7 days', '2026-01-01'::timestamp)`;
-    cpSync(
-      path.join(source, "migrations", migrations[3]),
-      path.join(temp, "migrations", migrations[3]),
-      { recursive: true },
-    );
+    for (const name of migrations.slice(3))
+      cpSync(
+        path.join(source, "migrations", name),
+        path.join(temp, "migrations", name),
+        { recursive: true },
+      );
     deploy(url.toString());
     const subsystems = await provisionCanonicalSubsystems(db);
     adcs = subsystems.find((s) => s.key === "ADCS")!.id;

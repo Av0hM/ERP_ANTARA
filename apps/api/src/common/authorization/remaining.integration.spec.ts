@@ -1,7 +1,9 @@
+import { storageFixture } from "../../../test/storage.fixture";
+import { StorageRouter } from "../storage/storage.router";
+import { StorageConfig } from "../storage/storage.config";
 import { Queue } from "bullmq";
 import { getQueueToken } from "@nestjs/bullmq";
 import { GoogleIntegrationService } from "../integrations/google.integration.service";
-import { OpenAiIntegrationService } from "../integrations/openai.integration.service";
 import { ResourcesController } from "../../modules/resources/resources.controller";
 import { ResourcesService } from "../../modules/resources/resources.service";
 import { FilesController } from "../../modules/files/files.controller";
@@ -304,12 +306,11 @@ integration("Phase 4B current DB scoped HTTP and object races", () => {
         AiService,
         { provide: GoogleIntegrationService, useValue: google },
         {
-          provide: OpenAiIntegrationService,
-          useValue: {
-            summarize: jest.fn(),
-            generateStructuredOutput: jest.fn(),
-          },
+          provide: StorageRouter,
+          useFactory: () => storageFixture(google).router,
         },
+        { provide: StorageConfig, useFactory: () => storageFixture().config },
+
         {
           provide: getQueueToken("notification-email"),
           useValue: { add: jest.fn() },
@@ -606,7 +607,9 @@ integration("Phase 4B current DB scoped HTTP and object races", () => {
       (await req("admin", `/files/attachments/${fileA}`, "DELETE")).status,
     ).toBe(200);
     expect(
-      await db.auditLog.count({ where: { entityId: fileA, action: "DELETE" } }),
+      await db.auditLog.count({
+        where: { entityId: fileA, action: "FILE_SOFT_DELETE" },
+      }),
     ).toBe(1);
   });
   it("MEMBER upload remains prohibited by existing collaboration contract", async () => {

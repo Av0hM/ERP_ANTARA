@@ -1,0 +1,71 @@
+{
+  "status": "BLOCKED_PENDING_OPERATOR_REVIEW",
+  "api": {
+    "suites": 43,
+    "passed": 741,
+    "skipped": 0,
+    "log": "/tmp/phase8-final-regression.log"
+  },
+  "browser": {
+    "passed": 20,
+    "log": "/tmp/phase8-final-browser.log"
+  },
+  "releaseSmoke": {
+    "passed": 13,
+    "subsetOfBrowser": true,
+    "log": "/tmp/phase8-final-smoke.log"
+  },
+  "distinctTests": 761,
+  "builds": {
+    "api": "PASS",
+    "webOptimized": "PASS",
+    "contracts": "PASS",
+    "sharedUtils": "PASS",
+    "ui": "PASS",
+    "docker": {
+      "api": "PASS Node22 Alpine / npm11.6.2",
+      "web": "PASS Node22 Alpine / npm11.6.2",
+      "apiImage": "090af08bf586",
+      "webImage": "3e2fe6742b1e",
+      "productionModeApiSmoke": "PASS",
+      "webPublicAsset": "PASS antara-badge.png",
+      "missingSecretStartup": "PASS exit 1",
+      "restoredOwnerBrowser": "PASS valid local configuration; six contexts; ephemeral session removed"
+    }
+  },
+  "typechecks": {
+    "api": "PASS",
+    "web": "PASS"
+  },
+  "prismaGenerate": "PASS",
+  "prismaValidate": "PASS",
+  "cleanInstall": "PASS npm ci --ignore-scripts in isolated temporary directory; native generation/build separately passed",
+  "rehearsal": {
+    "database": "antara_phase8_rehearsal_20261008",
+    "host": "127.0.0.1",
+    "port": 55461,
+    "source": "approved immutable restored production backup",
+    "migrations": 6,
+    "ready": true,
+    "users": 1,
+    "activeOwners": 1,
+    "canonicalSubsystems": 5,
+    "memberships": 0,
+    "tasks": 0,
+    "decisions": 0,
+    "invitations": 0,
+    "attachments": 0,
+    "aiJobs": 0,
+    "targetUnrevokedSessions": 0,
+    "bootstrapAudits": 1,
+    "backupSha256BeforeAndAfter": "bfd1633ecec62de4914bf259beed0ee69e6e4b140a072ee0923d7f88c9bea902",
+    "httpSmoke": "PASS; temporary synthetic session removed; no real password changed"
+  },
+  "limitations": [
+    "No production/provider/DNS/deployment operation performed",
+    "General shared-proxy request limit capacity unresolved; broad increase rejected and not applied",
+    "Live provider and Render capacity verification remain operator gates"
+  ],
+  "formatting": "PASS",
+  "diffCheck": "PASS"
+}

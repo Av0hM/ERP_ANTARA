@@ -1,21 +1,11 @@
 import { CurrentUser } from "../../common/decorators/current-user.decorator";
 import { Controller, Get, Query, UseGuards } from "@nestjs/common";
-import { Body, Post } from "@nestjs/common";
 
 import { Roles } from "../../common/decorators/roles.decorator";
 import { RolesGuard } from "../../common/guards/roles.guard";
 import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard";
-import { IsOptional, IsString, IsInt, Min } from "class-validator";
+import { IsOptional, IsInt, Min } from "class-validator";
 import { AiService } from "./ai.service";
-
-class SummarizeDto {
-  @IsString()
-  text!: string;
-
-  @IsOptional()
-  @IsString()
-  context?: string;
-}
 
 class ScheduleRiskDto {
   @IsOptional()
@@ -75,11 +65,5 @@ export class AiController {
       query.simulations ?? 1000,
       actor.id,
     );
-  }
-
-  @Post("summarize")
-  @Roles("OWNER", "ADMIN", "MEMBER")
-  async summarize(@Body() payload: SummarizeDto) {
-    return this.aiService.summarizeText(payload);
   }
 }

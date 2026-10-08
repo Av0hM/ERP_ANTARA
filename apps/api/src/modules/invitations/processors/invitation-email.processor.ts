@@ -22,9 +22,13 @@ export class InvitationEmailProcessor extends WorkerHost {
 
   constructor(private readonly configService: ConfigService) {
     super();
-    this.enabled = this.configService.get<string>("NOTIFICATIONS_EMAIL_ENABLED") === "true";
-    this.fromEmail = this.configService.get<string>("NOTIFICATIONS_FROM_EMAIL") ?? "noreply@antaraerp.local";
-    this.baseUrl = this.configService.get<string>("FRONTEND_URL") ?? "http://localhost:3000";
+    this.enabled =
+      this.configService.get<string>("NOTIFICATIONS_EMAIL_ENABLED") === "true";
+    this.fromEmail =
+      this.configService.get<string>("NOTIFICATIONS_FROM_EMAIL") ??
+      "noreply@antaraerp.local";
+    this.baseUrl =
+      this.configService.get<string>("FRONTEND_URL") ?? "http://localhost:3000";
 
     const apiKey = this.configService.get<string>("RESEND_API_KEY");
     if (this.enabled && apiKey) {
@@ -49,12 +53,17 @@ export class InvitationEmailProcessor extends WorkerHost {
       });
       return true;
     } catch (error) {
-      console.error("Failed to send invitation email:", error);
-      throw error;
+      console.error("INVITATION_EMAIL_DELIVERY_FAILED");
+      throw new Error("EMAIL_DELIVERY_FAILED");
     }
   }
 
-  private renderEmailTemplate(role: string, subsystemId: string | undefined, inviteUrl: string, expiresAt: Date): string {
+  private renderEmailTemplate(
+    role: string,
+    subsystemId: string | undefined,
+    inviteUrl: string,
+    expiresAt: Date,
+  ): string {
     return `
       <!DOCTYPE html>
       <html>

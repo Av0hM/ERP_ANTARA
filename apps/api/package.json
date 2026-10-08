@@ -28,9 +28,14 @@
     "test:remaining:integration": "REMAINING_REQUIRE_DB=true jest --runInBand --config jest.config.js --runTestsByPath src/common/authorization/remaining.integration.spec.ts",
     "bootstrap:v1": "ts-node src/scripts/bootstrap-v1.ts",
     "bootstrap:v1-owner": "ts-node src/scripts/bootstrap-v1.ts --action owner",
-    "test:bootstrap": "PHASE1C_REQUIRE_DB=true jest --runInBand --config jest.config.js --runTestsByPath src/scripts/__tests__/phase1c.spec.ts src/scripts/__tests__/phase1c.integration.spec.ts"
+    "test:bootstrap": "PHASE1C_REQUIRE_DB=true jest --runInBand --config jest.config.js --runTestsByPath src/scripts/__tests__/phase1c.spec.ts src/scripts/__tests__/phase1c.integration.spec.ts",
+    "test:storage": "STORAGE_REQUIRE_DB=true jest --runInBand --config jest.config.js --runTestsByPath src/modules/files/files.service.spec.ts src/common/storage/storage.providers.spec.ts src/modules/files/storage.integration.spec.ts src/modules/files/file-outputs.spec.ts",
+    "test:ai": "AI_REQUIRE_DB=true jest --runInBand --config jest.config.js --runTestsByPath src/common/ai/ollama-ai.provider.spec.ts src/modules/ai/ai.controller.spec.ts src/modules/ai/ai.service.spec.ts src/modules/ai/ai-jobs.integration.spec.ts src/modules/ai/ai-queue.integration.spec.ts",
+    "verify:release": "ts-node src/scripts/verify-release.ts"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "3.1147.0",
+    "@aws-sdk/s3-request-presigner": "3.1147.0",
     "@nestjs/bullmq": "^12.0.0",
     "@nestjs/common": "^11.0.3",
     "@nestjs/config": "^4.0.2",
@@ -51,6 +56,7 @@
     "cookie-parser": "^1.4.7",
     "google-auth-library": "10.5.0",
     "ioredis": "^5.5.0",
+    "multer": "2.4.0",
     "passport": "^0.7.0",
     "passport-google-oauth20": "^2.0.0",
     "passport-jwt": "^4.0.1",
@@ -63,7 +69,7 @@
     "resend": "^6.28.1",
     "rxjs": "^7.8.2",
     "socket.io": "^4.2.0",
-    "socket.io-client": "4.2.0",
+    "socket.io-client": "4.8.4",
     "swagger-ui-express": "^5.0.1",
     "zod": "^3.24.2"
   },
@@ -75,6 +81,7 @@
     "@types/cookie-parser": "^1.4.8",
     "@types/express": "^5.0.0",
     "@types/jest": "^29.5.14",
+    "@types/multer": "2.3.0",
     "@types/passport-google-oauth20": "^2.0.16",
     "@types/passport-jwt": "^4.0.1",
     "@types/passport-local": "^1.0.38",

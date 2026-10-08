@@ -27,10 +27,6 @@ describe("AiService", () => {
     setJson: jest.fn(),
   };
 
-  const openAiIntegration = {
-    summarize: jest.fn(),
-  };
-
   let service: AiService;
 
   beforeEach(async () => {
@@ -39,7 +35,6 @@ describe("AiService", () => {
     cache.setJson.mockResolvedValue(undefined);
     service = new AiService(
       prisma as never,
-      openAiIntegration as never,
       cache as never,
       (await fixtureCore()).core,
     );
@@ -105,7 +100,8 @@ describe("AiService", () => {
     expect(
       insights.some((item) => item.title.includes("Dependency chain blockage")),
     ).toBe(true);
-    expect(prisma.aIInsight.createMany).toHaveBeenCalled();
+    expect(prisma.aIInsight.createMany).not.toHaveBeenCalled();
+    expect(insights.every((row) => row.source === "deterministic")).toBe(true);
   });
 
   it("creates workload suggestions from subsystem imbalance", async () => {
@@ -149,21 +145,5 @@ describe("AiService", () => {
 
     expect(suggestions[0]?.from).toBe("Software");
     expect(suggestions[0]?.to).toBe("Structures");
-  });
-
-  it("uses the live OpenAI adapter when text summarization is requested", async () => {
-    openAiIntegration.summarize.mockResolvedValue(
-      "Summarized technical update.",
-    );
-
-    await expect(
-      service.summarizeText({
-        text: "Telemetry packet checksum validation passed after retry logic adjustments.",
-        context: "Sprint review",
-      }),
-    ).resolves.toEqual({
-      summary: "Summarized technical update.",
-      source: "openai",
-    });
   });
 });

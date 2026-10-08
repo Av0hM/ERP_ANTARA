@@ -40,7 +40,7 @@ export class NotificationsService implements OnModuleInit {
     // Legacy/general rows do not consistently retain object references; never replay stale protected content.
     return notifications.map((item) => ({
       ...item,
-      ...genericNotification,
+      ...safeNotificationContent(item),
       taskId: null,
     }));
   }
@@ -61,9 +61,11 @@ export class NotificationsService implements OnModuleInit {
       take: 21,
       ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
     });
-    const items = rows
-      .slice(0, 20)
-      .map((item) => ({ ...item, ...genericNotification, taskId: null }));
+    const items = rows.slice(0, 20).map((item) => ({
+      ...item,
+      ...safeNotificationContent(item),
+      taskId: null,
+    }));
     return {
       items,
       nextCursor: rows.length > 20 ? items[items.length - 1]?.id : undefined,
@@ -151,9 +153,10 @@ export class NotificationsService implements OnModuleInit {
         data: { isRead: payload.isRead },
       });
       if (!result.count) throw new NotFoundException("Notification not found");
+      const item = await tx.notification.findUniqueOrThrow({ where: { id } });
       return {
-        ...(await tx.notification.findUniqueOrThrow({ where: { id } })),
-        ...genericNotification,
+        ...item,
+        ...safeNotificationContent(item),
         taskId: null,
       };
     });
@@ -174,3 +177,21 @@ export const genericNotification = {
   title: "ANTARA update",
   body: "An update is available. Open ANTARA to view information you can access.",
 };
+
+// Only fixed generic completion vocabulary is exposed; persisted body is never trusted.
+export function safeNotificationContent(item: {
+  type: NotificationType;
+  title: string;
+}) {
+  if (item.type === "SYSTEM" && item.title === "AI analysis completed")
+    return {
+      title: "AI analysis completed",
+      body: "Your requested insight is ready. Open AI Summarization to review it.",
+    };
+  if (item.type === "SYSTEM" && item.title === "AI analysis unavailable")
+    return {
+      title: "AI analysis unavailable",
+      body: "Your requested analysis could not be completed.",
+    };
+  return genericNotification;
+}

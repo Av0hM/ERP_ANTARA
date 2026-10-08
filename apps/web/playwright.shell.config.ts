@@ -23,11 +23,13 @@ export default defineConfig({
       env: { NODE_ENV: "test" },
     },
     {
-      command: "npm run start -- --hostname 127.0.0.1 --port 3105",
+      command: "node scripts/start-standalone.mjs",
       url: "http://127.0.0.1:3105/login",
       timeout: 120000,
       reuseExistingServer: false,
       env: {
+        HOSTNAME: "127.0.0.1",
+        PORT: "3105",
         NEXTAUTH_URL: "http://127.0.0.1:3105",
         NEXTAUTH_SECRET: "phase5-local-browser-fixture-secret",
         API_URL: "http://127.0.0.1:4105/api",

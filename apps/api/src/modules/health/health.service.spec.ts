@@ -1,3 +1,5 @@
+import { statfs } from "node:fs/promises";
+jest.mock("node:fs/promises", () => ({ statfs: jest.fn() }));
 import { HealthService } from "./health.service";
 
 describe("HealthService", () => {
@@ -9,6 +11,15 @@ describe("HealthService", () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    jest.mocked(statfs).mockResolvedValue({
+      bsize: 4096,
+      blocks: 100000,
+      bavail: 60000,
+      bfree: 60000,
+      files: 1000,
+      ffree: 900,
+      type: 0,
+    });
     // The suite's own heap pressure is not the system state under test.
     jest.spyOn(process, "memoryUsage").mockReturnValue({
       rss: 100_000_000,
@@ -38,6 +49,16 @@ describe("HealthService", () => {
   afterEach(() => jest.restoreAllMocks());
 
   describe("checkHealth", () => {
+    it("measures disk capacity rather than reporting fabricated values", async () => {
+      const result = await service.checkHealth();
+      expect(result.checks.disk.totalGb).toBe(409600000 / 1024 ** 3);
+      expect(result.checks.disk.percentage).toBe(40);
+    });
+    it("fails readiness when disk measurement fails", async () => {
+      jest.mocked(statfs).mockRejectedValue(new Error("Unavailable"));
+      const result = await service.checkHealth();
+      expect(result.status).toBe("unhealthy");
+    });
     it("returns degraded for actual high memory usage", async () => {
       jest.spyOn(process, "memoryUsage").mockReturnValue({
         rss: 100_000_000,
@@ -75,7 +96,7 @@ describe("HealthService", () => {
       expect(result.checks.database.status).toBe("unhealthy");
     });
 
-    it("returns unhealthy when redis check fails", async () => {
+    it("returns degraded when optional redis check fails", async () => {
       prisma.$queryRaw.mockResolvedValue(null);
       redisCacheService.ping.mockRejectedValue(
         new Error("Redis connection failed"),
@@ -83,8 +104,8 @@ describe("HealthService", () => {
 
       const result = await service.checkHealth();
 
-      expect(result.status).toBe("unhealthy");
-      expect(result.checks.redis.status).toBe("unhealthy");
+      expect(result.status).toBe("degraded");
+      expect(result.checks.redis.status).toBe("degraded");
     });
 
     it("returns unhealthy when a check is rejected", async () => {
@@ -95,7 +116,7 @@ describe("HealthService", () => {
 
       expect(result.status).toBe("unhealthy");
       expect(result.checks.database.status).toBe("unhealthy");
-      expect(result.checks.redis.status).toBe("unhealthy");
+      expect(result.checks.redis.status).toBe("degraded");
     });
 
     it("returns healthy when redis is not configured", async () => {
@@ -139,12 +160,12 @@ describe("HealthService", () => {
       expect(result.latencyMs).toBeGreaterThanOrEqual(0);
     });
 
-    it("returns unhealthy when ping fails", async () => {
+    it("returns degraded when ping fails", async () => {
       redisCacheService.ping.mockRejectedValue(new Error("Redis down"));
 
       const result = await service["checkRedis"]();
 
-      expect(result.status).toBe("unhealthy");
+      expect(result.status).toBe("degraded");
     });
 
     it("returns healthy when redis is not configured", async () => {

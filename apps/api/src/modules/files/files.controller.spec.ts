@@ -19,6 +19,6 @@ describe("FilesController", () => {
     await expect(controller.listAttachments({ id: "member" })).resolves.toEqual(
       [],
     );
-    expect(filesService.list).toHaveBeenCalledWith("member");
+    expect(filesService.list).toHaveBeenCalledWith("member", false);
   });
 });

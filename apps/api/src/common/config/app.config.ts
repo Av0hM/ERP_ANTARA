@@ -1,7 +1,10 @@
 export const appConfig = () => ({
   app: {
     port: Number(process.env.PORT ?? 4000),
-    frontendUrl: process.env.FRONTEND_URL ?? process.env.NEXTAUTH_URL ?? "http://localhost:3000",
+    frontendUrl:
+      process.env.FRONTEND_URL ??
+      process.env.NEXTAUTH_URL ??
+      "http://localhost:3000",
   },
   auth: {
     accessSecret: process.env.JWT_ACCESS_SECRET ?? "dev-access-secret",
@@ -10,8 +13,6 @@ export const appConfig = () => ({
     refreshTtl: "7d",
   },
   integrations: {
-    openaiApiKey: process.env.OPENAI_API_KEY,
-    openaiModel: process.env.OPENAI_MODEL ?? "gpt-4.1-mini",
     googleClientId: process.env.GOOGLE_CLIENT_ID,
     googleClientSecret: process.env.GOOGLE_CLIENT_SECRET,
     googleCalendarId: process.env.GOOGLE_CALENDAR_ID,

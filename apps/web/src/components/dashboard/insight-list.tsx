@@ -11,23 +11,34 @@ export function InsightList({ insights }: { insights: InsightCard[] }) {
     <div className="card-dark rounded-[1.25rem] p-6">
       <div className="mb-5 flex items-center justify-between">
         <div>
-          <p className="text-xs uppercase tracking-[0.28em] text-saffron">AI Mission Insights</p>
-          <h2 className="mt-2 text-xl font-semibold">Operational risk and recommendations</h2>
+          <p className="text-xs uppercase tracking-[0.28em] text-saffron">
+            Operational diagnostics
+          </p>
+          <h2 className="mt-2 text-xl font-semibold">
+            Operational risk and recommendations
+          </h2>
         </div>
       </div>
 
       <div className="space-y-4">
         {insights.map((insight) => (
-          <div key={insight.id} className="rounded-xl border border-steel/30 bg-white/5 p-4">
+          <div
+            key={insight.id}
+            className="rounded-xl border border-steel/30 bg-white/5 p-4"
+          >
             <div className="flex items-center justify-between gap-3">
               <h3 className="font-medium">{insight.title}</h3>
-              <span className={`rounded-full border px-3 py-1 text-xs ${severityClass[insight.severity]}`}>
+              <span
+                className={`rounded-full border px-3 py-1 text-xs ${severityClass[insight.severity]}`}
+              >
                 {insight.severity}
               </span>
             </div>
             <p className="mt-2 text-sm text-muted">{insight.summary}</p>
             {insight.subsystem ? (
-              <p className="mt-3 text-xs uppercase tracking-[0.2em] text-ice">{insight.subsystem}</p>
+              <p className="mt-3 text-xs uppercase tracking-[0.2em] text-ice">
+                {insight.subsystem}
+              </p>
             ) : null}
           </div>
         ))}

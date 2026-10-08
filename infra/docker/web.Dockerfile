@@ -24,6 +24,12 @@ COPY apps/web apps/web
 COPY packages/contracts packages/contracts
 COPY packages/ui packages/ui
 
+# Public browser URL is compiled into the bundle; Render supplies these build args.
+ARG NEXT_PUBLIC_API_URL
+ARG API_URL
+ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
+ENV API_URL=$API_URL
+
 # Build Next.js production bundle
 RUN npm run build --workspace @antara/web
 
@@ -40,6 +46,7 @@ ENV NODE_ENV=production
 # monorepo tracing root.
 COPY --from=builder /app/apps/web/.next/standalone ./
 COPY --from=builder /app/apps/web/.next/static ./apps/web/.next/static
+COPY --from=builder /app/apps/web/public ./apps/web/public
 
 EXPOSE 3000
 

@@ -66,8 +66,8 @@ export class NotificationEmailProcessor extends WorkerHost {
       });
       return true;
     } catch (error) {
-      console.error("Failed to send notification email:", error);
-      throw error;
+      console.error("NOTIFICATION_EMAIL_DELIVERY_FAILED");
+      throw new Error("EMAIL_DELIVERY_FAILED");
     }
   }
 

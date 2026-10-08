@@ -3,11 +3,9 @@ import { administeredSubsystemIds } from "../../common/authorization/authorizati
 import { Prisma, Task, WorkLog, CalendarEvent } from "@prisma/client";
 import { ForbiddenException } from "@nestjs/common";
 import { Injectable } from "@nestjs/common";
-import { createHash } from "node:crypto";
 import { InsightSeverity, TaskPriority, TaskStatus } from "@antara/contracts";
 
 import { RedisCacheService } from "../../common/cache/redis-cache.service";
-import { OpenAiIntegrationService } from "../../common/integrations/openai.integration.service";
 import { PrismaService } from "../../common/prisma/prisma.service";
 
 type TaskSnapshot = {
@@ -36,32 +34,11 @@ type EventSnapshot = {
   subsystem: { name: string } | null;
 };
 
-type PersistedInsight = {
-  id: string;
-  title: string;
-  summary: string;
-  severity: InsightSeverity;
-  recommendation: string;
-  riskScore: number;
-  subsystem: { name: string } | null;
-  createdAt: Date;
-};
-
 type GeneratedInsight = {
   id: string;
   title: string;
   summary: string;
   severity: InsightSeverity;
-  recommendation: string;
-  riskScore: number;
-  subsystem?: string;
-};
-
-type OpenAiInsight = {
-  id: string;
-  title: string;
-  summary: string;
-  severity: "INFO" | "WARNING" | "CRITICAL";
   recommendation: string;
   riskScore: number;
   subsystem?: string;
@@ -122,7 +99,6 @@ function toEventSnapshot(
 export class AiService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly openAiIntegration: OpenAiIntegrationService,
     private readonly cache: RedisCacheService,
     private readonly core: CoreAuthorizationService,
   ) {}
@@ -154,43 +130,7 @@ export class AiService {
     };
   }
 
-  async summarizeText(input: { text: string; context?: string }) {
-    const cacheKey = `ai:summarize:${createHash("sha1")
-      .update(`${input.context ?? ""}:${input.text}`)
-      .digest("hex")}`;
-    const cached = await this.cache.getJson<{
-      summary: string;
-      source: "openai" | "local";
-    }>(cacheKey);
-    if (cached) {
-      return cached;
-    }
-
-    try {
-      const summary = await this.openAiIntegration.summarize(
-        input.text,
-        input.context,
-      );
-      if (summary) {
-        const payload = {
-          summary,
-          source: "openai",
-        };
-        await this.cache.setJson(cacheKey, payload, 600);
-        return payload;
-      }
-    } catch {
-      // Fall through to deterministic summary below.
-    }
-
-    const payload = {
-      summary: this.buildSeedSummary(input.text, input.context),
-      source: "local",
-    };
-    await this.cache.setJson(cacheKey, payload, 600);
-    return payload;
-  }
-
+  // Read-only deterministic diagnostics; generation is exclusively AIJob-backed.
   async getInsights(actorId: string) {
     const scope = await this.scope(actorId);
     if (
@@ -198,283 +138,23 @@ export class AiService {
       (scope.actor.role !== "ADMIN" || !scope.ids.length)
     )
       return [];
-    const cacheKey = `ai:insights:${scope.key}`;
-    const cached = await this.cache.getJson<GeneratedInsight[]>(cacheKey);
-    if (cached) {
-      return cached;
-    }
-
-    try {
-      const now = new Date();
-      const dayStart = new Date(now);
-      dayStart.setHours(0, 0, 0, 0);
-
-      const [tasks, storedInsights, recentWorklogs, subsystems] =
-        await Promise.all([
-          this.prisma.task.findMany({
-            where: {
-              ...scope.taskWhere,
-              deletedAt: null,
-              isArchived: false,
-              status: { not: TaskStatus.COMPLETED },
-            },
-            include: {
-              subsystem: { select: { name: true } },
-              assignedTo: {
-                select: { id: true, name: true, availabilityScore: true },
-              },
-            },
-          }),
-          this.prisma.aIInsight.findMany({
-            where: scope.actor.globalAuthority ? {} : { id: { in: [] } },
-            take: 3,
-            orderBy: { createdAt: "desc" },
-            include: {
-              subsystem: { select: { name: true } },
-            },
-          }),
-          this.prisma.workLog.findMany({
-            where: {
-              ...(scope.actor.globalAuthority ? {} : { id: { in: [] } }),
-              startedAt: {
-                gte: new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000),
-              },
-            },
-            include: {
-              user: { select: { name: true } },
-            },
-          }),
-          this.prisma.subsystem.findMany({
-            where: scope.actor.globalAuthority ? {} : { id: { in: scope.ids } },
-            select: {
-              id: true,
-              name: true,
-            },
-          }),
-        ]);
-
-      // Try OpenAI function calling first
-      let derivedInsights: GeneratedInsight[] = [];
-      try {
-        derivedInsights = await this.generateInsightsWithOpenAI(
-          this.taskSnapshots(tasks),
-          recentWorklogs.map(toWorklogSnapshot),
-          now,
-        );
-      } catch {
-        // Fallback to deterministic heuristics
-        derivedInsights = this.buildInsights(
-          this.taskSnapshots(tasks),
-          recentWorklogs.map(toWorklogSnapshot),
-          now,
-        );
-      }
-
-      const normalizedStoredInsights: PersistedInsight[] = storedInsights.map(
-        (insight) => ({
-          id: insight.id,
-          title: insight.title,
-          summary: insight.summary,
-          severity: insight.severity as InsightSeverity,
-          recommendation: insight.recommendation,
-          riskScore: Number(insight.riskScore),
-          subsystem: insight.subsystem,
-          createdAt: insight.createdAt,
-        }),
-      );
-
-      if (scope.actor.globalAuthority)
-        await this.persistInsights(
-          derivedInsights,
-          normalizedStoredInsights,
-          subsystems,
-          dayStart,
-        );
-
-      const persisted = normalizedStoredInsights.map((insight) => ({
-        id: insight.id,
-        title: insight.title,
-        summary: insight.summary,
-        severity: insight.severity,
-        recommendation: insight.recommendation,
-        riskScore: Number(insight.riskScore),
-        subsystem: insight.subsystem?.name,
-      }));
-
-      const insights = [...derivedInsights, ...persisted]
-        .sort((left, right) => right.riskScore - left.riskScore)
-        .slice(0, 6);
-
-      const payload = insights.length ? insights : [];
-      await this.cache.setJson(cacheKey, payload, 300);
-      return payload;
-    } catch {
-      const payload: [] = [];
-      await this.cache.setJson(cacheKey, payload, 120);
-      return payload;
-    }
-  }
-
-  private async generateInsightsWithOpenAI(
-    tasks: TaskSnapshot[],
-    recentWorklogs: WorklogSnapshot[],
-    now: Date,
-  ): Promise<GeneratedInsight[]> {
-    const activeTasks = tasks.filter((t) => t.status !== TaskStatus.COMPLETED);
-    const overdueTasks = activeTasks.filter(
-      (t) => t.deadline.getTime() < now.getTime(),
-    );
-    const blockedTasks = activeTasks.filter(
-      (t) => t.status === TaskStatus.BLOCKED,
-    );
-    const highPriorityTasks = activeTasks.filter(
-      (t) =>
-        t.priority === TaskPriority.CRITICAL ||
-        t.priority === TaskPriority.HIGH,
-    );
-
-    const workloadByUser = recentWorklogs.reduce<
-      Record<string, { name: string; minutes: number }>
-    >((acc, log) => {
-      const current = acc[log.userId] ?? { name: log.user.name, minutes: 0 };
-      current.minutes += log.durationMin;
-      acc[log.userId] = current;
-      return acc;
-    }, {});
-
-    const topWorklogUsers = Object.entries(workloadByUser)
-      .map(([userId, entry]) => ({
-        id: userId,
-        ...entry,
-        activeTasks: tasks.filter((task) => task.assignedTo?.id === userId)
-          .length,
-      }))
-      .sort((left, right) => right.minutes - left.minutes)
-      .slice(0, 5);
-
-    const subsystemWorkload = activeTasks.reduce<
-      Record<string, { taskCount: number; totalHours: number }>
-    >((acc, task) => {
-      const current = acc[task.subsystem.name] ?? {
-        taskCount: 0,
-        totalHours: 0,
-      };
-      current.taskCount += 1;
-      current.totalHours += Number(task.estimatedHours ?? 0);
-      acc[task.subsystem.name] = current;
-      return acc;
-    }, {});
-
-    const systemPrompt = `You are an AI operations analyst for a student CubeSat engineering team (20+ members across Software, Avionics, Structures, Payload, Communications, Thermal, Ground Station subsystems). 
-Analyze the provided task/worklog data and generate 3-5 actionable insights with risk scores (0-99).
-
-Each insight must have:
-- id: unique identifier
-- title: concise headline (max 60 chars)
-- summary: 1-2 sentences describing the risk
-- severity: "INFO" | "WARNING" | "CRITICAL"
-- recommendation: specific, actionable mitigation
-- riskScore: 0-99 (higher = more urgent)
-- subsystem: optional subsystem name
-
-Focus on: deadline slips, dependency chain blockages, workload imbalances, burnout indicators, cross-subsystem coordination risks.`;
-
-    const userPrompt = `Current time: ${now.toISOString()}
-
-Active tasks: ${activeTasks.length}
-Overdue tasks: ${overdueTasks.length}
-Blocked tasks: ${blockedTasks.length}
-High priority (CRITICAL/HIGH): ${highPriorityTasks.length}
-
-Task details:
-${activeTasks
-  .slice(0, 20)
-  .map(
-    (t) =>
-      `- ${t.title} [${t.subsystem.name}] ${t.status} ${t.priority} deadline:${t.deadline.toISOString().split("T")[0]} est:${t.estimatedHours}h deps:${t.dependencyIds.length} assignee:${t.assignedTo?.name ?? "unassigned"}`,
-  )
-  .join("\n")}
-
-Recent worklogs (7 days):
-${topWorklogUsers.map((u) => `- ${u.name}: ${Math.round(u.minutes / 60)}h across ${u.activeTasks} tasks`).join("\n")}
-
-Subsystem workload:
-${Object.entries(subsystemWorkload)
-  .map(
-    ([name, s]) =>
-      `- ${name}: ${s.taskCount} tasks, ${Math.round(s.totalHours)}h`,
-  )
-  .join("\n")}
-
-Generate insights as a function call to "generate_insights".`;
-
-    const functions = [
-      {
-        name: "generate_insights",
-        description: "Generate operational insights for engineering team",
-        parameters: {
-          type: "object",
-          properties: {
-            insights: {
-              type: "array",
-              items: {
-                type: "object",
-                properties: {
-                  id: { type: "string" },
-                  title: { type: "string" },
-                  summary: { type: "string" },
-                  severity: {
-                    type: "string",
-                    enum: ["INFO", "WARNING", "CRITICAL"],
-                  },
-                  recommendation: { type: "string" },
-                  riskScore: { type: "number", minimum: 0, maximum: 99 },
-                  subsystem: { type: "string" },
-                },
-                required: [
-                  "id",
-                  "title",
-                  "summary",
-                  "severity",
-                  "recommendation",
-                  "riskScore",
-                ],
-              },
-            },
-          },
-        },
-        required: ["insights"],
+    const tasks = await this.prisma.task.findMany({
+      where: {
+        ...scope.taskWhere,
+        deletedAt: null,
+        isArchived: false,
+        status: { not: TaskStatus.COMPLETED },
       },
-    ];
-
-    try {
-      const result = await this.openAiIntegration.callWithFunctions({
-        systemPrompt,
-        userPrompt,
-        functions,
-        functionCall: { name: "generate_insights" },
-      });
-
-      if (result.functionCall) {
-        const parsed = JSON.parse(result.functionCall.arguments) as {
-          insights: OpenAiInsight[];
-        };
-        return parsed.insights.map((insight) => ({
-          id: insight.id,
-          title: insight.title,
-          summary: insight.summary,
-          severity: insight.severity as InsightSeverity,
-          recommendation: insight.recommendation,
-          riskScore: insight.riskScore,
-          subsystem: insight.subsystem,
-        }));
-      }
-    } catch {
-      // Fall through to heuristics
-    }
-
-    // Fallback to deterministic heuristics
-    return this.buildInsights(tasks, recentWorklogs, now);
+      include: {
+        subsystem: { select: { name: true } },
+        assignedTo: {
+          select: { id: true, name: true, availabilityScore: true },
+        },
+      },
+    });
+    return this.buildInsights(this.taskSnapshots(tasks), [], new Date()).map(
+      (row) => ({ ...row, source: "deterministic" as const }),
+    );
   }
 
   async getSmartReminders(actorId: string) {
@@ -665,47 +345,6 @@ Generate insights as a function call to "generate_insights".`;
     ]);
 
     return { insights, reminders, schedule, workload };
-  }
-
-  private async persistInsights(
-    insights: GeneratedInsight[],
-    storedInsights: PersistedInsight[],
-    subsystems: Array<{ id: string; name: string }>,
-    dayStart: Date,
-  ) {
-    const existingKeys = new Set(
-      storedInsights
-        .filter((insight) => insight.createdAt >= dayStart)
-        .map((insight) => `${insight.title}::${insight.subsystem?.name ?? ""}`),
-    );
-    const subsystemMap = new Map(
-      subsystems.map((subsystem) => [subsystem.name, subsystem.id]),
-    );
-
-    const records = insights
-      .filter(
-        (insight) =>
-          !existingKeys.has(`${insight.title}::${insight.subsystem ?? ""}`),
-      )
-      .map((insight) => ({
-        title: insight.title,
-        summary: insight.summary,
-        severity: insight.severity,
-        recommendation: insight.recommendation,
-        riskScore: insight.riskScore,
-        subsystemId: insight.subsystem
-          ? (subsystemMap.get(insight.subsystem) ?? null)
-          : null,
-        actorId: null,
-      }));
-
-    if (!records.length) {
-      return;
-    }
-
-    await this.prisma.aIInsight.createMany({
-      data: records,
-    });
   }
 
   private buildInsights(
@@ -1253,94 +892,5 @@ Generate insights as a function call to "generate_insights".`;
       default:
         return 1;
     }
-  }
-
-  private getSeedInsights() {
-    return [
-      {
-        id: "ai-1",
-        title: "Telemetry integration delay risk",
-        severity: InsightSeverity.WARNING,
-        summary:
-          "Firmware validation is now on the critical path for avionics-to-ground station verification.",
-        recommendation:
-          "Reassign one ground station operator to firmware review and move rehearsal one day later.",
-        riskScore: 74,
-        subsystem: "Avionics",
-      },
-      {
-        id: "ai-2",
-        title: "Workload imbalance detected",
-        severity: InsightSeverity.INFO,
-        summary:
-          "Payload tasks are concentrated around two contributors. Reassignment could improve schedule resilience.",
-        recommendation:
-          "Shift documentation and test prep from payload to structures for one sprint.",
-        riskScore: 51,
-        subsystem: "Payload",
-      },
-    ];
-  }
-
-  private getSeedReminders() {
-    return [
-      {
-        id: "r1",
-        message:
-          "Telemetry integration depends on your firmware task. Delay risk detected.",
-        priority: "HIGH",
-      },
-      {
-        id: "r2",
-        message:
-          "Payload review is 24 hours away and one prerequisite CAD note is still open.",
-        priority: "MEDIUM",
-      },
-    ];
-  }
-
-  private getSeedSchedule() {
-    return [
-      {
-        id: "s1",
-        title: "Move payload review to Thursday 5:00 PM",
-        reason:
-          "This is the earliest slot with software, payload, and faculty mentor overlap.",
-      },
-      {
-        id: "s2",
-        title: "Pull ground station rehearsal forward by 1 day",
-        reason:
-          "Comms risk is low and it opens buffer before integration review.",
-      },
-    ];
-  }
-
-  private getSeedWorkload() {
-    return [
-      {
-        id: "w1",
-        from: "Payload",
-        to: "Structures",
-        reason:
-          "Structures has spare capacity and compatible documentation bandwidth.",
-      },
-      {
-        id: "w2",
-        from: "Software",
-        to: "Ground Station",
-        reason:
-          "Ground station can absorb verification scripting with lower deadline pressure.",
-      },
-    ];
-  }
-
-  private buildSeedSummary(text: string, context?: string) {
-    const trimmed = text.trim().replace(/\s+/g, " ");
-    const excerpt =
-      trimmed.length > 220 ? `${trimmed.slice(0, 220)}...` : trimmed;
-    return [context ? `Context: ${context}.` : null, `Summary: ${excerpt}`]
-      .filter(Boolean)
-      .join(" ");
   }
 }

@@ -12,7 +12,8 @@ class BackendSignInError extends CredentialsSignin {
 
 const apiUrl = process.env.API_URL ?? "http://localhost:4000/api";
 const resolvedNextAuthSecret =
-  process.env.NEXTAUTH_SECRET ?? "dev-nextauth-secret";
+  process.env.NEXTAUTH_SECRET ??
+  (process.env.NODE_ENV === "production" ? undefined : "dev-nextauth-secret");
 async function refreshAccessToken(token: {
   accessToken?: string;
   accessTokenExpires?: number;

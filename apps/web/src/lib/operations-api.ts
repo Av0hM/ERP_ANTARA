@@ -324,10 +324,11 @@ export async function summarizeTechnicalText(
 
 export async function fetchAttachments(
   accessToken?: string,
+  deleted = false,
 ): Promise<AttachmentRecord[]> {
   try {
     return await request<AttachmentRecord[]>(
-      "/files/attachments",
+      `/files/attachments${deleted ? "?deleted=true" : ""}`,
       undefined,
       accessToken,
     );
@@ -336,28 +337,85 @@ export async function fetchAttachments(
   }
 }
 
+async function fileResponse(response: Response) {
+  if (!response.ok) {
+    if (response.status === 401 || response.status === 403)
+      rejectApiResponse(response.status);
+    const error = (await response.json().catch(() => null)) as {
+      message?: string;
+    } | null;
+    throw new Error(
+      typeof error?.message === "string"
+        ? error.message
+        : "File operation failed",
+    );
+  }
+  return response;
+}
 export async function createAttachment(
   input: {
-    name: string;
-    mimeType: string;
-    sizeBytes: number;
+    file: File;
+    category: AttachmentRecord["category"];
     taskId?: string;
-    tags?: string[];
-    contentBase64?: string;
   },
   accessToken?: string,
 ): Promise<AttachmentRecord> {
-  try {
-    return await request<AttachmentRecord>(
-      "/files/attachments",
-      {
+  const body = new FormData();
+  body.append("file", input.file);
+  body.append("category", input.category);
+  if (input.taskId) body.append("taskId", input.taskId);
+  return (
+    await fileResponse(
+      await fetch(`${baseUrl}/files/upload`, {
         method: "POST",
-        body: JSON.stringify(input),
-      },
-      accessToken,
-    );
-  } catch (error) {
-    throw error;
+        headers: { Authorization: `Bearer ${accessToken}` },
+        body,
+      }),
+    )
+  ).json();
+}
+export async function fileLifecycle(
+  id: string,
+  action: "delete" | "restore",
+  accessToken?: string,
+) {
+  return (
+    await fileResponse(
+      await fetch(
+        `${baseUrl}/files/${action === "delete" ? `attachments/${id}` : `${id}/restore`}`,
+        {
+          method: action === "delete" ? "DELETE" : "POST",
+          headers: { Authorization: `Bearer ${accessToken}` },
+        },
+      ),
+    )
+  ).json();
+}
+export async function openAttachment(
+  id: string,
+  name: string,
+  accessToken?: string,
+) {
+  const response = await fileResponse(
+    await fetch(`${baseUrl}/files/${id}/open`, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+      cache: "no-store",
+    }),
+  );
+  if (response.headers.get("content-type")?.includes("application/json")) {
+    const access = (await response.json()) as { url: string };
+    const link = document.createElement("a");
+    link.href = access.url;
+    link.rel = "noreferrer";
+    link.referrerPolicy = "no-referrer";
+    link.click();
+  } else {
+    const url = URL.createObjectURL(await response.blob());
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = name;
+    link.click();
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
   }
 }
 
@@ -717,6 +775,39 @@ export function fetchNotificationHistory(accessToken: string, cursor?: string) {
   return request<{ items: NotificationRecord[]; nextCursor?: string }>(
     `/notifications/history${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ""}`,
     undefined,
+    accessToken,
+  );
+}
+
+export function fetchAiJob(id: string, accessToken?: string) {
+  return request<AiSummaryResponse>(
+    `/ai/jobs/${encodeURIComponent(id)}`,
+    { cache: "no-store" },
+    accessToken,
+  );
+}
+export function fetchAiReadiness(accessToken?: string) {
+  return request<{
+    status: "available" | "temporarily unavailable" | "disabled";
+  }>("/ai/readiness", { cache: "no-store" }, accessToken);
+}
+export function submitAiInsights(
+  subsystemId: string | undefined,
+  accessToken?: string,
+) {
+  return request<AiSummaryResponse>(
+    "/ai/jobs",
+    {
+      method: "POST",
+      body: JSON.stringify({ operation: "INSIGHTS", subsystemId }),
+    },
+    accessToken,
+  );
+}
+export function fetchAiJobs(accessToken?: string) {
+  return request<AiSummaryResponse[]>(
+    "/ai/jobs",
+    { cache: "no-store" },
     accessToken,
   );
 }

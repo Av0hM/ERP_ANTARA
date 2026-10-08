@@ -1,3 +1,21 @@
+import { DecisionsController } from "../src/modules/decisions/decisions.controller";
+import { DecisionsService } from "../src/modules/decisions/decisions.service";
+import { AiJobsController } from "../src/modules/ai/ai-jobs.controller";
+import { AiJobsService } from "../src/modules/ai/ai-jobs.service";
+import { AiQueueService } from "../src/modules/ai/ai-queue.service";
+import { AiConfig } from "../src/common/ai/ai.config";
+import { AiProvider, AiFailure } from "../src/common/ai/ai.provider";
+import { FilesController } from "../src/modules/files/files.controller";
+import { FilesService } from "../src/modules/files/files.service";
+import { StorageRouter } from "../src/common/storage/storage.router";
+import { StorageConfig } from "../src/common/storage/storage.config";
+import {
+  providerFor,
+  StorageProvider,
+  StorageObject,
+} from "../src/common/storage/storage.types";
+import { readFile } from "node:fs/promises";
+import { Readable } from "node:stream";
 /** Isolated browser fixture server. Never imported by the application. */
 import "reflect-metadata";
 import { Test } from "@nestjs/testing";
@@ -37,6 +55,42 @@ import { TasksController } from "../src/modules/tasks/tasks.controller";
 import { TasksService } from "../src/modules/tasks/tasks.service";
 import { TaskEventsService } from "../src/modules/tasks/events/task-events.service";
 import { AuditService } from "../src/modules/audit/audit.service";
+
+// Explicit in-memory provider boundary for browser tests only; never production wiring.
+const fileBytes = new Map<string, Buffer>();
+function provider(kind: "DRIVE" | "S3"): StorageProvider {
+  return {
+    async put(input) {
+      const key = kind === "DRIVE" ? input.key.replaceAll("/", "-") : input.key;
+      fileBytes.set(key, await readFile(input.path));
+      return {
+        provider: kind,
+        objectKey: key,
+        bucket: kind === "S3" ? "browser-fixture" : null,
+      };
+    },
+    async open(object) {
+      const bytes = fileBytes.get(object.objectKey);
+      if (!bytes) throw new Error("Missing fixture object");
+      return { kind: "stream", stream: Readable.from([bytes]) };
+    },
+    async exists(object) {
+      return fileBytes.has(object.objectKey);
+    },
+    async remove(object) {
+      fileBytes.delete(object.objectKey);
+    },
+    async inventory() {
+      return { objects: [] };
+    },
+  };
+}
+const storageBoundary = {
+  provider,
+  forCategory: (category: Parameters<typeof providerFor>[0]) =>
+    provider(providerFor(category)),
+  run: <T>(operation: () => Promise<T>) => operation(),
+};
 
 async function main() {
   const url = new URL(
@@ -141,6 +195,9 @@ async function main() {
       ThrottlerModule.forRoot([{ ttl: 60000, limit: 120 }]),
     ],
     controllers: [
+      DecisionsController,
+      AiJobsController,
+      FilesController,
       AuthController,
       UiContextController,
       NotificationsController,
@@ -149,6 +206,55 @@ async function main() {
       TasksController,
     ],
     providers: [
+      DecisionsService,
+      AiJobsService,
+      {
+        provide: AiConfig,
+        useValue: new AiConfig(
+          new ConfigService({
+            AI_ENABLED: "true",
+            OLLAMA_BASE_URL: "http://127.0.0.1:1",
+            OLLAMA_MODEL: "offline-browser",
+          }),
+        ),
+      },
+      {
+        provide: AiProvider,
+        useValue: {
+          readiness: async () => "available",
+          generate: async (input: unknown) => {
+            await new Promise((resolve) => setTimeout(resolve, 6500));
+            if (JSON.stringify(input).includes("fixture-fail"))
+              throw new AiFailure("INVALID_MODEL_OUTPUT");
+            return { summary: "Offline fixture summary" };
+          },
+        },
+      },
+      {
+        provide: AiQueueService,
+        useValue: {
+          enqueue: async (id: string) => {
+            setTimeout(() => {
+              void app
+                .get(AiJobsService)
+                .execute(id)
+                .catch(() => undefined);
+            }, 1500);
+          },
+          state: async () => "waiting",
+        },
+      },
+      FilesService,
+      { provide: StorageRouter, useValue: storageBoundary },
+      {
+        provide: StorageConfig,
+        useValue: new StorageConfig(
+          new ConfigService({
+            STORAGE_DRIVE_ENABLED: "false",
+            STORAGE_S3_ENABLED: "false",
+          }),
+        ),
+      },
       AuthService,
       JwtStrategy,
       SessionService,

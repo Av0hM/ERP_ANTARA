@@ -1,0 +1,870 @@
+{
+  "before": {
+    "info": 0,
+    "low": 0,
+    "moderate": 9,
+    "high": 44,
+    "critical": 2,
+    "total": 55
+  },
+  "after": {
+    "info": 0,
+    "low": 0,
+    "moderate": 9,
+    "high": 36,
+    "critical": 0,
+    "total": 45
+  },
+  "lockfileSha256": "311d6f28b68347a47ae2ecc7870412f5136a8d13bf7be5d464dd7362ea1ddcb1",
+  "unresolved": [
+    {
+      "package": "@istanbuljs/load-nyc-config",
+      "severity": "moderate",
+      "direct": false,
+      "paths": ["node_modules/@istanbuljs/load-nyc-config"],
+      "versions": ["1.1.0"],
+      "advisories": [],
+      "via": ["js-yaml"],
+      "fixAvailable": {
+        "name": "jest-snapshot",
+        "version": "30.5.2",
+        "isSemVerMajor": true
+      },
+      "decision": "Test/build tooling dependency (Jest/Tailwind/Swagger schema generation); no caller-provided glob/format/CSS/YAML input in production routes. Defer breaking Jest/Tailwind changes; trusted source builds only."
+    },
+    {
+      "package": "@jest/console",
+      "severity": "high",
+      "direct": false,
+      "paths": ["node_modules/@jest/console"],
+      "versions": ["29.7.0"],
+      "advisories": [],
+      "via": ["jest-message-util"],
+      "fixAvailable": {
+        "name": "jest",
+        "version": "30.5.2",
+        "isSemVerMajor": true
+      },
+      "decision": "Test/build tooling dependency (Jest/Tailwind/Swagger schema generation); no caller-provided glob/format/CSS/YAML input in production routes. Defer breaking Jest/Tailwind changes; trusted source builds only."
+    },
+    {
+      "package": "@jest/core",
+      "severity": "high",
+      "direct": false,
+      "paths": ["node_modules/@jest/core"],
+      "versions": ["29.7.0"],
+      "advisories": [],
+      "via": [
+        "@jest/console",
+        "@jest/reporters",
+        "@jest/test-result",
+        "@jest/transform",
+        "jest-config",
+        "jest-haste-map",
+        "jest-message-util",
+        "jest-resolve",
+        "jest-resolve-dependencies",
+        "jest-runner",
+        "jest-runtime",
+        "jest-snapshot",
+        "jest-watcher",
+        "micromatch"
+      ],
+      "fixAvailable": {
+        "name": "jest",
+        "version": "30.5.2",
+        "isSemVerMajor": true
+      },
+      "decision": "Test/build tooling dependency (Jest/Tailwind/Swagger schema generation); no caller-provided glob/format/CSS/YAML input in production routes. Defer breaking Jest/Tailwind changes; trusted source builds only."
+    },
+    {
+      "package": "@jest/environment",
+      "severity": "high",
+      "direct": false,
+      "paths": ["node_modules/@jest/environment"],
+      "versions": ["29.7.0"],
+      "advisories": [],
+      "via": ["@jest/fake-timers"],
+      "fixAvailable": {
+        "name": "jest",
+        "version": "30.5.2",
+        "isSemVerMajor": true
+      },
+      "decision": "Test/build tooling dependency (Jest/Tailwind/Swagger schema generation); no caller-provided glob/format/CSS/YAML input in production routes. Defer breaking Jest/Tailwind changes; trusted source builds only."
+    },
+    {
+      "package": "@jest/expect",
+      "severity": "high",
+      "direct": false,
+      "paths": ["node_modules/@jest/expect"],
+      "versions": ["29.7.0"],
+      "advisories": [],
+      "via": ["expect", "jest-snapshot"],
+      "fixAvailable": {
+        "name": "jest",
+        "version": "30.5.2",
+        "isSemVerMajor": true
+      },
+      "decision": "Test/build tooling dependency (Jest/Tailwind/Swagger schema generation); no caller-provided glob/format/CSS/YAML input in production routes. Defer breaking Jest/Tailwind changes; trusted source builds only."
+    },
+    {
+      "package": "@jest/fake-timers",
+      "severity": "high",
+      "direct": false,
+      "paths": ["node_modules/@jest/fake-timers"],
+      "versions": ["29.7.0"],
+      "advisories": [],
+      "via": ["jest-message-util"],
+      "fixAvailable": {
+        "name": "jest",
+        "version": "30.5.2",
+        "isSemVerMajor": true
+      },
+      "decision": "Test/build tooling dependency (Jest/Tailwind/Swagger schema generation); no caller-provided glob/format/CSS/YAML input in production routes. Defer breaking Jest/Tailwind changes; trusted source builds only."
+    },
+    {
+      "package": "@jest/globals",
+      "severity": "high",
+      "direct": false,
+      "paths": ["node_modules/@jest/globals"],
+      "versions": ["29.7.0"],
+      "advisories": [],
+      "via": ["@jest/environment", "@jest/expect"],
+      "fixAvailable": {
+        "name": "jest",
+        "version": "30.5.2",
+        "isSemVerMajor": true
+      },
+      "decision": "Test/build tooling dependency (Jest/Tailwind/Swagger schema generation); no caller-provided glob/format/CSS/YAML input in production routes. Defer breaking Jest/Tailwind changes; trusted source builds only."
+    },
+    {
+      "package": "@jest/reporters",
+      "severity": "high",
+      "direct": false,
+      "paths": ["node_modules/@jest/reporters"],
+      "versions": ["29.7.0"],
+      "advisories": [],
+      "via": [
+        "@jest/console",
+        "@jest/test-result",
+        "@jest/transform",
+        "jest-message-util"
+      ],
+      "fixAvailable": {
+        "name": "jest",
+        "version": "30.5.2",
+        "isSemVerMajor": true
+      },
+      "decision": "Test/build tooling dependency (Jest/Tailwind/Swagger schema generation); no caller-provided glob/format/CSS/YAML input in production routes. Defer breaking Jest/Tailwind changes; trusted source builds only."
+    },
+    {
+      "package": "@jest/test-result",
+      "severity": "high",
+      "direct": false,
+      "paths": ["node_modules/@jest/test-result"],
+      "versions": ["29.7.0"],
+      "advisories": [],
+      "via": ["@jest/console"],
+      "fixAvailable": {
+        "name": "jest",
+        "version": "30.5.2",
+        "isSemVerMajor": true
+      },
+      "decision": "Test/build tooling dependency (Jest/Tailwind/Swagger schema generation); no caller-provided glob/format/CSS/YAML input in production routes. Defer breaking Jest/Tailwind changes; trusted source builds only."
+    },
+    {
+      "package": "@jest/test-sequencer",
+      "severity": "high",
+      "direct": false,
+      "paths": ["node_modules/@jest/test-sequencer"],
+      "versions": ["29.7.0"],
+      "advisories": [],
+      "via": ["@jest/test-result", "jest-haste-map"],
+      "fixAvailable": {
+        "name": "jest",
+        "version": "30.5.2",
+        "isSemVerMajor": true
+      },
+      "decision": "Test/build tooling dependency (Jest/Tailwind/Swagger schema generation); no caller-provided glob/format/CSS/YAML input in production routes. Defer breaking Jest/Tailwind changes; trusted source builds only."
+    },
+    {
+      "package": "@jest/transform",
+      "severity": "high",
+      "direct": false,
+      "paths": ["node_modules/@jest/transform"],
+      "versions": ["29.7.0"],
+      "advisories": [],
+      "via": ["babel-plugin-istanbul", "jest-haste-map", "micromatch"],
+      "fixAvailable": {
+        "name": "jest-snapshot",
+        "version": "30.5.2",
+        "isSemVerMajor": true
+      },
+      "decision": "Test/build tooling dependency (Jest/Tailwind/Swagger schema generation); no caller-provided glob/format/CSS/YAML input in production routes. Defer breaking Jest/Tailwind changes; trusted source builds only."
+    },
+    {
+      "package": "@nestjs/swagger",
+      "severity": "moderate",
+      "direct": true,
+      "paths": ["node_modules/@nestjs/swagger"],
+      "versions": ["11.4.7"],
+      "advisories": [],
+      "via": ["js-yaml"],
+      "fixAvailable": true,
+      "decision": "Test/build tooling dependency (Jest/Tailwind/Swagger schema generation); no caller-provided glob/format/CSS/YAML input in production routes. Defer breaking Jest/Tailwind changes; trusted source builds only."
+    },
+    {
+      "package": "@prisma/config",
+      "severity": "high",
+      "direct": false,
+      "paths": ["node_modules/@prisma/config"],
+      "versions": ["6.19.3"],
+      "advisories": [],
+      "via": ["deepmerge-ts"],
+      "fixAvailable": true,
+      "decision": "Prisma CLI/config dependency; no application request path merges caller recursive objects. Defer major dependency change; trusted operator configuration only."
+    },
+    {
+      "package": "@types/jest",
+      "severity": "high",
+      "direct": true,
+      "paths": ["node_modules/@types/jest"],
+      "versions": ["29.5.14"],
+      "advisories": [],
+      "via": ["expect"],
+      "fixAvailable": {
+        "name": "@types/jest",
+        "version": "30.0.0",
+        "isSemVerMajor": true
+      },
+      "decision": "Test/build tooling dependency (Jest/Tailwind/Swagger schema generation); no caller-provided glob/format/CSS/YAML input in production routes. Defer breaking Jest/Tailwind changes; trusted source builds only."
+    },
+    {
+      "package": "argparse",
+      "severity": "moderate",
+      "direct": false,
+      "paths": [
+        "node_modules/@istanbuljs/load-nyc-config/node_modules/argparse"
+      ],
+      "versions": ["1.0.10"],
+      "advisories": [],
+      "via": ["sprintf-js"],
+      "fixAvailable": {
+        "name": "jest-snapshot",
+        "version": "30.5.2",
+        "isSemVerMajor": true
+      },
+      "decision": "Test/build tooling dependency (Jest/Tailwind/Swagger schema generation); no caller-provided glob/format/CSS/YAML input in production routes. Defer breaking Jest/Tailwind changes; trusted source builds only."
+    },
+    {
+      "package": "babel-jest",
+      "severity": "high",
+      "direct": false,
+      "paths": ["node_modules/babel-jest"],
+      "versions": ["29.7.0"],
+      "advisories": [],
+      "via": ["@jest/transform", "babel-plugin-istanbul"],
+      "fixAvailable": {
+        "name": "jest",
+        "version": "30.5.2",
+        "isSemVerMajor": true
+      },
+      "decision": "Test/build tooling dependency (Jest/Tailwind/Swagger schema generation); no caller-provided glob/format/CSS/YAML input in production routes. Defer breaking Jest/Tailwind changes; trusted source builds only."
+    },
+    {
+      "package": "babel-plugin-istanbul",
+      "severity": "moderate",
+      "direct": false,
+      "paths": ["node_modules/babel-plugin-istanbul"],
+      "versions": ["6.1.1"],
+      "advisories": [],
+      "via": ["@istanbuljs/load-nyc-config"],
+      "fixAvailable": {
+        "name": "jest-snapshot",
+        "version": "30.5.2",
+        "isSemVerMajor": true
+      },
+      "decision": "Test/build tooling dependency (Jest/Tailwind/Swagger schema generation); no caller-provided glob/format/CSS/YAML input in production routes. Defer breaking Jest/Tailwind changes; trusted source builds only."
+    },
+    {
+      "package": "braces",
+      "severity": "high",
+      "direct": false,
+      "paths": ["node_modules/braces"],
+      "versions": ["3.0.3"],
+      "advisories": [
+        {
+          "source": 1240992,
+          "name": "braces",
+          "dependency": "braces",
+          "title": "braces vulnerable to stack-exhaustion denial of service through deeply nested patterns",
+          "url": "https://github.com/advisories/GHSA-vfj7-8cjw-p6xm",
+          "severity": "high",
+          "cwe": ["CWE-674"],
+          "cvss": {
+            "score": 7.5,
+            "vectorString": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H"
+          },
+          "range": "<=3.0.3"
+        }
+      ],
+      "via": [],
+      "fixAvailable": {
+        "name": "tailwindcss",
+        "version": "4.3.3",
+        "isSemVerMajor": true
+      },
+      "decision": "Test/build tooling dependency (Jest/Tailwind/Swagger schema generation); no caller-provided glob/format/CSS/YAML input in production routes. Defer breaking Jest/Tailwind changes; trusted source builds only."
+    },
+    {
+      "package": "chokidar",
+      "severity": "high",
+      "direct": false,
+      "paths": ["node_modules/tailwindcss/node_modules/chokidar"],
+      "versions": ["3.6.0"],
+      "advisories": [],
+      "via": ["braces"],
+      "fixAvailable": {
+        "name": "tailwindcss",
+        "version": "4.3.3",
+        "isSemVerMajor": true
+      },
+      "decision": "Test/build tooling dependency (Jest/Tailwind/Swagger schema generation); no caller-provided glob/format/CSS/YAML input in production routes. Defer breaking Jest/Tailwind changes; trusted source builds only."
+    },
+    {
+      "package": "create-jest",
+      "severity": "high",
+      "direct": false,
+      "paths": ["node_modules/create-jest"],
+      "versions": ["29.7.0"],
+      "advisories": [],
+      "via": ["jest-config"],
+      "fixAvailable": {
+        "name": "jest",
+        "version": "30.5.2",
+        "isSemVerMajor": true
+      },
+      "decision": "Test/build tooling dependency (Jest/Tailwind/Swagger schema generation); no caller-provided glob/format/CSS/YAML input in production routes. Defer breaking Jest/Tailwind changes; trusted source builds only."
+    },
+    {
+      "package": "deepmerge-ts",
+      "severity": "high",
+      "direct": false,
+      "paths": ["node_modules/deepmerge-ts"],
+      "versions": ["7.1.5"],
+      "advisories": [
+        {
+          "source": 1145093,
+          "name": "deepmerge-ts",
+          "dependency": "deepmerge-ts",
+          "title": "DeepmergeTS has stack exhaustion when merging recursive object graphs",
+          "url": "https://github.com/advisories/GHSA-ggr8-5vv4-36mx",
+          "severity": "high",
+          "cwe": ["CWE-674"],
+          "cvss": {
+            "score": 0,
+            "vectorString": null
+          },
+          "range": "<8.0.0"
+        }
+      ],
+      "via": [],
+      "fixAvailable": true,
+      "decision": "Prisma CLI/config dependency; no application request path merges caller recursive objects. Defer major dependency change; trusted operator configuration only."
+    },
+    {
+      "package": "expect",
+      "severity": "high",
+      "direct": true,
+      "paths": ["node_modules/expect"],
+      "versions": ["29.7.0"],
+      "advisories": [],
+      "via": ["jest-message-util"],
+      "fixAvailable": {
+        "name": "expect",
+        "version": "30.5.2",
+        "isSemVerMajor": true
+      },
+      "decision": "Test/build tooling dependency (Jest/Tailwind/Swagger schema generation); no caller-provided glob/format/CSS/YAML input in production routes. Defer breaking Jest/Tailwind changes; trusted source builds only."
+    },
+    {
+      "package": "fast-glob",
+      "severity": "high",
+      "direct": false,
+      "paths": ["node_modules/fast-glob"],
+      "versions": ["3.3.3"],
+      "advisories": [],
+      "via": ["micromatch"],
+      "fixAvailable": true,
+      "decision": "Test/build tooling dependency (Jest/Tailwind/Swagger schema generation); no caller-provided glob/format/CSS/YAML input in production routes. Defer breaking Jest/Tailwind changes; trusted source builds only."
+    },
+    {
+      "package": "jest",
+      "severity": "high",
+      "direct": true,
+      "paths": ["node_modules/jest"],
+      "versions": ["29.7.0"],
+      "advisories": [],
+      "via": ["@jest/core", "jest-cli"],
+      "fixAvailable": {
+        "name": "jest",
+        "version": "30.5.2",
+        "isSemVerMajor": true
+      },
+      "decision": "Test/build tooling dependency (Jest/Tailwind/Swagger schema generation); no caller-provided glob/format/CSS/YAML input in production routes. Defer breaking Jest/Tailwind changes; trusted source builds only."
+    },
+    {
+      "package": "jest-circus",
+      "severity": "high",
+      "direct": false,
+      "paths": ["node_modules/jest-circus"],
+      "versions": ["29.7.0"],
+      "advisories": [],
+      "via": [
+        "@jest/environment",
+        "@jest/expect",
+        "@jest/test-result",
+        "jest-message-util",
+        "jest-runtime",
+        "jest-snapshot"
+      ],
+      "fixAvailable": {
+        "name": "jest",
+        "version": "30.5.2",
+        "isSemVerMajor": true
+      },
+      "decision": "Test/build tooling dependency (Jest/Tailwind/Swagger schema generation); no caller-provided glob/format/CSS/YAML input in production routes. Defer breaking Jest/Tailwind changes; trusted source builds only."
+    },
+    {
+      "package": "jest-cli",
+      "severity": "high",
+      "direct": false,
+      "paths": ["node_modules/jest-cli"],
+      "versions": ["29.7.0"],
+      "advisories": [],
+      "via": ["@jest/core", "@jest/test-result", "create-jest", "jest-config"],
+      "fixAvailable": {
+        "name": "jest",
+        "version": "30.5.2",
+        "isSemVerMajor": true
+      },
+      "decision": "Test/build tooling dependency (Jest/Tailwind/Swagger schema generation); no caller-provided glob/format/CSS/YAML input in production routes. Defer breaking Jest/Tailwind changes; trusted source builds only."
+    },
+    {
+      "package": "jest-config",
+      "severity": "high",
+      "direct": false,
+      "paths": ["node_modules/jest-config"],
+      "versions": ["29.7.0"],
+      "advisories": [],
+      "via": [
+        "@jest/test-sequencer",
+        "babel-jest",
+        "jest-circus",
+        "jest-environment-node",
+        "jest-resolve",
+        "jest-runner",
+        "micromatch"
+      ],
+      "fixAvailable": {
+        "name": "jest",
+        "version": "30.5.2",
+        "isSemVerMajor": true
+      },
+      "decision": "Test/build tooling dependency (Jest/Tailwind/Swagger schema generation); no caller-provided glob/format/CSS/YAML input in production routes. Defer breaking Jest/Tailwind changes; trusted source builds only."
+    },
+    {
+      "package": "jest-environment-node",
+      "severity": "high",
+      "direct": false,
+      "paths": ["node_modules/jest-environment-node"],
+      "versions": ["29.7.0"],
+      "advisories": [],
+      "via": ["@jest/environment", "@jest/fake-timers"],
+      "fixAvailable": {
+        "name": "jest",
+        "version": "30.5.2",
+        "isSemVerMajor": true
+      },
+      "decision": "Test/build tooling dependency (Jest/Tailwind/Swagger schema generation); no caller-provided glob/format/CSS/YAML input in production routes. Defer breaking Jest/Tailwind changes; trusted source builds only."
+    },
+    {
+      "package": "jest-haste-map",
+      "severity": "high",
+      "direct": true,
+      "paths": ["node_modules/jest-haste-map"],
+      "versions": ["29.7.0"],
+      "advisories": [],
+      "via": ["micromatch"],
+      "fixAvailable": {
+        "name": "jest-haste-map",
+        "version": "30.5.1",
+        "isSemVerMajor": true
+      },
+      "decision": "Test/build tooling dependency (Jest/Tailwind/Swagger schema generation); no caller-provided glob/format/CSS/YAML input in production routes. Defer breaking Jest/Tailwind changes; trusted source builds only."
+    },
+    {
+      "package": "jest-message-util",
+      "severity": "high",
+      "direct": false,
+      "paths": ["node_modules/jest-message-util"],
+      "versions": ["29.7.0"],
+      "advisories": [],
+      "via": ["micromatch"],
+      "fixAvailable": {
+        "name": "expect",
+        "version": "30.5.2",
+        "isSemVerMajor": true
+      },
+      "decision": "Test/build tooling dependency (Jest/Tailwind/Swagger schema generation); no caller-provided glob/format/CSS/YAML input in production routes. Defer breaking Jest/Tailwind changes; trusted source builds only."
+    },
+    {
+      "package": "jest-resolve",
+      "severity": "high",
+      "direct": false,
+      "paths": ["node_modules/jest-resolve"],
+      "versions": ["29.7.0"],
+      "advisories": [],
+      "via": ["jest-haste-map"],
+      "fixAvailable": {
+        "name": "jest",
+        "version": "30.5.2",
+        "isSemVerMajor": true
+      },
+      "decision": "Test/build tooling dependency (Jest/Tailwind/Swagger schema generation); no caller-provided glob/format/CSS/YAML input in production routes. Defer breaking Jest/Tailwind changes; trusted source builds only."
+    },
+    {
+      "package": "jest-resolve-dependencies",
+      "severity": "high",
+      "direct": false,
+      "paths": ["node_modules/jest-resolve-dependencies"],
+      "versions": ["29.7.0"],
+      "advisories": [],
+      "via": ["jest-snapshot"],
+      "fixAvailable": true,
+      "decision": "Test/build tooling dependency (Jest/Tailwind/Swagger schema generation); no caller-provided glob/format/CSS/YAML input in production routes. Defer breaking Jest/Tailwind changes; trusted source builds only."
+    },
+    {
+      "package": "jest-runner",
+      "severity": "high",
+      "direct": false,
+      "paths": ["node_modules/jest-runner"],
+      "versions": ["29.7.0"],
+      "advisories": [],
+      "via": [
+        "@jest/console",
+        "@jest/environment",
+        "@jest/test-result",
+        "@jest/transform",
+        "jest-environment-node",
+        "jest-haste-map",
+        "jest-message-util",
+        "jest-resolve",
+        "jest-runtime",
+        "jest-watcher"
+      ],
+      "fixAvailable": {
+        "name": "jest",
+        "version": "30.5.2",
+        "isSemVerMajor": true
+      },
+      "decision": "Test/build tooling dependency (Jest/Tailwind/Swagger schema generation); no caller-provided glob/format/CSS/YAML input in production routes. Defer breaking Jest/Tailwind changes; trusted source builds only."
+    },
+    {
+      "package": "jest-runtime",
+      "severity": "high",
+      "direct": false,
+      "paths": ["node_modules/jest-runtime"],
+      "versions": ["29.7.0"],
+      "advisories": [],
+      "via": [
+        "@jest/environment",
+        "@jest/fake-timers",
+        "@jest/globals",
+        "@jest/test-result",
+        "@jest/transform",
+        "jest-haste-map",
+        "jest-message-util",
+        "jest-resolve",
+        "jest-snapshot"
+      ],
+      "fixAvailable": {
+        "name": "jest",
+        "version": "30.5.2",
+        "isSemVerMajor": true
+      },
+      "decision": "Test/build tooling dependency (Jest/Tailwind/Swagger schema generation); no caller-provided glob/format/CSS/YAML input in production routes. Defer breaking Jest/Tailwind changes; trusted source builds only."
+    },
+    {
+      "package": "jest-snapshot",
+      "severity": "high",
+      "direct": true,
+      "paths": ["node_modules/jest-snapshot"],
+      "versions": ["29.7.0"],
+      "advisories": [],
+      "via": ["@jest/transform", "expect", "jest-message-util"],
+      "fixAvailable": {
+        "name": "jest-snapshot",
+        "version": "30.5.2",
+        "isSemVerMajor": true
+      },
+      "decision": "Test/build tooling dependency (Jest/Tailwind/Swagger schema generation); no caller-provided glob/format/CSS/YAML input in production routes. Defer breaking Jest/Tailwind changes; trusted source builds only."
+    },
+    {
+      "package": "jest-watcher",
+      "severity": "high",
+      "direct": false,
+      "paths": ["node_modules/jest-watcher"],
+      "versions": ["29.7.0"],
+      "advisories": [],
+      "via": ["@jest/test-result"],
+      "fixAvailable": {
+        "name": "jest",
+        "version": "30.5.2",
+        "isSemVerMajor": true
+      },
+      "decision": "Test/build tooling dependency (Jest/Tailwind/Swagger schema generation); no caller-provided glob/format/CSS/YAML input in production routes. Defer breaking Jest/Tailwind changes; trusted source builds only."
+    },
+    {
+      "package": "js-yaml",
+      "severity": "moderate",
+      "direct": false,
+      "paths": [
+        "node_modules/@istanbuljs/load-nyc-config/node_modules/js-yaml",
+        "node_modules/js-yaml"
+      ],
+      "versions": ["3.15.2", "5.3.0"],
+      "advisories": [
+        {
+          "source": 1239991,
+          "name": "js-yaml",
+          "dependency": "js-yaml",
+          "title": "js-yaml: maxTotalMergeKeys does not limit CPU use for empty merge sources",
+          "url": "https://github.com/advisories/GHSA-r3ph-w7gj-g6xm",
+          "severity": "moderate",
+          "cwe": ["CWE-400", "CWE-407"],
+          "cvss": {
+            "score": 5.3,
+            "vectorString": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:L"
+          },
+          "range": ">=5.0.0 <=5.4.0"
+        }
+      ],
+      "via": ["argparse"],
+      "fixAvailable": {
+        "name": "jest-snapshot",
+        "version": "30.5.2",
+        "isSemVerMajor": true
+      },
+      "decision": "Test/build tooling dependency (Jest/Tailwind/Swagger schema generation); no caller-provided glob/format/CSS/YAML input in production routes. Defer breaking Jest/Tailwind changes; trusted source builds only."
+    },
+    {
+      "package": "micromatch",
+      "severity": "high",
+      "direct": false,
+      "paths": ["node_modules/micromatch"],
+      "versions": ["4.0.8"],
+      "advisories": [],
+      "via": ["braces"],
+      "fixAvailable": {
+        "name": "tailwindcss",
+        "version": "4.3.3",
+        "isSemVerMajor": true
+      },
+      "decision": "Test/build tooling dependency (Jest/Tailwind/Swagger schema generation); no caller-provided glob/format/CSS/YAML input in production routes. Defer breaking Jest/Tailwind changes; trusted source builds only."
+    },
+    {
+      "package": "next",
+      "severity": "moderate",
+      "direct": true,
+      "paths": ["apps/web/node_modules/next"],
+      "versions": ["15.5.27"],
+      "advisories": [],
+      "via": ["postcss"],
+      "fixAvailable": {
+        "name": "next",
+        "version": "16.4.0",
+        "isSemVerMajor": true
+      },
+      "decision": "Build-time CSS processing; application does not accept caller CSS/source maps or render user HTML. Next 15 patch applied; remaining PostCSS requires upstream/bundler update. Do not compile untrusted CSS."
+    },
+    {
+      "package": "postcss",
+      "severity": "high",
+      "direct": false,
+      "paths": ["apps/web/node_modules/next/node_modules/postcss"],
+      "versions": ["8.4.31"],
+      "advisories": [
+        {
+          "source": 1117015,
+          "name": "postcss",
+          "dependency": "postcss",
+          "title": "PostCSS has XSS via Unescaped </style> in its CSS Stringify Output",
+          "url": "https://github.com/advisories/GHSA-qx2v-qp2m-jg93",
+          "severity": "moderate",
+          "cwe": ["CWE-79"],
+          "cvss": {
+            "score": 6.1,
+            "vectorString": "CVSS:3.1/AV:N/AC:L/PR:N/UI:R/S:C/C:L/I:L/A:N"
+          },
+          "range": "<8.5.10"
+        },
+        {
+          "source": 1124252,
+          "name": "postcss",
+          "dependency": "postcss",
+          "title": "PostCSS: Arbitrary file read and information disclosure via attacker-controlled sourceMappingURL in CSS comments",
+          "url": "https://github.com/advisories/GHSA-6g55-p6wh-862q",
+          "severity": "high",
+          "cwe": ["CWE-22", "CWE-200"],
+          "cvss": {
+            "score": 7.5,
+            "vectorString": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:N/A:N"
+          },
+          "range": "<=8.5.11"
+        },
+        {
+          "source": 1130709,
+          "name": "postcss",
+          "dependency": "postcss",
+          "title": "PostCSS: incomplete fix of GHSA-6g55-p6wh-862q — attacker-controlled sourceMappingURL reads arbitrary .map files when `from` is unset",
+          "url": "https://github.com/advisories/GHSA-fxqj-rqcc-2cmp",
+          "severity": "moderate",
+          "cwe": ["CWE-22", "CWE-200"],
+          "cvss": {
+            "score": 0,
+            "vectorString": null
+          },
+          "range": "<=8.5.22"
+        },
+        {
+          "source": 1139510,
+          "name": "postcss",
+          "dependency": "postcss",
+          "title": "PostCSS: Path Traversal in Previous Source Map Auto-Loading (sourceMappingURL) leads to Arbitrary .map File Disclosure",
+          "url": "https://github.com/advisories/GHSA-r28c-9q8g-f849",
+          "severity": "high",
+          "cwe": ["CWE-22"],
+          "cvss": {
+            "score": 7.5,
+            "vectorString": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:N/A:N"
+          },
+          "range": "<=8.5.17"
+        }
+      ],
+      "via": [],
+      "fixAvailable": {
+        "name": "next",
+        "version": "16.4.0",
+        "isSemVerMajor": true
+      },
+      "decision": "Build-time CSS processing; application does not accept caller CSS/source maps or render user HTML. Next 15 patch applied; remaining PostCSS requires upstream/bundler update. Do not compile untrusted CSS."
+    },
+    {
+      "package": "postcss-nested",
+      "severity": "moderate",
+      "direct": false,
+      "paths": ["node_modules/postcss-nested"],
+      "versions": ["6.2.0"],
+      "advisories": [],
+      "via": ["postcss-selector-parser"],
+      "fixAvailable": true,
+      "decision": "Test/build tooling dependency (Jest/Tailwind/Swagger schema generation); no caller-provided glob/format/CSS/YAML input in production routes. Defer breaking Jest/Tailwind changes; trusted source builds only."
+    },
+    {
+      "package": "postcss-selector-parser",
+      "severity": "moderate",
+      "direct": false,
+      "paths": [
+        "node_modules/postcss-nested/node_modules/postcss-selector-parser",
+        "node_modules/tailwindcss/node_modules/postcss-selector-parser"
+      ],
+      "versions": ["6.1.4", "6.1.4"],
+      "advisories": [
+        {
+          "source": 1241232,
+          "name": "postcss-selector-parser",
+          "dependency": "postcss-selector-parser",
+          "title": "PostCSS: Quadratic complexity in flat selector parsing allows CPU exhaustion",
+          "url": "https://github.com/advisories/GHSA-rj75-hqrm-r3gf",
+          "severity": "moderate",
+          "cwe": ["CWE-400", "CWE-407"],
+          "cvss": {
+            "score": 5.9,
+            "vectorString": "CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:N/I:N/A:H"
+          },
+          "range": "<7.1.6"
+        }
+      ],
+      "via": [],
+      "fixAvailable": {
+        "name": "tailwindcss",
+        "version": "4.3.3",
+        "isSemVerMajor": true
+      },
+      "decision": "Test/build tooling dependency (Jest/Tailwind/Swagger schema generation); no caller-provided glob/format/CSS/YAML input in production routes. Defer breaking Jest/Tailwind changes; trusted source builds only."
+    },
+    {
+      "package": "prisma",
+      "severity": "high",
+      "direct": true,
+      "paths": ["node_modules/prisma"],
+      "versions": ["6.19.3"],
+      "advisories": [],
+      "via": ["@prisma/config"],
+      "fixAvailable": true,
+      "decision": "Prisma CLI/config dependency; no application request path merges caller recursive objects. Defer major dependency change; trusted operator configuration only."
+    },
+    {
+      "package": "sprintf-js",
+      "severity": "moderate",
+      "direct": false,
+      "paths": ["node_modules/sprintf-js"],
+      "versions": ["1.0.3"],
+      "advisories": [
+        {
+          "source": 1241202,
+          "name": "sprintf-js",
+          "dependency": "sprintf-js",
+          "title": "sprintf-js vulnerable to denial of service through unbounded precision specifiers",
+          "url": "https://github.com/advisories/GHSA-hp3w-g68c-fv3c",
+          "severity": "moderate",
+          "cwe": ["CWE-1284"],
+          "cvss": {
+            "score": 5.3,
+            "vectorString": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:L"
+          },
+          "range": "<=1.1.3"
+        }
+      ],
+      "via": [],
+      "fixAvailable": {
+        "name": "jest-snapshot",
+        "version": "30.5.2",
+        "isSemVerMajor": true
+      },
+      "decision": "Test/build tooling dependency (Jest/Tailwind/Swagger schema generation); no caller-provided glob/format/CSS/YAML input in production routes. Defer breaking Jest/Tailwind changes; trusted source builds only."
+    },
+    {
+      "package": "tailwindcss",
+      "severity": "high",
+      "direct": true,
+      "paths": ["node_modules/tailwindcss"],
+      "versions": ["3.4.19"],
+      "advisories": [],
+      "via": [
+        "chokidar",
+        "fast-glob",
+        "micromatch",
+        "postcss-nested",
+        "postcss-selector-parser"
+      ],
+      "fixAvailable": {
+        "name": "tailwindcss",
+        "version": "4.3.3",
+        "isSemVerMajor": true
+      },
+      "decision": "Test/build tooling dependency (Jest/Tailwind/Swagger schema generation); no caller-provided glob/format/CSS/YAML input in production routes. Defer breaking Jest/Tailwind changes; trusted source builds only."
+    }
+  ]
+}

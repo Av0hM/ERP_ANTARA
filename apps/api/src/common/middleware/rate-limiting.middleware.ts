@@ -62,6 +62,8 @@ export class RateLimitingMiddleware implements NestMiddleware {
     // RefreshThrottleGuard. Do not also impose this shared proxy-IP quota.
     if (
       (req.method === "POST" && /^\/api\/auth\/refresh\/?$/i.test(req.path)) ||
+      (req.method === "GET" &&
+        /^\/api\/health(?:\/(?:live|ready))?\/?$/i.test(req.path)) ||
       this.config.skip(req)
     ) {
       return next();

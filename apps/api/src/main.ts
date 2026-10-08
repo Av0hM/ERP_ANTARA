@@ -1,3 +1,4 @@
+import { SafeExceptionFilter } from "./common/errors/safe-exception.filter";
 import { ValidationPipe } from "@nestjs/common";
 import { NestFactory } from "@nestjs/core";
 import { ConfigService } from "@nestjs/config";
@@ -11,28 +12,12 @@ import { RateLimitingMiddleware } from "./common/middleware/rate-limiting.middle
 import { ApiVersioningMiddleware } from "./common/middleware/api-versioning.middleware";
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule, {
-    cors: {
-      origin: [
-        process.env.FRONTEND_URL ?? process.env.NEXTAUTH_URL ?? "http://localhost:3000",
-      ],
-      credentials: true,
-    },
-  });
+  const app = await NestFactory.create(AppModule);
+  app.enableShutdownHooks();
+  app.useGlobalFilters(new SafeExceptionFilter());
   const config = app.get(ConfigService);
   const frontendUrl = config.get<string>("app.frontendUrl");
 
-  const requiredSecrets = [
-    config.get<string>("auth.accessSecret"),
-    config.get<string>("auth.refreshSecret"),
-  ];
-
-  if (process.env.NODE_ENV === "production" && requiredSecrets.some((value) => !value || value.startsWith("dev-"))) {
-    throw new Error("Production JWT secrets must be configured before booting the API");
-  }
-
-  // WebSocket adapter for Socket.IO
-  // @ts-ignore - IoAdapter type mismatch with WebSocketAdapter interface in v11
   app.useWebSocketAdapter(new IoAdapter(app));
 
   // Global prefix with versioning handled by middleware

@@ -94,6 +94,7 @@ model User {
   attachments         Attachment[]          @relation("AttachmentUploader")
   auditLogs           AuditLog[]
   analyticsSnapshots  AnalyticsSnapshot[]   @relation("SnapshotActor")
+  aiJobs              AIJob[]
   aiInsights          AIInsight[]           @relation("InsightActor")
   skills              String[]              @default([])
   weeklyCapacityHours Int                   @default(20)
@@ -237,21 +238,54 @@ model CalendarEvent {
   @@index([subsystemId])
 }
 
+enum StorageProviderKind {
+  DRIVE
+  S3
+}
+
+enum FileCategory {
+  DOCUMENT
+  MEETING_REPORT
+  CAD
+  IMAGE
+  EXPORT
+  OTHER
+}
+
+enum FileProvenance {
+  LEGACY_UNVERIFIED
+  VERIFIED
+}
+
 model Attachment {
-  id           String   @id @default(cuid())
-  name         String
-  mimeType     String
-  sizeBytes    Int
-  storageUrl   String
-  driveFileId  String?
-  tags         String[]
-  createdAt    DateTime @default(now())
-  taskId       String?
-  uploadedById String?
-  task         Task?    @relation(fields: [taskId], references: [id], onDelete: SetNull)
-  uploadedBy   User?    @relation("AttachmentUploader", fields: [uploadedById], references: [id], onDelete: SetNull)
+  id                String               @id @default(cuid())
+  name              String
+  mimeType          String
+  sizeBytes         Int
+  // Deprecated legacy evidence, never an authorized access URL.
+  storageUrl        String               @default("")
+  provider          StorageProviderKind?
+  category          FileCategory         @default(OTHER)
+  provenance        FileProvenance       @default(LEGACY_UNVERIFIED)
+  objectKey         String?
+  bucket            String?
+  // Non-task generated artifacts retain all source scopes. Empty means OWNER-only.
+  scopeSubsystemIds String[]             @default([])
+  updatedAt         DateTime             @default(now()) @updatedAt
+  deletedAt         DateTime?
+  purgeAfter        DateTime?
+  purgedAt          DateTime?
+  storageError      String?
+  driveFileId       String?
+  tags              String[]
+  createdAt         DateTime             @default(now())
+  taskId            String?
+  uploadedById      String?
+  task              Task?                @relation(fields: [taskId], references: [id], onDelete: SetNull)
+  uploadedBy        User?                @relation("AttachmentUploader", fields: [uploadedById], references: [id], onDelete: SetNull)
 
   @@index([taskId])
+  @@index([deletedAt, purgeAfter])
 }
 
 model AnalyticsSnapshot {
@@ -380,4 +414,39 @@ model Invitation {
   @@index([email, status])
   @@index([token])
   @@index([invitedById])
+}
+
+// Phase 7: independent durable results; legacy AIInsight history is preserved.
+enum AIJobStatus {
+  QUEUED
+  RUNNING
+  SUCCEEDED
+  FAILED
+  CANCELLED
+}
+
+model AIJob {
+  id              String      @id @default(cuid())
+  actorId         String
+  actor           User        @relation(fields: [actorId], references: [id], onDelete: Restrict)
+  operation       String
+  scopeKind       String
+  subsystemIds    String[]
+  sourceRefs      Json
+  input           Json
+  model           String
+  templateVersion String
+  status          AIJobStatus @default(QUEUED)
+  attempts        Int         @default(0)
+  maxAttempts     Int
+  nextAttemptAt   DateTime?
+  startedAt       DateTime?
+  completedAt     DateTime?
+  errorCode       String?
+  result          Json?
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  @@index([actorId, createdAt])
+  @@index([status, nextAttemptAt])
 }
