@@ -43,11 +43,32 @@ describe("release configuration", () => {
     ).toThrow("JWT_ACCESS_SECRET"));
   it("parses limiter settings as numbers", () =>
     expect(
-      validateEnvironment({ ...valid(), RATE_LIMIT_WINDOW_MS: "60000" })
-        .RATE_LIMIT_WINDOW_MS,
+      validateEnvironment({ ...valid(), API_RATE_LIMIT_WINDOW_MS: "60000" })
+        .API_RATE_LIMIT_WINDOW_MS,
     ).toBe(60000));
   it("rejects malformed limiter settings", () =>
     expect(() =>
-      validateEnvironment({ ...valid(), RATE_LIMIT_MAX_REQUESTS: "NaN" }),
-    ).toThrow("RATE_LIMIT_MAX_REQUESTS"));
+      validateEnvironment({ ...valid(), API_RATE_LIMIT_USER_MAX: "NaN" }),
+    ).toThrow("API_RATE_LIMIT_USER_MAX"));
+});
+
+describe("explicit application limiter configuration", () => {
+  it.each(["RATE_LIMIT_MAX_REQUESTS", "RATE_LIMIT_WINDOW_MS"])(
+    "rejects ambiguous retired %s",
+    (key) => {
+      expect(() => validateEnvironment({ [key]: "100" })).toThrow(
+        `Retired ${key}`,
+      );
+    },
+  );
+  it.each([
+    "API_RATE_LIMIT_USER_MAX",
+    "API_RATE_LIMIT_PUBLIC_SOURCE_MAX",
+    "API_RATE_LIMIT_SOURCE_FLOOD_MAX",
+    "API_RATE_LIMIT_WINDOW_MS",
+  ])("bounds %s", (key) => {
+    for (const value of ["0", "-1", "1.5", "NaN", "Infinity", "100000001"])
+      expect(() => validateEnvironment({ [key]: value })).toThrow(key);
+    expect(validateEnvironment({ [key]: "60" })[key]).toBe(60);
+  });
 });

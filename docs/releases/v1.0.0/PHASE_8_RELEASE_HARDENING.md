@@ -4,14 +4,14 @@ Target: `v1.0.0-rc.1`. No tag, commit, push, deployment, production connection, 
 
 ## Release decision
 
-**BLOCKED pending release review and operator checkpoints.** This is not final v1 approval. Local migration/bootstrap and offline security/browser evidence are available below. Live identity/storage/provider configuration and the actual production image must be verified before reopening traffic. AI may launch explicitly disabled.
+**READY WITH OPERATOR ACTIONS after Phase 8.1 local validation.** This is not final v1 approval. Local migration/bootstrap and offline security/browser evidence are available below. Live identity/storage/provider configuration and the actual production image must be verified before reopening traffic. AI may launch explicitly disabled.
 
 Specific unresolved release risks:
 
-1. The general API limiter remains **100 requests/15 minutes per apparent source IP**. Express does not trust forwarded headers. Multiple viewers behind a Render/NextAuth proxy can share this bucket; capacity must be measured and an explicit bounded policy approved before launch. A proposed broad increase was rejected by automatic approval review and was **not applied**. Login/Google/invitation guards remain 20/minute, refresh uses its separate credential/session limiter. Do not enable `trust proxy=true` as a workaround.
+1. The generic shared-proxy limiter code blocker is resolved by the Phase 8.1 amendment below: verified-account quota plus independent source/public bounds, with unchanged specialized auth limits and no forwarded-header trust. Production concurrency/capacity verification remains an operator gate. The rejected blanket increase was never applied.
 2. Live Render operator settings require verification. Local Node22 Alpine API/web images now build and start successfully; this does not certify the live deployment plan capacity, Google console, DNS or cloud providers.
 3. Dependency risk acceptance: no remaining critical advisory; remaining high findings are build/test/config-tool paths, detailed in the evidence artifact. Do not accept untrusted source/CSS/glob/YAML configuration into those tools. Major Jest/Tailwind/Prisma changes were deliberately deferred.
-4. The reviewed release SHA does not yet exist: approved Phase 6/7 work and Phase 8 are uncommitted by request. HEAD alone is not the tested release candidate. Review all changes, then separately authorize a commit/tag after gates and operator checklist.
+4. The reviewed release SHA does not yet exist: Phase 8.1 changes remain uncommitted by request. HEAD alone is not the tested release candidate. Review all changes, then separately authorize a commit/tag after gates and operator checklist.
 
 ## Exact source and runtime evidence
 
@@ -119,14 +119,14 @@ All values below are names/requirements, never real secrets. No production URL i
 | AI_WORKER_ENABLED                                                   | API; nonsecret                                     | Defaulttrue; one embedded generation worker with concurrency1 for v1. Do not horizontally scale workers without review.                                           |
 | NOTIFICATIONS_EMAIL_ENABLED                                         | API; nonsecret                                     | Defaultfalse. Enabling requires verified sending configuration.                                                                                                   |
 | RESEND_API_KEY, NOTIFICATIONS_FROM_EMAIL                            | API; key secret                                    | Email provider/operator verification; disabled email does not disable in-app notifications.                                                                       |
-| RATE_LIMIT_WINDOW_MS, RATE_LIMIT_MAX_REQUESTS                       | API; nonsecret                                     | Existing general defaults900000/100; positive bounded integers. Policy change requires approval.                                                                  |
+| RATE_LIMIT_WINDOW_MS, RATE_LIMIT_MAX_REQUESTS                       | API; nonsecret                                     | Retired in Phase 8.1; remove these variables. See explicit API_RATE_LIMIT settings in the amendment.                                                              |
 | ENFORCE_DUMMY_ALLOWLIST                                             | Local only                                         | Production cannot enable dummy authentication. Never run dummy seed for deployment.                                                                               |
 
 ## HTTP/session/AI boundaries
 
 API CORS permits one configured web origin with credentials. CORS is not authentication. Express proxy trust stays disabled; spoofed X-Forwarded-For is not a limiter identity. Render/Cloudflare must terminate HTTPS and restrict ingress; NextAuth `trustHost` assumes the platform supplies the correct host, so operators must reject attacker-controlled Host/forwarded-host at the edge and configure NEXTAUTH_URL. Secure/HttpOnly/SameSite=Lax Auth.js defaults apply on HTTPS; no insecure custom cookie override. Refresh tokens stay encrypted in the server-owned Auth.js cookie, not public session JSON; backend stores only digests. Logout and current-session checks revoke access; inactive/deleted accounts denied. Production Google redirects must be tested on the actual domain.
 
-Login/Google/public acceptance remain20/minute. Refresh:20/minute per presented credential,60/minute per stable session,3000/minute source flood bound; malformed credentials20/minute/source. HMAC keys avoid raw credentials in limiter state. Health is exempt; refresh does not consume the generic shared-IP bucket. Remaining generic bucket capacity is a blocker for operator review, not silently weakened.
+Login/Google/public acceptance remain20/minute. Refresh:20/minute per presented credential,60/minute per stable session,3000/minute source flood bound; malformed credentials20/minute/source. HMAC keys avoid raw credentials in limiter state. Health is exempt; refresh does not consume the generic shared-IP bucket. Phase 8.1 replaces the generic shared-IP quota; operator capacity validation remains pending.
 
 AI prompt/source bounds, pre-query current authorization, requester-only reads, source version checks, publication reauthorization and generic exactly-once terminal notification remain intact. No prompts, model output or provider topology in normal logs/responses. AI cannot mutate privileged ERP state. Redis/queue reconciliation remains explicit read-only and never auto-replays ambiguous history. Core health never invokes Ollama or cloud storage.
 
@@ -234,7 +234,7 @@ Render manual auto-deploy/build-argument semantics were checked against [Bluepri
 - Remaining benign warnings: FORCE_COLOR/NO_COLOR in browser harness; deprecated build-tool packages are included in dependency review. BullMQ duplicate mock warning remains fixed; unsupported `next start` standalone warning eliminated.
 - Logs are local `/tmp/phase8-*`; durable sanitized counts, lock inventory and decisions are in `evidence/phase8-*.json`. No secret-bearing raw dump, auth payload or environment export is included.
 
-Deviation/limits: restored-account credentials were intentionally not reset; real interactive login uses isolated synthetic browser fixtures. No live provider smoke or production drift check was performed. The rejected rate-limit increase remains unapplied; resolving that policy requires approval. Maintenance is operational, not a new application feature; no automated purge scheduler or new product scope was added.
+Deviation/limits: restored-account credentials were intentionally not reset; real interactive login uses isolated synthetic browser fixtures. No live provider smoke or production drift check was performed. The rejected rate-limit increase remains unapplied; the separately authorized Phase 8.1 amendment below resolves the code policy. Maintenance is operational, not a new application feature; no automated purge scheduler or new product scope was added.
 
 ### Container rehearsal follow-up
 
@@ -243,3 +243,93 @@ Local builds: `docker build -f infra/docker/api.Dockerfile -t antara-api-phase8-
 Production-mode API container on4109 passed authenticated reads, current-session revocation and health polling. Web image on loopback3108 served login and `antara-badge.png`. Restored OWNER shell/six contexts passed with a temporary encrypted local Auth.js fixture cookie and API image in explicit test mode for plaintext loopback CORS. The production HTTPS-origin guard was not relaxed; HTTPS/Secure-cookie/live OAuth remain live operator smoke obligations. Temporary sessions were removed afterward.
 
 The missing-secret negative startup test exposed Next.js swallowing the instrumentation exception while keeping the process alive. Instrumentation now logs only the fixed configuration field error and exits1 explicitly. This is a release correctness fix, not a new feature. Final web image `3e2fe6742b1e` passed missing-secret exit1 and valid restored-OWNER browser checks. API image `090af08bf586` passed production-mode HTTP smoke. Both were built with Node22 Alpine/npm11.6.2. Local services were stopped after verification; the restored database and immutable backup are retained.
+
+## Phase 8.1 amendment — shared-source general API limiter
+
+This amendment supersedes the old generic-limiter blocker and its rejected blanket-increase proposal. It changes only application throttling, configuration, its authentication hook and test wiring. No migration, proxy trust change, production/provider access or deployment is involved. Phase 8.1 starts from approved HEAD `b321c8a1d86062616f90d0e87b00c237b462dcf0`; earlier Phase 8 evidence remains historical evidence, not a claim that the old images contain this patch.
+
+### Enforcement and identity boundary
+
+1. Before authentication, `RateLimitingMiddleware` consumes a coarse source ceiling using **`req.socket.remoteAddress`**. No forwarding header participates, even if a later caller changes Express settings.
+2. A private request-keyed WeakMap carries a one-shot server callback. `JwtAuthGuard` first runs the existing Passport JWT signature/expiry check and `SessionService.authenticateAccess` current database account/session validation. Only then does it consume the **verified user ID** budget. No JWT decoding shortcut, duplicate authorization implementation, raw-token key or request-body identity exists.
+3. Failed JWT/session validation consumes the public-source quota and still denies access (401, or429 when that quota is exhausted). Valid users behind that source retain their own budgets until the coarse ceiling is reached.
+4. A global interceptor consumes the public-source quota for ordinary public Nest handlers without JWT guards. The one-shot callback prevents double consumption for authenticated requests. Framework-served Swagger assets/unmatched routes remain subject to the coarse source ceiling; they do not execute ERP feature handlers.
+5. Exact existing auth/invitation route patterns bypass both new layers because their controller guards already supply the specialized limits below. Unknown paths merely beginning with `/auth` or `/invitations` do not acquire an exemption. Health GET routes retain their exemption.
+
+An account shares its application quota across devices, new login sessions, refresh rotation, role changes, membership changes and context selection. The limiter does not cache authentication: revoked/expired/logged-out sessions and inactive/deleted accounts cannot keep a previously verified identity on the next request. Object authorization remains independently current-database backed.
+
+### Defaults and capacity evidence
+
+All general windows are fixed windows of **60,000ms**, started at the first request for that key:
+
+| Dimension                       | Default               | Purpose                                                     |
+| ------------------------------- | --------------------- | ----------------------------------------------------------- |
+| Verified account                | 180 requests/minute   | Normal application quota; stable across sessions            |
+| Unauthenticated ordinary source | 60 requests/minute    | Public-handler/invalid-auth abuse protection                |
+| Coarse connection source        | 3,600 requests/minute | Infrastructure flood ceiling, checked before authentication |
+
+The source default budgets **20 simultaneously busy accounts ×180/minute**. Twenty is a conservative planning assumption, not a measured production concurrency claim. Operators must confirm expected concurrent viewers and API/DB capacity before launch; raising this bound requires measured justification. No arbitrary10,000 limit was installed.
+
+The deterministic shell fixture models a deliberately busy minute: initial shell/dashboard12 requests; periodic context/notifications/AI readiness/history6; two context switches12; three focus revalidations18; task/file navigation and mutations24; one pending AI job at five-second polling12. Total **84 requests/account/minute**, leaving96 requests of headroom. Twenty such users produce1,680 requests, below3,600. Actual source references are `app-shell.tsx` and `use-operations.ts` (60-second foreground context/notification polling) and `ai-summary-panel.tsx` (60-second readiness/history and five-second pending-job polling). This is a deterministic request budget, not a load/latency benchmark. The optimized browser gate runs the real limiter with default capacities, without a test-only quota increase.
+
+### Specialized controls preserved
+
+| Route/dimension                                                  | Unchanged policy         |
+| ---------------------------------------------------------------- | ------------------------ |
+| Credentials login, Google callback, public invitation acceptance | 20/minute/source/handler |
+| Refresh credential                                               | 20/minute                |
+| Refresh stable session across rotation                           | 60/minute                |
+| Malformed refresh                                                | 20/minute/source         |
+| All refresh attempts                                             | 3,000/minute/source      |
+
+Existing auth `/me`, logout, rejected registration and invitation management/validation routes retain their existing controller20/minute/handler policy too. Their exemption is deliberate; this patch does not broaden those existing policies. General application requests cannot consume these independent auth counters. `RefreshThrottleGuard` is unchanged.
+
+### State, failures and configuration
+
+The existing process-local general limiter remains process-local; no Redis dependency or new datastore is introduced. Domain-prefixed HMAC-SHA256 keys use a random process-lifetime key. Stored values are counts and reset times only; raw tokens, refresh credentials, emails, IP addresses and user IDs are absent from keys/state/logs. Request callbacks use WeakMap lifetime rather than a persistent identity cache. Fixed expiry plus interval cleanup bounds lifetime; the map has a50,000-live-key hard bound. Saturation returns sanitized503 with Retry-After rather than evicting active budgets or bypassing protection. Unexpected storage/code failure propagates as failure, never authenticated success. Normal exhaustion returns sanitized429, Retry-After and quota headers, without keys or identity details.
+
+There is no Redis storage failure mode for the general limiter. Existing specialized Nest throttler storage remains process-local and unchanged. Process restart resets budgets; scale-out requires a separately reviewed shared atomic store and coordinated HMAC key before multiple API replicas are enabled. This patch neither introduces Redis fail-open behavior nor claims distributed flood protection.
+
+New explicit `.env.example` settings:
+
+```dotenv
+API_RATE_LIMIT_WINDOW_MS=60000
+API_RATE_LIMIT_USER_MAX=180
+API_RATE_LIMIT_PUBLIC_SOURCE_MAX=60
+API_RATE_LIMIT_SOURCE_FLOOD_MAX=3600
+```
+
+Boot validation requires positive safe integers; maxima are900,000ms for the window,1,000 for account/public quotas and100,000 for the operator source ceiling. These are configuration validation bounds, **not defaults**. Old `RATE_LIMIT_WINDOW_MS` / `RATE_LIMIT_MAX_REQUESTS` are rejected with a fixed actionable startup error instead of silently reinterpreted. Remove retired settings before cutover. No frontend change/rebuild is required for this API policy.
+
+### Phase 8.1 validation and remaining operator gates
+
+Final results:
+
+- Focused middleware/configuration/unchanged refresh guard: **49 passed /3 suites**.
+- Full API regression: **772 passed /44 suites**, with all isolated PostgreSQL suites and local Redis enabled; no skipped suites. Includes31 additional tests:23 limiter cases,6 configuration cases and2 PostgreSQL/HTTP account-budget cases. Prior security assertions are retained.
+- Optimized standalone browser: **20 passed**, with default limiter installed in the real-session fixture; roles, memberships, logout, notifications, storage and AI states remain green.
+- Compact release smoke: **13 passed**, a subset rerun, not13 additional distinct cases. Combined API/browser distinct total: **792**.
+- API lint/typecheck and build/postbuild passed. Focused formatting and `git diff --check` passed. No web source/contracts changed; browser tests reused the approved optimized web output, so no redundant web rebuild/typecheck was needed.
+- Migration files, dependencies, auth-specific guards/limits and production settings are unchanged. No live provider calls occurred. Existing browser FORCE_COLOR/NO_COLOR warnings remain benign.
+
+Commands: `npm run test --workspace @antara/api` with all existing explicit loopback fixture variables (`PHASE1A_TEST_DATABASE_URL`, `AUTHORIZATION_TEST_DATABASE_URL`, `PHASE1C_TEST_DATABASE_URL`, `AUTH_TEST_DATABASE_URL`, `PRIVACY_TEST_DATABASE_URL`, `CORE_TEST_DATABASE_URL`, `REMAINING_TEST_DATABASE_URL`, `STORAGE_TEST_DATABASE_URL`, `AI_TEST_DATABASE_URL`, `AI_TEST_REDIS_URL`); `npm run test:shell --workspace @antara/web` and `npm run test:release --workspace @antara/web` with explicit `PHASE5_TEST_DATABASE_URL`; `npm run lint --workspace @antara/api`; `npm run build --workspace @antara/api`; Prettier on the exact changed TS/Markdown files; `git diff --check`. PostgreSQL used127.0.0.1:55461 dedicated test databases, Redis127.0.0.1:55462/15. No restored person or production connection supplied fixture state. Logs remain `/tmp/phase81-{focused-final,regression,browser,smoke,lint-final,build}.log`.
+
+The initial sandbox-only HTTP attempt could not bind loopback (EPERM); the approved local-listener rerun passed. The expiry test uses a deterministic clock, not a short timing-sensitive sleep. No assertion was removed to obtain passing results.
+
+Exact Phase 8.1 file inventory:
+
+```text
+.env.example
+apps/api/src/common/config/validate-environment.ts
+apps/api/src/common/config/validate-environment.spec.ts
+apps/api/src/common/middleware/rate-limiting.middleware.ts
+apps/api/src/common/middleware/rate-limiting.middleware.spec.ts (new)
+apps/api/src/main.ts
+apps/api/src/modules/auth/guards/jwt-auth.guard.ts
+apps/api/src/modules/auth/auth.integration.spec.ts
+apps/api/test/phase5-server.ts
+docs/releases/v1.0.0/PHASE_8_RELEASE_HARDENING.md
+docs/releases/v1.0.0/V1_RELEASE_CHECKLIST.md
+```
+
+Live Google OAuth, Drive, R2/S3, production Redis, Render settings, exact release-image review, concurrency/capacity verification, maintenance/backup and cutover remain **unperformed operator gates**. No provider checkbox is satisfied by offline tests. No production data was read or changed; no commit, push, tag or deployment was made.

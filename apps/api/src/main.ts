@@ -8,7 +8,10 @@ import cookieParser from "cookie-parser";
 import { AppModule } from "./app.module";
 import { setupSwagger } from "./modules/swagger/swagger-setup";
 import { SecurityHeadersMiddleware } from "./common/middleware/security-headers.middleware";
-import { RateLimitingMiddleware } from "./common/middleware/rate-limiting.middleware";
+import {
+  ApplicationRateLimitInterceptor,
+  RateLimitingMiddleware,
+} from "./common/middleware/rate-limiting.middleware";
 import { ApiVersioningMiddleware } from "./common/middleware/api-versioning.middleware";
 
 async function bootstrap() {
@@ -43,6 +46,8 @@ async function bootstrap() {
   // Rate limiting (after versioning, before routes)
   const rateLimiter = new RateLimitingMiddleware(app.get(ConfigService));
   app.use(rateLimiter.use.bind(rateLimiter));
+  app.useGlobalInterceptors(new ApplicationRateLimitInterceptor());
+  app.getHttpServer().once("close", () => rateLimiter.onModuleDestroy());
 
   // Global validation pipe
   app.useGlobalPipes(

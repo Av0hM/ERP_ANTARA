@@ -1,3 +1,7 @@
+import {
+  ApplicationRateLimitInterceptor,
+  RateLimitingMiddleware,
+} from "../src/common/middleware/rate-limiting.middleware";
 import { DecisionsController } from "../src/modules/decisions/decisions.controller";
 import { DecisionsService } from "../src/modules/decisions/decisions.service";
 import { AiJobsController } from "../src/modules/ai/ai-jobs.controller";
@@ -310,6 +314,9 @@ async function main() {
   }).compile();
   const app = module.createNestApplication({ logger: false });
   app.setGlobalPrefix("api");
+  const limiter = new RateLimitingMiddleware(new ConfigService());
+  app.use(limiter.use.bind(limiter));
+  app.useGlobalInterceptors(new ApplicationRateLimitInterceptor());
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,
@@ -328,6 +335,7 @@ async function main() {
   const stop = async () => {
     if (stopping) return;
     stopping = true;
+    limiter.onModuleDestroy();
     await app.close();
     await db.$disconnect();
     await root.$executeRawUnsafe(`DROP SCHEMA "${schema}" CASCADE`);

@@ -1,13 +1,14 @@
 # v1.0.0-rc.1 operator checklist
 
-Status: **BLOCKED** until the release risks and operator gates in [Phase 8](PHASE_8_RELEASE_HARDENING.md) are resolved. No production work is authorized by this document alone.
+Status: **READY WITH OPERATOR ACTIONS** after Phase 8.1 local validation. The remaining release risks and operator gates in [Phase 8](PHASE_8_RELEASE_HARDENING.md) must still be resolved. No production work is authorized by this document alone.
 
 ## Before scheduling cutover
 
 - [ ] Review exact release SHA/worktree, lockfile checksum and all Phase 8 evidence; obtain commit/RC authorization separately.
 - [ ] Full API security suites, optimized browser regression, compact release smoke, lint/typecheck/build/format/diff gates green.
 - [ ] Build/run actual Node22 Alpine API/web images; verify compiled API URL and public logo/assets.
-- [ ] Resolve shared-proxy **100 requests/15min** general limiter capacity without trusting arbitrary forwarding headers or disabling auth limits.
+- [x] Phase 8.1 code blocker resolved: verified-user180/minute, public-source60/minute and coarse-source3,600/minute; no forwarding trust or auth-limit weakening.772 API/20 browser/13 smoke tests pass.
+- [ ] Remove retired RATE_LIMIT settings; review explicit API_RATE_LIMIT settings, expected concurrency and measured API/DB capacity (default planning assumption:20 busy accounts per apparent source).
 - [ ] Accept/document remaining build-tool advisories; no unresolved reachable critical/high runtime defect.
 - [ ] Review secret scan; rotate any independently identified historical live credential.
 - [ ] Configure protected production environment approvals; disable automatic Render deployment and automatic migration execution.

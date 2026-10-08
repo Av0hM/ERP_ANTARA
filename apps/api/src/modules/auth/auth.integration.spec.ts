@@ -1,6 +1,10 @@
+import { JwtAuthGuard } from "./guards/jwt-auth.guard";
 import { CoreAuthorizationService } from "../../common/authorization/core-authorization.service";
 import { withOwnerQuorum } from "../users/owner-quorum";
-import { RateLimitingMiddleware } from "../../common/middleware/rate-limiting.middleware";
+import {
+  ApplicationRateLimitInterceptor,
+  RateLimitingMiddleware,
+} from "../../common/middleware/rate-limiting.middleware";
 import { execFileSync } from "node:child_process";
 import {
   cpSync,
@@ -15,7 +19,13 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { ConfigModule, ConfigService } from "@nestjs/config";
 import { JwtService } from "@nestjs/jwt";
-import { INestApplication, ValidationPipe } from "@nestjs/common";
+import {
+  INestApplication,
+  ValidationPipe,
+  Controller,
+  Get,
+  UseGuards,
+} from "@nestjs/common";
 import { Test } from "@nestjs/testing";
 import { ThrottlerModule } from "@nestjs/throttler";
 import { PrismaClient, Role } from "@prisma/client";
@@ -38,6 +48,14 @@ import { AccountLifecycleService } from "../users/account-lifecycle.service";
 import { UsersController } from "../users/users.controller";
 import { UsersService } from "../users/users.service";
 import { AuditService } from "../audit/audit.service";
+
+@Controller("rate-probe")
+@UseGuards(JwtAuthGuard)
+class RateProbeController {
+  @Get() read() {
+    return { ok: true };
+  }
+}
 
 const testUrl = process.env.AUTH_TEST_DATABASE_URL;
 if (process.env.AUTH_REQUIRE_DB === "true" && !testUrl)
@@ -226,7 +244,11 @@ integration("Phase 2 authentication: isolated PostgreSQL", () => {
         AuthModule,
         ThrottlerModule.forRoot([{ ttl: 60000, limit: 120 }]),
       ],
-      controllers: [InvitationsController, UsersController],
+      controllers: [
+        InvitationsController,
+        UsersController,
+        RateProbeController,
+      ],
       providers: [
         { provide: InvitationsService, useValue: invitations },
         { provide: AccountLifecycleService, useValue: lifecycle },
@@ -254,6 +276,7 @@ integration("Phase 2 authentication: isolated PostgreSQL", () => {
     app.setGlobalPrefix("api");
     generalLimiter = new RateLimitingMiddleware(new ConfigService());
     app.use(generalLimiter.use.bind(generalLimiter));
+    app.useGlobalInterceptors(new ApplicationRateLimitInterceptor());
     app.useGlobalPipes(
       new ValidationPipe({
         whitelist: true,
@@ -275,6 +298,43 @@ integration("Phase 2 authentication: isolated PostgreSQL", () => {
       await root.$disconnect();
     }
     if (temp) rmSync(temp, { recursive: true, force: true });
+  });
+
+  it("keeps the general account budget across real login sessions and refresh rotation", async () => {
+    await user("rate-account");
+    await user("rate-independent");
+    const first = await login("rate-account");
+    const second = await login("rate-account");
+    const probe = (access: string) =>
+      fetch(`${origin}/rate-probe`, {
+        headers: { Authorization: `Bearer ${access}` },
+      });
+    for (let i = 0; i < 180; i++)
+      expect(
+        (await probe(i % 2 ? first.accessToken : second.accessToken)).status,
+      ).toBe(200);
+    const rotated = await sessions.refresh(first.refreshToken);
+    expect((await probe(rotated.accessToken)).status).toBe(429);
+    expect(
+      (await probe((await login("rate-independent")).accessToken)).status,
+    ).toBe(200);
+    await sessions.logout(rotated.refreshToken);
+    expect((await probe(rotated.accessToken)).status).toBe(401);
+  });
+
+  it("uses current DB account/session state for the general limiter after deactivation", async () => {
+    await user("rate-disabled");
+    const signed = await login("rate-disabled");
+    const probe = () =>
+      fetch(`${origin}/rate-probe`, {
+        headers: { Authorization: `Bearer ${signed.accessToken}` },
+      });
+    expect((await probe()).status).toBe(200);
+    await db.user.update({
+      where: { id: "rate-disabled" },
+      data: { isActive: false },
+    });
+    expect((await probe()).status).toBe(401);
   });
 
   it("keeps all existing migration SQL byte-for-byte intact", () => {

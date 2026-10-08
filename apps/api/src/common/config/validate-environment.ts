@@ -36,10 +36,18 @@ export function validateEnvironment(env: Record<string, unknown>) {
         );
     }
   }
+  for (const key of ["RATE_LIMIT_MAX_REQUESTS", "RATE_LIMIT_WINDOW_MS"]) {
+    if (env[key] !== undefined)
+      throw new Error(
+        `Retired ${key}; configure explicit API_RATE_LIMIT settings`,
+      );
+  }
   for (const [key, max] of [
     ["PORT", 65535],
-    ["RATE_LIMIT_MAX_REQUESTS", 100000],
-    ["RATE_LIMIT_WINDOW_MS", 86400000],
+    ["API_RATE_LIMIT_USER_MAX", 1000],
+    ["API_RATE_LIMIT_PUBLIC_SOURCE_MAX", 1000],
+    ["API_RATE_LIMIT_SOURCE_FLOOD_MAX", 100000],
+    ["API_RATE_LIMIT_WINDOW_MS", 900000],
   ] as const) {
     if (env[key] === undefined) continue;
     const value = Number(env[key]);
