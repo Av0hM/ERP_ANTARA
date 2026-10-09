@@ -124,5 +124,8 @@ export async function verifyBootstrap(prisma: PrismaClient, userId: string) {
         counts.invalidAssignments === 0 &&
         counts.roleConflicts === 0,
     };
+  }, {
+    maxWait: 10_000,
+    timeout: 30_000,
   });
 }
