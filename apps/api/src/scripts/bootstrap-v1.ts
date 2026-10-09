@@ -25,6 +25,10 @@ async function main() {
   );
   const prisma = new PrismaClient({
     datasources: { db: { url: options.url } },
+    transactionOptions: {
+      maxWait: 10_000,
+      timeout: 30_000,
+    },
   });
   try {
     // Verifies hashes before any write. Never runs migrations or reads .env.

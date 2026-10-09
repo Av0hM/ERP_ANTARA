@@ -9,7 +9,13 @@ async function main() {
   );
   if (options.mode === "local")
     await verifyLocalResolution(options.identity.host);
-  const db = new PrismaClient({ datasources: { db: { url: options.url } } });
+  const db = new PrismaClient({
+    datasources: { db: { url: options.url } },
+    transactionOptions: {
+      maxWait: 10_000,
+      timeout: 30_000,
+    },
+  });
   try {
     const foundation = await verifyBootstrap(db, options.userId);
     const storageAndAi = await db.$transaction(async (tx) => {
