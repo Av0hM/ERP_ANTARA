@@ -241,3 +241,7 @@ apps/api/src/modules/users/account-lifecycle.service.ts
 apps/api/src/modules/users/owner-quorum.ts                          (new)
 docs/releases/v1.0.0/PHASE_2_AUTHENTICATION.md
 ```
+
+## Approved People management follow-up
+
+[People management and invitation onboarding](./PEOPLE_USER_MANAGEMENT.md) records the approved seventh migration, scoped People UI, multi-subsystem grants, hashed new invitation tokens, and pending Google onboarding state. Its backend eligibility matrix supersedes the earlier allowlist-only Google policy; normal existing active accounts and eligible invitations no longer require routine environment allowlist edits. Deploy matching API/web/worker code with the migration, and complete the documented live OAuth/email smoke checks. Existing quorum, session and object authorization remain authoritative.

@@ -10,6 +10,7 @@ import { Prisma, PrismaClient } from "@prisma/client";
 export function withOwnerQuorum<T>(
   prisma: PrismaClient,
   operation: (tx: Prisma.TransactionClient) => Promise<T>,
+  options: { maxWait?: number; timeout?: number } = {},
 ): Promise<T> {
   return prisma.$transaction(
     async (tx) => {
@@ -27,6 +28,9 @@ export function withOwnerQuorum<T>(
         });
       return result;
     },
-    { isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted },
+    {
+      ...options,
+      isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted,
+    },
   );
 }

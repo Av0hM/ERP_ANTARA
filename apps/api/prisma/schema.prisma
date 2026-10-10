@@ -68,6 +68,7 @@ enum DecisionAuthority {
 model User {
   id                  String                @id @default(cuid())
   email               String                @unique
+  onboardingPending   Boolean               @default(false)
   isDummySeed         Boolean               @default(false)
   passwordHash        String?
   name                String
@@ -107,21 +108,22 @@ model User {
 
 model Subsystem {
   /// Null until an explicit OWNER-reviewed legacy mapping is applied.
-  key         String?               @unique
-  memberships SubsystemMembership[]
-  id          String                @id @default(cuid())
-  name        String                @unique
-  slug        String                @unique
-  description String
-  color       String
-  createdAt   DateTime              @default(now())
-  updatedAt   DateTime              @updatedAt
-  users       User[]
-  tasks       Task[]
-  events      CalendarEvent[]
-  insights    AIInsight[]
-  invitations Invitation[]
-  decisions   DecisionRecord[]
+  key              String?               @unique
+  memberships      SubsystemMembership[]
+  id               String                @id @default(cuid())
+  name             String                @unique
+  slug             String                @unique
+  description      String
+  color            String
+  createdAt        DateTime              @default(now())
+  updatedAt        DateTime              @updatedAt
+  users            User[]
+  tasks            Task[]
+  events           CalendarEvent[]
+  insights         AIInsight[]
+  invitationGrants InvitationGrant[]
+  invitations      Invitation[]
+  decisions        DecisionRecord[]
 
   @@index([slug])
 }
@@ -398,18 +400,20 @@ enum InvitationStatus {
 }
 
 model Invitation {
-  id          String           @id @default(cuid())
+  id          String            @id @default(cuid())
   email       String
   role        Role
   subsystemId String?
-  subsystem   Subsystem?       @relation(fields: [subsystemId], references: [id], onDelete: SetNull)
+  subsystem   Subsystem?        @relation(fields: [subsystemId], references: [id], onDelete: SetNull)
   invitedById String
-  invitedBy   User             @relation("InvitedBy", fields: [invitedById], references: [id], onDelete: Cascade)
-  token       String           @unique
-  status      InvitationStatus @default(PENDING)
+  invitedBy   User              @relation("InvitedBy", fields: [invitedById], references: [id], onDelete: Cascade)
+  token       String?           @unique
+  tokenHash   String?           @unique
+  grants      InvitationGrant[]
+  status      InvitationStatus  @default(PENDING)
   expiresAt   DateTime
-  createdAt   DateTime         @default(now())
-  updatedAt   DateTime         @updatedAt
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
 
   @@index([email, status])
   @@index([token])
@@ -449,4 +453,18 @@ model AIJob {
 
   @@index([actorId, createdAt])
   @@index([status, nextAttemptAt])
+}
+
+model InvitationGrant {
+  id           String                @id @default(cuid())
+  invitationId String
+  subsystemId  String
+  accessLevel  MembershipAccessLevel
+  createdAt    DateTime              @default(now())
+  updatedAt    DateTime              @updatedAt
+  invitation   Invitation            @relation(fields: [invitationId], references: [id], onDelete: Cascade)
+  subsystem    Subsystem             @relation(fields: [subsystemId], references: [id], onDelete: Restrict)
+
+  @@unique([invitationId, subsystemId])
+  @@index([subsystemId, accessLevel])
 }

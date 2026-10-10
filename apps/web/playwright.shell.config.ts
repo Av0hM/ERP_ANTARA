@@ -2,7 +2,7 @@ import { defineConfig } from "@playwright/test";
 export default defineConfig({
   testDir: "./tests",
   outputDir: "/tmp/antara-phase5-playwright-results",
-  testMatch: "shell.spec.ts",
+  testMatch: ["shell.spec.ts", "people.spec.ts"],
   workers: 1,
   timeout: 45000,
   use: {

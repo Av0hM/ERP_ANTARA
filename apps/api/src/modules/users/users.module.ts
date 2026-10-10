@@ -1,3 +1,4 @@
+import { PeopleService } from "./people.service";
 import { AuthorizationModule } from "../../common/authorization/authorization.module";
 import { SessionModule } from "../../common/sessions/session.module";
 import { AccountLifecycleService } from "./account-lifecycle.service";
@@ -11,7 +12,7 @@ import { UsersService } from "./users.service";
 @Module({
   imports: [PrismaModule, AuditModule, AuthorizationModule, SessionModule],
   controllers: [UsersController],
-  providers: [UsersService, AccountLifecycleService],
+  providers: [UsersService, AccountLifecycleService, PeopleService],
   exports: [UsersService],
 })
 export class UsersModule {}

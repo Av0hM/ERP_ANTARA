@@ -37,7 +37,9 @@ export function buildActorContext(
       ? "DELETED"
       : !record.isActive
         ? "INACTIVE"
-        : "ACTIVE";
+        : record.onboardingPending
+          ? "PENDING"
+          : "ACTIVE";
   const hasAdmin = memberships.some(
     ({ accessLevel }) => accessLevel === "ADMIN",
   );

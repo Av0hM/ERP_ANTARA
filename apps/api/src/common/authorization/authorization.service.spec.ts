@@ -24,6 +24,7 @@ function user(overrides: Partial<UserFixture> = {}): UserFixture {
     avatarUrl: null,
     role: "ADMIN",
     isDummySeed: false,
+    onboardingPending: false,
     title: null,
     timezone: "UTC",
     locale: "en",
@@ -91,6 +92,7 @@ describe("AuthorizationService (isolated, no network)", () => {
     expect(actorAuthorizationSelect).toEqual({
       id: true,
       role: true,
+      onboardingPending: true,
       isActive: true,
       deletedAt: true,
       memberships: {

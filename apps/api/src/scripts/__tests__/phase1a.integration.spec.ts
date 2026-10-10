@@ -178,10 +178,15 @@ integration("Phase 1A local PostgreSQL", () => {
     expect(await clean.user.count()).toBe(0);
     await provisionCanonicalSubsystems(clean);
     expect(await clean.user.count()).toBe(0);
-    const member = await clean.user.create({
-      data: { email: "member@fixture.invalid", name: "Member", role: "MEMBER" },
+    // This fixture intentionally stops at Phase 1A; seed only columns from that schema.
+    await clean.$executeRaw`INSERT INTO "User" (id, email, name, role, "updatedAt") VALUES ('member', 'member@fixture.invalid', 'Member', 'MEMBER', NOW())`;
+    const member = await clean.user.findUniqueOrThrow({
+      where: { id: "member" },
+      select: { id: true, role: true },
     });
-    const original = await clean.user.findMany();
+    const original = await clean.user.findMany({
+      omit: { onboardingPending: true },
+    });
     const first = await clean.subsystem.findMany({ orderBy: { key: "asc" } });
     await provisionCanonicalSubsystems(clean);
     expect(await clean.subsystem.findMany({ orderBy: { key: "asc" } })).toEqual(
@@ -194,7 +199,9 @@ integration("Phase 1A local PostgreSQL", () => {
       "PAYLOAD",
       "SDM",
     ]);
-    expect(await clean.user.findMany()).toEqual(original);
+    expect(
+      await clean.user.findMany({ omit: { onboardingPending: true } }),
+    ).toEqual(original);
     expect(member.role).toBe("MEMBER");
   });
 
@@ -213,12 +220,9 @@ integration("Phase 1A local PostgreSQL", () => {
     const main = await clean.subsystem.findUniqueOrThrow({
       where: { key: "MAIN_SATELLITE" },
     });
-    const a = await clean.user.create({
-      data: { email: "a@fixture.invalid", name: "A", role: "ADMIN" },
-    });
-    const b = await clean.user.create({
-      data: { email: "b@fixture.invalid", name: "B", role: "ADMIN" },
-    });
+    await clean.$executeRaw`INSERT INTO "User" (id, email, name, role, "updatedAt") VALUES ('a', 'a@fixture.invalid', 'A', 'ADMIN', NOW()), ('b', 'b@fixture.invalid', 'B', 'ADMIN', NOW())`;
+    const a = { id: "a" },
+      b = { id: "b" };
     await clean.subsystemMembership.createMany({
       data: [
         { userId: a.id, subsystemId: adcs.id, accessLevel: "ADMIN" },
@@ -255,16 +259,16 @@ integration("Phase 1A local PostgreSQL", () => {
         data: { userId: a.id, subsystemId: "missing", accessLevel: "MEMBER" },
       }),
     ).rejects.toMatchObject({ code: "P2003" });
-    await expect(clean.user.delete({ where: { id: a.id } })).rejects.toThrow(
-      "SubsystemMembership_userId_fkey",
-    );
+    await expect(
+      clean.user.delete({ where: { id: a.id }, select: { id: true } }),
+    ).rejects.toThrow("SubsystemMembership_userId_fkey");
     await expect(
       clean.subsystem.delete({ where: { id: adcs.id } }),
     ).rejects.toThrow("SubsystemMembership_subsystemId_fkey");
   });
 
   it("enforces decision placement/authority combinations and restrictive deletion", async () => {
-    const author = await clean.user.findFirstOrThrow();
+    const author = await clean.user.findFirstOrThrow({ select: { id: true } });
     const payload = await clean.subsystem.findUniqueOrThrow({
       where: { key: "PAYLOAD" },
     });

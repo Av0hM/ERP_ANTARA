@@ -1,16 +1,25 @@
+import { Type } from "class-transformer";
 import {
-  IsEmail,
-  IsEnum,
-  IsOptional,
-  IsString,
-  MaxLength,
-  MinLength,
+  IsIn,
+  IsArray,
+  ArrayMaxSize,
+  ArrayUnique,
+  ValidateNested,
 } from "class-validator";
-import { Role } from "@prisma/client";
+import { IsEmail, IsString, MaxLength, MinLength } from "class-validator";
+export class MembershipGrantDto {
+  @IsString() @MinLength(1) subsystemId!: string;
+  @IsIn(["MEMBER", "ADMIN"]) accessLevel!: "MEMBER" | "ADMIN";
+}
 export class CreateInvitationDto {
   @IsEmail() email!: string;
-  @IsEnum(Role) role!: Role;
-  @IsOptional() @IsString() @MinLength(1) subsystemId?: string;
+  @IsIn(["MEMBER", "OWNER"]) globalRole!: "MEMBER" | "OWNER";
+  @IsArray()
+  @ArrayMaxSize(5)
+  @ArrayUnique((grant: MembershipGrantDto) => grant?.subsystemId)
+  @ValidateNested({ each: true })
+  @Type(() => MembershipGrantDto)
+  memberships!: MembershipGrantDto[];
 }
 export class AcceptInvitationDto {
   @IsString() @MinLength(1) @MaxLength(128) token!: string;

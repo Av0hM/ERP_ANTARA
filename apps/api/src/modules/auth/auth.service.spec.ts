@@ -69,7 +69,14 @@ describe("Auth contract safety", () => {
     await expect(service.googleCallback({ idToken: "fake" })).rejects.toThrow();
     expect(create).not.toHaveBeenCalled();
   });
-  it("empty backend allowlist denies even a verified identity", async () => {
+  it("unknown verified identity without invitation or allowlist is denied", async () => {
+    jest.spyOn(db.user, "findUnique").mockResolvedValue(null);
+    jest.spyOn(db.invitation, "findMany").mockResolvedValue([]);
+    jest.spyOn(db, "$transaction").mockImplementation(async (operation) => {
+      if (typeof operation !== "function")
+        throw new Error("Interactive transaction required");
+      return operation(db);
+    });
     jest.spyOn(google, "verify").mockResolvedValue({
       email: "owner@fixture.invalid",
       name: "Owner",

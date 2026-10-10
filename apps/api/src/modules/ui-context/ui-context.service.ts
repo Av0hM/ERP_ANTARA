@@ -81,6 +81,7 @@ export class UiContextService {
         defaultContextId: primary.id,
         permissions: {
           manageOperations: manage,
+          viewPeople: manage,
           viewResources: manage,
           viewReports: manage,
         },

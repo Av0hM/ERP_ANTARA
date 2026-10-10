@@ -21,6 +21,7 @@ import type { ActorContext } from "./authorization.types";
 export const actorAuthorizationSelect = {
   id: true,
   role: true,
+  onboardingPending: true,
   isActive: true,
   deletedAt: true,
   memberships: {

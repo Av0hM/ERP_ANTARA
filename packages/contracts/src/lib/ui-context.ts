@@ -22,6 +22,7 @@ export interface UiContext {
   defaultContextId: string;
   permissions: {
     manageOperations: boolean;
+    viewPeople: boolean;
     viewResources: boolean;
     viewReports: boolean;
   };

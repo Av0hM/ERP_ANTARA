@@ -110,6 +110,7 @@ describe("Current UI context presentation", () => {
       manageOperations: false,
       viewResources: false,
       viewReports: false,
+      viewPeople: false,
     });
   });
   it.each(["ADMIN", "MEMBER"] as const)(

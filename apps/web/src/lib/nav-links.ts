@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import type { UiContext } from "@antara/contracts";
 export const navLinks = [
+  { href: "/people", label: "People", icon: Users },
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/tasks", label: "Mission Tasks", icon: RadioTower },
   { href: "/subsystems", label: "Subsystems", icon: Network },
@@ -27,6 +28,7 @@ export const navLinks = [
 export function visibleNavLinks(data: UiContext) {
   return navLinks.filter(
     (link) =>
+      (link.href !== "/people" || data.permissions.viewPeople) &&
       (link.href !== "/resources" || data.permissions.viewResources) &&
       (link.href !== "/reports" || data.permissions.viewReports),
   );

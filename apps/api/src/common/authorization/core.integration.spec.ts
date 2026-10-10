@@ -1,3 +1,4 @@
+import { PeopleService } from "../../modules/users/people.service";
 import { execFileSync } from "node:child_process";
 import { cpSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -246,6 +247,7 @@ integration("Phase 4A current DB scoped HTTP and object races", () => {
         UsersController,
       ],
       providers: [
+        PeopleService,
         TasksService,
         SubsystemsService,
         DecisionsService,

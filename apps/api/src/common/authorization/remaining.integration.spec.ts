@@ -1,3 +1,4 @@
+import { PeopleService } from "../../modules/users/people.service";
 import { storageFixture } from "../../../test/storage.fixture";
 import { StorageRouter } from "../storage/storage.router";
 import { StorageConfig } from "../storage/storage.config";
@@ -287,6 +288,7 @@ integration("Phase 4B current DB scoped HTTP and object races", () => {
         AuditController,
       ],
       providers: [
+        PeopleService,
         TasksService,
         ResourcesService,
         FilesService,

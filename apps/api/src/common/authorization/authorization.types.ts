@@ -9,7 +9,8 @@ export type ActorMembership = Readonly<{
   subsystemId: string;
   accessLevel: MembershipAccessLevel;
 }>;
-export type AccountStatus = "ACTIVE" | "INACTIVE" | "DELETED" | "UNKNOWN";
+export type AccountStatus =
+  "ACTIVE" | "PENDING" | "INACTIVE" | "DELETED" | "UNKNOWN";
 export type RoleInconsistency =
   "MEMBER_WITH_ADMIN_MEMBERSHIP" | "ADMIN_WITHOUT_ADMIN_MEMBERSHIP" | null;
 
@@ -33,6 +34,7 @@ export type SubsystemAccess =
   | Readonly<{ kind: "SCOPED"; ids: readonly string[] }>;
 
 export interface ActorRecord {
+  readonly onboardingPending?: boolean;
   readonly id: string;
   readonly role: Role;
   readonly isActive: boolean;

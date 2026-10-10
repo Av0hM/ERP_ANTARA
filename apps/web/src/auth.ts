@@ -131,24 +131,6 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     },
   },
   callbacks: {
-    async signIn({ account, profile }) {
-      if (account?.provider !== "google") {
-        return true;
-      }
-
-      const allowlist = process.env.GOOGLE_ALLOWED_EMAILS?.split(",")
-        .map((item) => item.trim().toLowerCase())
-        .filter(Boolean);
-
-      if (!allowlist?.length) {
-        return true;
-      }
-
-      const email = (
-        profile as { email?: string | null } | null
-      )?.email?.toLowerCase();
-      return Boolean(email && allowlist.includes(email));
-    },
     async jwt({ token, user, account }) {
       if (account?.provider === "google") {
         if (!account.id_token)

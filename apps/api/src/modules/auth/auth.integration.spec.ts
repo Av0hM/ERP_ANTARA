@@ -1,3 +1,4 @@
+import { PeopleService } from "../users/people.service";
 import { JwtAuthGuard } from "./guards/jwt-auth.guard";
 import { CoreAuthorizationService } from "../../common/authorization/core-authorization.service";
 import { withOwnerQuorum } from "../users/owner-quorum";
@@ -68,6 +69,7 @@ const migrations = [
   "20261007000000_phase_2_session_security",
   "20261008000000_phase_6_storage",
   "20261009000000_phase_7_ai_jobs",
+  "20261010000000_people_invitation_grants",
 ] as const;
 const originalHashes = [
   "83d550d1662edac027948bcf48a8a2b15be300ea1f518e187cf374a6e3b5db52",
@@ -192,7 +194,7 @@ integration("Phase 2 authentication: isolated PostgreSQL", () => {
     deploy(url.toString());
     db = new PrismaClient({ datasources: { db: { url: url.toString() } } });
     passwordHash = await bcrypt.hash(password, 4);
-    legacyUser = await user("legacy-history", "OWNER");
+    await db.$executeRaw`INSERT INTO "User" (id, email, name, role, "updatedAt") VALUES ('legacy-history', 'legacy-history@fixture.invalid', 'legacy-history', 'OWNER', NOW())`;
     await db.auditLog.create({
       data: {
         id: "historical-audit",
@@ -211,6 +213,7 @@ integration("Phase 2 authentication: isolated PostgreSQL", () => {
         { recursive: true },
       );
     deploy(url.toString());
+    legacyUser = await db.user.findUnique({ where: { id: "legacy-history" } });
     const subsystems = await provisionCanonicalSubsystems(db);
     adcs = subsystems.find((s) => s.key === "ADCS")!.id;
     payload = subsystems.find((s) => s.key === "PAYLOAD")!.id;
@@ -250,6 +253,15 @@ integration("Phase 2 authentication: isolated PostgreSQL", () => {
         RateProbeController,
       ],
       providers: [
+        {
+          provide: PeopleService,
+          useValue: new PeopleService(
+            db as PrismaService,
+            authorization,
+            sessions,
+            lifecycle,
+          ),
+        },
         { provide: InvitationsService, useValue: invitations },
         { provide: AccountLifecycleService, useValue: lifecycle },
         {
@@ -462,7 +474,7 @@ integration("Phase 2 authentication: isolated PostgreSQL", () => {
       expect(
         (
           await db.invitation.findUniqueOrThrow({
-            where: { token: invite.token },
+            where: { id: invite.id },
           })
         ).status,
       ).toBe("ACCEPTED");
@@ -525,7 +537,12 @@ integration("Phase 2 authentication: isolated PostgreSQL", () => {
         (
           await post(
             "/invitations",
-            { email: "crafted@fixture.invalid", role, subsystemId },
+            {
+              email: "crafted@fixture.invalid",
+              globalRole: role === "OWNER" ? "OWNER" : "MEMBER",
+              memberships:
+                role === "OWNER" ? [] : [{ subsystemId, accessLevel: role }],
+            },
             session.accessToken,
           )
         ).status,
@@ -630,7 +647,7 @@ integration("Phase 2 authentication: isolated PostgreSQL", () => {
     expect(
       (
         await db.invitation.findUniqueOrThrow({
-          where: { token: invite.token },
+          where: { id: invite.id },
         })
       ).status,
     ).toBe("PENDING");
@@ -661,7 +678,7 @@ integration("Phase 2 authentication: isolated PostgreSQL", () => {
       "owner",
     );
     const row = await db.invitation.findUniqueOrThrow({
-      where: { token: revoked.token },
+      where: { id: revoked.id },
     });
     await invitations.revokeInvitation(row.id, "owner");
     await expect(
@@ -674,7 +691,7 @@ integration("Phase 2 authentication: isolated PostgreSQL", () => {
       "owner",
     );
     await db.invitation.update({
-      where: { token: expired.token },
+      where: { id: expired.id },
       data: { expiresAt: new Date(0) },
     });
     await expect(
@@ -688,7 +705,7 @@ integration("Phase 2 authentication: isolated PostgreSQL", () => {
       "owner",
     );
     const hidden = await db.invitation.findUniqueOrThrow({
-      where: { token: unrelated.token },
+      where: { id: unrelated.id },
     });
     await expect(
       invitations.revokeInvitation(hidden.id, "admin"),
@@ -696,10 +713,17 @@ integration("Phase 2 authentication: isolated PostgreSQL", () => {
     const listed = await invitations.listPendingInvitations("admin");
     expect(
       listed.every(
-        (i) => i.subsystemId === adcs && i.role === "MEMBER" && !("token" in i),
+        (i) =>
+          i.memberships.every(
+            (g) => g.subsystemId === adcs && g.accessLevel === "MEMBER",
+          ) &&
+          !("token" in i) &&
+          !("tokenHash" in i),
       ),
     ).toBe(true);
-    expect(await invitations.listPendingInvitations("member")).toEqual([]);
+    await expect(
+      invitations.listPendingInvitations("member"),
+    ).rejects.toThrow();
   });
 
   it("non-allowlisted verified Google email is denied without creating a user", async () => {

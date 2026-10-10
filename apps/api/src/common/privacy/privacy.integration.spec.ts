@@ -1,3 +1,4 @@
+import { PeopleService } from "../../modules/users/people.service";
 import { storageFixture } from "../../../test/storage.fixture";
 import { StorageRouter } from "../storage/storage.router";
 import { StorageConfig } from "../storage/storage.config";
@@ -242,6 +243,7 @@ integration("Phase 3 real PostgreSQL and authenticated HTTP", () => {
         NotificationsController,
       ],
       providers: [
+        PeopleService,
         AuthorizationService,
         CoreAuthorizationService,
         ResourcesService,

@@ -1,9 +1,12 @@
+import { PeopleService } from "./people.service";
+import { UpdateAccessDto } from "./people.dto";
 import { AccountLifecycleService } from "./account-lifecycle.service";
 import { IsIn } from "class-validator";
 import {
   Body,
   Controller,
   Get,
+  Header,
   Patch,
   Param,
   Req,
@@ -43,7 +46,25 @@ export class UsersController {
   constructor(
     private readonly usersService: UsersService,
     private readonly lifecycle: AccountLifecycleService,
+    private readonly people: PeopleService,
   ) {}
+
+  @Get()
+  @Header("Cache-Control", "no-store")
+  @Roles("OWNER", "ADMIN")
+  listPeople(@Req() req: AuthenticatedRequest) {
+    return this.people.list(req.user.id);
+  }
+
+  @Patch(":id/access")
+  @Roles("OWNER")
+  updateAccess(
+    @Param("id") id: string,
+    @Body() body: UpdateAccessDto,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    return this.people.updateAccess(id, body, req.user.id);
+  }
 
   @Get("members")
   @Roles("OWNER", "ADMIN", "MEMBER")

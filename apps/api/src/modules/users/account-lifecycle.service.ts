@@ -6,7 +6,7 @@ import {
   Injectable,
   NotFoundException,
 } from "@nestjs/common";
-import { PrismaClient, Role } from "@prisma/client";
+import { Prisma, PrismaClient, Role } from "@prisma/client";
 import { PrismaService } from "../../common/prisma/prisma.service";
 import { AuthorizationService } from "../../common/authorization/authorization.service";
 import {
@@ -32,39 +32,49 @@ export class AccountLifecycleService {
       throw new BadRequestException(
         "Grant subsystem ADMIN through a membership invitation",
       );
-    return withOwnerQuorum(this.prisma, async (tx) => {
-      await lockAccounts(tx, [actorId, userId]);
-      if (
-        !canGrantGlobalRole(
-          await this.authorization.loadActorContext(actorId, tx),
-          requestedRole,
-        )
+    return withOwnerQuorum(this.prisma, (tx) =>
+      this.updateRoleInTransaction(tx, userId, requestedRole, actorId),
+    );
+  }
+
+  /** Caller owns the quorum transaction before acquiring User locks. */
+  async updateRoleInTransaction(
+    tx: Prisma.TransactionClient,
+    userId: string,
+    requestedRole: "OWNER" | "MEMBER",
+    actorId: string,
+  ) {
+    await lockAccounts(tx, [actorId, userId]);
+    if (
+      !canGrantGlobalRole(
+        await this.authorization.loadActorContext(actorId, tx),
+        requestedRole,
       )
-        throw new ForbiddenException("OWNER authority required");
-      const target = await this.authorization.loadActorContext(userId, tx);
-      if (target.accountStatus !== "ACTIVE")
-        throw new BadRequestException("Account is unavailable");
-      const role =
-        requestedRole === "OWNER"
-          ? "OWNER"
-          : compatibilityRoleForMemberships("MEMBER", target.memberships);
-      const user = await tx.user.update({
-        where: { id: userId },
-        data: { role },
-        select: safeAuthUserSelect,
-      });
-      await this.sessions.revokeAllSessions(userId, tx);
-      await tx.auditLog.create({
-        data: {
-          action: "ROLE_CHANGE",
-          entityType: "User",
-          entityId: userId,
-          actorId,
-          payload: { oldRole: target.role, newRole: role },
-        },
-      });
-      return user;
+    )
+      throw new ForbiddenException("OWNER authority required");
+    const target = await this.authorization.loadActorContext(userId, tx);
+    if (target.accountStatus !== "ACTIVE")
+      throw new BadRequestException("Account is unavailable");
+    const role =
+      requestedRole === "OWNER"
+        ? "OWNER"
+        : compatibilityRoleForMemberships("MEMBER", target.memberships);
+    const user = await tx.user.update({
+      where: { id: userId },
+      data: { role },
+      select: safeAuthUserSelect,
     });
+    await this.sessions.revokeAllSessions(userId, tx);
+    await tx.auditLog.create({
+      data: {
+        action: "ROLE_CHANGE",
+        entityType: "User",
+        entityId: userId,
+        actorId,
+        payload: { oldRole: target.role, newRole: role },
+      },
+    });
+    return user;
   }
 
   async setActive(userId: string, isActive: boolean, actorId: string) {

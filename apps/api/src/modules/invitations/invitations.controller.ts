@@ -8,6 +8,7 @@ import {
   Body,
   Controller,
   Get,
+  Header,
   Post,
   Param,
   Req,
@@ -34,6 +35,7 @@ export class InvitationsController {
   constructor(private readonly invitationsService: InvitationsService) {}
 
   @Post()
+  @Header("Cache-Control", "no-store")
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles("OWNER", "ADMIN")
   async create(
@@ -42,17 +44,17 @@ export class InvitationsController {
   ) {
     return this.invitationsService.createInvitation(
       body.email,
-      body.role,
-      body.subsystemId,
+      { globalRole: body.globalRole, memberships: body.memberships },
       req.user.id,
     );
   }
 
   @Get()
+  @Header("Cache-Control", "no-store")
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles("OWNER", "ADMIN")
   async listPending(@Req() req: AuthenticatedRequest) {
-    return this.invitationsService.listPendingInvitations(req.user.id);
+    return this.invitationsService.listPendingInvitations(req.user.id, true);
   }
 
   @Post(":id/revoke")
@@ -81,6 +83,7 @@ export class InvitationsController {
   }
 
   @Get("validate/:token")
+  @Header("Cache-Control", "no-store")
   async validate(@Param("token") token: string) {
     const result = await this.invitationsService.validateToken(token);
     return { valid: !!result, ...result };

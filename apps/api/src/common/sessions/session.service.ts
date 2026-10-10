@@ -1,3 +1,4 @@
+import { eligiblePendingInvitation } from "../../modules/invitations/invitation-access";
 import { Inject, Injectable, UnauthorizedException } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { JwtService } from "@nestjs/jwt";
@@ -16,6 +17,7 @@ export const accountAuthSelect = {
   isActive: true,
   deletedAt: true,
   isDummySeed: true,
+  onboardingPending: true,
 } satisfies Prisma.UserSelect;
 export type SafeAuthUser = Prisma.UserGetPayload<{
   select: typeof safeAuthUserSelect;
@@ -100,6 +102,32 @@ export class SessionService {
     };
   }
 
+  async pendingCanAuthenticate(
+    user: {
+      id: string;
+      email: string;
+      role: string;
+      onboardingPending?: boolean;
+    },
+    tx: Prisma.TransactionClient = this.prisma,
+  ) {
+    if (!user.onboardingPending) return true;
+    if (
+      user.role !== "MEMBER" ||
+      (await tx.subsystemMembership.count({ where: { userId: user.id } }))
+    )
+      return false;
+    const allowlist =
+      this.config
+        .get<string>("GOOGLE_ALLOWED_EMAILS")
+        ?.split(",")
+        .map((email) => email.trim().toLowerCase()) ?? [];
+    return (
+      allowlist.includes(user.email) ||
+      !!(await eligiblePendingInvitation(tx, user.email))
+    );
+  }
+
   async refresh(refreshToken: string) {
     if (!/^[a-f0-9]{64}$/.test(refreshToken))
       throw new UnauthorizedException("Invalid session");
@@ -125,7 +153,8 @@ export class SessionService {
         !session ||
         session.revokedAt ||
         session.expiresAt <= new Date() ||
-        !accountCanAuthenticate(session.user)
+        !accountCanAuthenticate(session.user) ||
+        !(await this.pendingCanAuthenticate(session.user, tx))
       ) {
         throw new UnauthorizedException("Invalid session");
       }
@@ -203,7 +232,8 @@ export class SessionService {
       session.userId !== payload.id ||
       session.revokedAt ||
       session.expiresAt <= new Date() ||
-      !accountCanAuthenticate(session.user)
+      !accountCanAuthenticate(session.user) ||
+      !(await this.pendingCanAuthenticate(session.user))
     ) {
       throw new UnauthorizedException("Invalid session");
     }

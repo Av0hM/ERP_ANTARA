@@ -55,3 +55,7 @@ Status: **READY WITH OPERATOR ACTIONS** after Phase 8.1 local validation. The re
 - [ ] No arbitrary time window substitutes for working flows; no Time Intelligence/new features in release hardening.
 
 Exact commands, stop conditions, provider smoke cleanup and rollback boundaries are in [Phase 8](PHASE_8_RELEASE_HARDENING.md).
+
+## Approved People management follow-up
+
+[People management and invitation onboarding](./PEOPLE_USER_MANAGEMENT.md) records the approved seventh migration, scoped People UI, multi-subsystem grants, hashed new invitation tokens, and pending Google onboarding state. Its backend eligibility matrix supersedes the earlier allowlist-only Google policy; normal existing active accounts and eligible invitations no longer require routine environment allowlist edits. Deploy matching API/web/worker code with the migration, and complete the documented live OAuth/email smoke checks. Existing quorum, session and object authorization remain authoritative.

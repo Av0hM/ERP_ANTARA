@@ -1,3 +1,4 @@
+import { eligiblePendingInvitation } from "../invitations/invitation-access";
 import {
   ForbiddenException,
   Inject,
@@ -42,6 +43,7 @@ export class AuthService {
     if (
       !candidate?.passwordHash ||
       !accountCanAuthenticate(candidate) ||
+      candidate.onboardingPending ||
       !dummyLoginAllowed(candidate) ||
       !(await bcrypt.compare(payload.password, candidate.passwordHash))
     ) {
@@ -56,6 +58,7 @@ export class AuthService {
       if (
         !user ||
         !accountCanAuthenticate(user) ||
+        user.onboardingPending ||
         user.passwordHash !== candidate.passwordHash ||
         !dummyLoginAllowed(user)
       )
@@ -82,41 +85,77 @@ export class AuthService {
         ?.split(",")
         .map((email) => email.trim().toLowerCase())
         .filter(Boolean) ?? [];
-    if (!allowed.includes(identity.email))
-      throw new UnauthorizedException("Authentication failed");
-    return this.prisma.$transaction(async (tx) => {
-      // Empty update never reactivates, overwrites credentials or changes roles/memberships.
-      const candidate = await tx.user.upsert({
-        where: { email: identity.email },
-        update: {},
-        create: {
-          email: identity.email,
-          name: identity.name,
-          avatarUrl: identity.avatarUrl,
-          role: "MEMBER",
-          isActive: true,
-        },
-        select: { id: true },
-      });
-      await lockAccounts(tx, [candidate.id]);
-      const user = await tx.user.findUnique({
-        where: { id: candidate.id },
-        select: accountAuthSelect,
-      });
-      if (!user || !accountCanAuthenticate(user))
-        throw new UnauthorizedException("Authentication failed");
-      const response = await this.sessions.issue(tx, user);
-      await tx.auditLog.create({
-        data: {
-          action: "LOGIN",
-          entityType: "User",
-          entityId: user.id,
-          actorId: user.id,
-          payload: { provider: "google" },
-        },
-      });
-      return response;
-    });
+    return this.prisma.$transaction(
+      async (tx) => {
+        const existing = await tx.user.findUnique({
+          where: { email: identity.email },
+          select: accountAuthSelect,
+        });
+        if (existing && !accountCanAuthenticate(existing))
+          throw new UnauthorizedException("Authentication failed");
+        const envAllowed = allowed.includes(identity.email);
+        const needsInvitation =
+          !envAllowed && (!existing || existing.onboardingPending);
+        if (needsInvitation) {
+          const invitation = await eligiblePendingInvitation(
+            tx,
+            identity.email,
+          );
+          if (!invitation)
+            throw new UnauthorizedException("Authentication failed");
+          // Same invitation-before-account order as acceptance and revocation.
+          await tx.$queryRaw`SELECT id FROM "Invitation" WHERE id = ${invitation.id} FOR UPDATE`;
+          await lockAccounts(tx, [
+            invitation.invitedById,
+            ...(existing ? [existing.id] : []),
+          ]);
+          if (
+            !(await eligiblePendingInvitation(
+              tx,
+              identity.email,
+              invitation.id,
+            ))
+          )
+            throw new UnauthorizedException("Authentication failed");
+        }
+        const candidate = await tx.user.upsert({
+          where: { email: identity.email },
+          update: {},
+          create: {
+            email: identity.email,
+            name: identity.name,
+            avatarUrl: identity.avatarUrl,
+            role: "MEMBER",
+            isActive: true,
+            onboardingPending: !envAllowed,
+          },
+          select: { id: true },
+        });
+        await lockAccounts(tx, [candidate.id]);
+        const user = await tx.user.findUnique({
+          where: { id: candidate.id },
+          select: accountAuthSelect,
+        });
+        if (
+          !user ||
+          !accountCanAuthenticate(user) ||
+          !(await this.sessions.pendingCanAuthenticate(user, tx))
+        )
+          throw new UnauthorizedException("Authentication failed");
+        const response = await this.sessions.issue(tx, user);
+        await tx.auditLog.create({
+          data: {
+            action: "LOGIN",
+            entityType: "User",
+            entityId: user.id,
+            actorId: user.id,
+            payload: { provider: "google" },
+          },
+        });
+        return response;
+      },
+      { maxWait: 10_000, timeout: 30_000 },
+    );
   }
   refreshSession(payload: RefreshSessionDto) {
     return this.sessions.refresh(payload.refreshToken);

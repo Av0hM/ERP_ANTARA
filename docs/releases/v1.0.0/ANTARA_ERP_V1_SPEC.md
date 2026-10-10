@@ -100,13 +100,13 @@ Existing legacy worklog/timer functionality must not drive new v1 architecture. 
 
 ANTARA ERP v1.0.0 has exactly five canonical subsystem groups:
 
-| Key | Display name | Notes |
-|---|---|---|
-| `ADCS` | ADCS | Attitude Determination & Control System |
-| `PAYLOAD` | Payload | Scientific payload work |
-| `GROUND_COMMS` | Ground-Station & Comms | Ground station and communications are one subsystem in v1 |
-| `SDM` | SDM — Sponsorship, Design & Media | Sponsorship, Design and Media are functions inside one subsystem |
-| `MAIN_SATELLITE` | Main Satellite | Main spacecraft / integrated satellite work |
+| Key              | Display name                      | Notes                                                            |
+| ---------------- | --------------------------------- | ---------------------------------------------------------------- |
+| `ADCS`           | ADCS                              | Attitude Determination & Control System                          |
+| `PAYLOAD`        | Payload                           | Scientific payload work                                          |
+| `GROUND_COMMS`   | Ground-Station & Comms            | Ground station and communications are one subsystem in v1        |
+| `SDM`            | SDM — Sponsorship, Design & Media | Sponsorship, Design and Media are functions inside one subsystem |
+| `MAIN_SATELLITE` | Main Satellite                    | Main spacecraft / integrated satellite work                      |
 
 No other subsystem should be silently introduced in v1 code, seeds, analytics, navigation, fixtures, or tests.
 
@@ -485,16 +485,16 @@ Users should normally discover and open files through ANTARA ERP, not by manuall
 
 ### v1 storage routing
 
-| Data category | Provider |
-|---|---|
-| Documents | Google Drive |
-| Meeting reports | Google Drive |
-| CAD binaries | S3 |
-| Images | S3 |
-| Exports | S3 |
-| Simulation artifacts | S3 |
-| Archives / miscellaneous binaries | S3 |
-| Anything not explicitly routed to Drive | S3 |
+| Data category                           | Provider     |
+| --------------------------------------- | ------------ |
+| Documents                               | Google Drive |
+| Meeting reports                         | Google Drive |
+| CAD binaries                            | S3           |
+| Images                                  | S3           |
+| Exports                                 | S3           |
+| Simulation artifacts                    | S3           |
+| Archives / miscellaneous binaries       | S3           |
+| Anything not explicitly routed to Drive | S3           |
 
 ### v1 S3 topology
 
@@ -1362,3 +1362,7 @@ For v1.0.0, prefer **correctness, authorization, data integrity, observability a
 The release should feel boring in the best possible way: users know what they can access, the backend enforces it, files go where the ERP says they went, AI either works or reports/queues failure honestly, deployments reproduce the same system, and the release can be recovered if something breaks.
 
 That is the definition of ANTARA ERP v1.0.0.
+
+## Approved People management follow-up
+
+[People management and invitation onboarding](./PEOPLE_USER_MANAGEMENT.md) records the approved seventh migration, scoped People UI, multi-subsystem grants, hashed new invitation tokens, and pending Google onboarding state. Its backend eligibility matrix supersedes the earlier allowlist-only Google policy; normal existing active accounts and eligible invitations no longer require routine environment allowlist edits. Deploy matching API/web/worker code with the migration, and complete the documented live OAuth/email smoke checks. Existing quorum, session and object authorization remain authoritative.

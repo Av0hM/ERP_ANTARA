@@ -1,3 +1,9 @@
+import { PeopleService } from "../src/modules/users/people.service";
+import { UsersController } from "../src/modules/users/users.controller";
+import { UsersService } from "../src/modules/users/users.service";
+import { AccountLifecycleService } from "../src/modules/users/account-lifecycle.service";
+import { InvitationsController } from "../src/modules/invitations/invitations.controller";
+import { InvitationsService } from "../src/modules/invitations/invitations.service";
 import {
   ApplicationRateLimitInterceptor,
   RateLimitingMiddleware,
@@ -199,6 +205,8 @@ async function main() {
       ThrottlerModule.forRoot([{ ttl: 60000, limit: 120 }]),
     ],
     controllers: [
+      UsersController,
+      InvitationsController,
       DecisionsController,
       AiJobsController,
       FilesController,
@@ -210,6 +218,14 @@ async function main() {
       TasksController,
     ],
     providers: [
+      PeopleService,
+      UsersService,
+      AccountLifecycleService,
+      InvitationsService,
+      {
+        provide: getQueueToken("invitation-email"),
+        useValue: { add: async () => undefined },
+      },
       DecisionsService,
       AiJobsService,
       {
@@ -276,13 +292,21 @@ async function main() {
       {
         provide: ConfigService,
         useValue: new ConfigService({
+          FRONTEND_URL: "http://127.0.0.1:3105",
           auth: { accessSecret: "shell-fixture-access-secret" },
         }),
       },
       {
         provide: GoogleIdentityService,
         useValue: {
-          verify: async () => {
+          verify: async (idToken: string) => {
+            // Offline Google cryptographic-verifier boundary only; real eligibility/session logic runs.
+            if (idToken === "people-google-fixture")
+              return {
+                email: "people-google@browser.invalid",
+                name: "Google Invitee",
+                avatarUrl: undefined,
+              };
             throw new Error("Offline fixture");
           },
         },

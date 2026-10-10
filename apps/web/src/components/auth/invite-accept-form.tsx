@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, type FormEvent } from "react";
-import { signOut, useSession } from "next-auth/react";
+import { signIn, signOut, useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { AlertTriangle, Sparkles, CheckCircle2 } from "lucide-react";
 
@@ -15,11 +15,24 @@ const baseUrl =
 type ValidationState =
   | { status: "loading" }
   | { status: "invalid" }
-  | { status: "valid"; email: string; role: string };
+  | { status: "unavailable" }
+  | {
+      status: "valid";
+      email: string;
+      globalRole: string;
+      expiresAt: string;
+      memberships: { subsystemId: string; name: string; accessLevel: string }[];
+    };
 
-export function InviteAcceptForm({ token }: { token: string }) {
+export function InviteAcceptForm({
+  token,
+  googleAuthEnabled = false,
+}: {
+  token: string;
+  googleAuthEnabled?: boolean;
+}) {
   const router = useRouter();
-  const { data: session } = useSession();
+  const { data: session, status: sessionStatus } = useSession();
   const [validation, setValidation] = useState<ValidationState>({
     status: "loading",
   });
@@ -33,21 +46,44 @@ export function InviteAcceptForm({ token }: { token: string }) {
     let cancelled = false;
 
     fetch(`${baseUrl}/invitations/validate/${token}`)
-      .then((res) => res.json())
-      .then((data: { valid: boolean; email?: string; role?: string }) => {
-        if (cancelled) return;
-        if (data.valid && data.email && data.role) {
-          setValidation({
-            status: "valid",
-            email: data.email,
-            role: data.role,
-          });
-        } else {
-          setValidation({ status: "invalid" });
-        }
+      .then((res) => {
+        if (!res.ok) throw new Error("Unavailable");
+        return res.json();
       })
+      .then(
+        (data: {
+          valid: boolean;
+          email?: string;
+          globalRole?: string;
+          expiresAt?: string;
+          memberships?: {
+            subsystemId: string;
+            name: string;
+            accessLevel: string;
+          }[];
+        }) => {
+          if (cancelled) return;
+          if (
+            data.valid &&
+            data.email &&
+            data.globalRole &&
+            data.expiresAt &&
+            data.memberships
+          ) {
+            setValidation({
+              status: "valid",
+              email: data.email,
+              globalRole: data.globalRole,
+              expiresAt: data.expiresAt,
+              memberships: data.memberships,
+            });
+          } else {
+            setValidation({ status: "invalid" });
+          }
+        },
+      )
       .catch(() => {
-        if (!cancelled) setValidation({ status: "invalid" });
+        if (!cancelled) setValidation({ status: "unavailable" });
       });
 
     return () => {
@@ -61,8 +97,15 @@ export function InviteAcceptForm({ token }: { token: string }) {
     !!session?.accessToken &&
     session.user.email?.toLowerCase() === validation.email.toLowerCase();
 
+  const wrongAccount =
+    !!session?.accessToken &&
+    !session.error &&
+    validation.status === "valid" &&
+    !acceptAsAccount;
+
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (wrongAccount || sessionStatus === "loading") return;
     setError(null);
     setSubmitting(true);
 
@@ -101,7 +144,7 @@ export function InviteAcceptForm({ token }: { token: string }) {
     }
   };
 
-  if (validation.status === "loading") {
+  if (validation.status === "loading" || sessionStatus === "loading") {
     return (
       <section className="glass-modal w-full max-w-lg rounded-[2rem] p-8">
         <p className="text-sm text-muted">Checking your invitation…</p>
@@ -109,14 +152,15 @@ export function InviteAcceptForm({ token }: { token: string }) {
     );
   }
 
-  if (validation.status === "invalid") {
+  if (validation.status === "invalid" || validation.status === "unavailable") {
     return (
       <section className="glass-modal w-full max-w-lg rounded-[2rem] p-8">
         <div className="flex items-start gap-3 rounded-xl border border-danger/30 bg-danger/10 px-4 py-3 text-sm text-danger">
           <AlertTriangle className="mt-0.5 size-4 shrink-0" />
           <p>
-            This invitation link is invalid or has expired. Ask your team admin
-            to send a new one.
+            {validation.status === "unavailable"
+              ? "Invitation service unavailable. Reload to try again."
+              : "This invitation is invalid, expired or no longer available. Ask your team admin for a new one."}
           </p>
         </div>
       </section>
@@ -128,10 +172,7 @@ export function InviteAcceptForm({ token }: { token: string }) {
       <section className="glass-modal w-full max-w-lg rounded-[2rem] p-8">
         <div className="flex items-start gap-3 rounded-xl border border-saffron/30 bg-saffron/10 px-4 py-3 text-sm text-text">
           <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-saffron" />
-          <p>
-            Invitation accepted. Redirecting you to sign in with your updated
-            access…
-          </p>
+          <p>Access updated. Sign in again to continue…</p>
         </div>
       </section>
     );
@@ -155,10 +196,40 @@ export function InviteAcceptForm({ token }: { token: string }) {
       <p className="mt-4 text-sm leading-6 text-muted">
         Accept the invitation for{" "}
         <span className="text-text">{validation.email}</span> as{" "}
-        <span className="text-text">{validation.role}</span>.
+        <span className="text-text">{validation.globalRole}</span>.
       </p>
 
-      {!acceptAsAccount && (
+      <ul className="mt-3 space-y-1 text-sm text-text">
+        {validation.memberships.map((grant) => (
+          <li key={grant.subsystemId}>
+            {grant.name} — {grant.accessLevel}
+          </li>
+        ))}
+      </ul>
+      <p className="mt-2 text-sm text-muted">
+        Expires {new Date(validation.expiresAt).toLocaleString()}
+      </p>
+      {wrongAccount && (
+        <div role="alert" className="mt-4 space-y-3">
+          <p>
+            This invitation belongs to a different account. Sign out before
+            continuing.
+          </p>
+          <Button onClick={() => signOut({ callbackUrl: `/invite/${token}` })}>
+            Sign out
+          </Button>
+        </div>
+      )}
+      {!wrongAccount && !acceptAsAccount && googleAuthEnabled && (
+        <Button
+          className="mt-4 w-full"
+          variant="secondary"
+          onClick={() => signIn("google", { callbackUrl: `/invite/${token}` })}
+        >
+          Continue with Google
+        </Button>
+      )}
+      {!wrongAccount && !acceptAsAccount && (
         <p className="mt-2 text-sm text-muted">
           New users: choose a password. Existing users: enter your current
           password, or{" "}
@@ -171,47 +242,49 @@ export function InviteAcceptForm({ token }: { token: string }) {
           to accept with your account, including Google.
         </p>
       )}
-      <form className="mt-8 space-y-4" onSubmit={handleSubmit}>
-        {!acceptAsAccount && (
-          <>
-            <label className="block">
-              <span className="mb-2 block text-sm text-muted">Full name</span>
-              <input
-                className="input-field"
-                placeholder="Your name"
-                autoComplete="name"
-                value={name}
-                onChange={(event) => setName(event.target.value)}
-                required
-              />
-            </label>
-            <label className="block">
-              <span className="mb-2 block text-sm text-muted">Password</span>
-              <input
-                className="input-field"
-                type="password"
-                placeholder="Choose a password"
-                autoComplete="new-password"
-                value={password}
-                onChange={(event) => setPassword(event.target.value)}
-                required
-                minLength={8}
-                maxLength={72}
-              />
-            </label>
-          </>
-        )}
-        {error ? (
-          <div className="flex items-start gap-3 rounded-xl border border-danger/30 bg-danger/10 px-4 py-3 text-sm text-danger">
-            <AlertTriangle className="mt-0.5 size-4 shrink-0" />
-            <p>{error}</p>
-          </div>
-        ) : null}
+      {!wrongAccount && (
+        <form className="mt-8 space-y-4" onSubmit={handleSubmit}>
+          {!acceptAsAccount && (
+            <>
+              <label className="block">
+                <span className="mb-2 block text-sm text-muted">Full name</span>
+                <input
+                  className="input-field"
+                  placeholder="Your name"
+                  autoComplete="name"
+                  value={name}
+                  onChange={(event) => setName(event.target.value)}
+                  required
+                />
+              </label>
+              <label className="block">
+                <span className="mb-2 block text-sm text-muted">Password</span>
+                <input
+                  className="input-field"
+                  type="password"
+                  placeholder="Choose a password"
+                  autoComplete="new-password"
+                  value={password}
+                  onChange={(event) => setPassword(event.target.value)}
+                  required
+                  minLength={8}
+                  maxLength={72}
+                />
+              </label>
+            </>
+          )}
+          {error ? (
+            <div className="flex items-start gap-3 rounded-xl border border-danger/30 bg-danger/10 px-4 py-3 text-sm text-danger">
+              <AlertTriangle className="mt-0.5 size-4 shrink-0" />
+              <p>{error}</p>
+            </div>
+          ) : null}
 
-        <Button className="w-full gap-2" type="submit" disabled={submitting}>
-          {submitting ? "Accepting invitation…" : "Accept invitation"}
-        </Button>
-      </form>
+          <Button className="w-full gap-2" type="submit" disabled={submitting}>
+            {submitting ? "Accepting invitation…" : "Accept invitation"}
+          </Button>
+        </form>
+      )}
     </section>
   );
 }
