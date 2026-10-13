@@ -1,4 +1,5 @@
 import { ConfigService } from "@nestjs/config";
+import { Logger } from "@nestjs/common";
 import { AiConfig } from "./ai.config";
 import { OllamaAiProvider } from "./ollama-ai.provider";
 import { parseOutput } from "./ai.provider";
@@ -9,6 +10,97 @@ const settings = {
 };
 describe("offline Ollama boundary", () => {
   afterEach(() => jest.restoreAllMocks());
+  it.each(["OLLAMA_CF_ACCESS_CLIENT_ID", "OLLAMA_CF_ACCESS_CLIENT_SECRET"])(
+    "rejects invalid optional header configuration without exposing %s",
+    (key) => {
+      for (const value of [42, "private-value\r\nInjected: header"]) {
+        expect(
+          () => new AiConfig(new ConfigService({ ...settings, [key]: value })),
+        ).toThrow(new Error(`Invalid ${key}`));
+      }
+    },
+  );
+  it.each([
+    ["fixture-client", "fixture-secret"],
+    [undefined, undefined],
+    ["fixture-client", undefined],
+    [undefined, "fixture-secret"],
+  ])(
+    "applies optional Access credentials consistently (%#)",
+    async (id, secret) => {
+      const fetcher = jest.spyOn(global, "fetch").mockImplementation(
+        async () =>
+          new Response(
+            JSON.stringify({
+              done: true,
+              response: '{"summary":"Advisory"}',
+            }),
+          ),
+      );
+      const provider = new OllamaAiProvider(
+        new AiConfig(
+          new ConfigService({
+            ...settings,
+            OLLAMA_CF_ACCESS_CLIENT_ID: id,
+            OLLAMA_CF_ACCESS_CLIENT_SECRET: secret,
+          }),
+        ),
+      );
+      await provider.generate({}, "SUMMARY");
+      expect(await provider.readiness()).toBe("available");
+      expect(
+        fetcher.mock.calls.map(([url]) => new URL(String(url)).pathname),
+      ).toEqual(["/api/generate", "/api/show"]);
+      for (const [, request] of fetcher.mock.calls) {
+        expect(request?.headers).toEqual({
+          "Content-Type": "application/json",
+          ...(id && secret
+            ? { "CF-Access-Client-Id": id, "CF-Access-Client-Secret": secret }
+            : {}),
+        });
+        expect(request?.redirect).toBe("error");
+        expect(String(request?.body)).not.toContain("fixture-secret");
+      }
+    },
+  );
+  it("does not log credentials or expose credential-bearing transport errors", async () => {
+    const logs = [
+      jest.spyOn(console, "log"),
+      jest.spyOn(console, "error"),
+      jest.spyOn(console, "warn"),
+      jest.spyOn(console, "debug"),
+      jest.spyOn(console, "info"),
+      jest.spyOn(Logger.prototype, "log"),
+      jest.spyOn(Logger.prototype, "error"),
+      jest.spyOn(Logger.prototype, "warn"),
+      jest.spyOn(Logger.prototype, "debug"),
+      jest.spyOn(Logger.prototype, "verbose"),
+    ];
+    const fetcher = jest
+      .spyOn(global, "fetch")
+      .mockImplementation(
+        async () =>
+          new Response(
+            JSON.stringify({ done: true, response: '{"summary":"Advisory"}' }),
+          ),
+      );
+    const provider = new OllamaAiProvider(
+      new AiConfig(
+        new ConfigService({
+          ...settings,
+          OLLAMA_CF_ACCESS_CLIENT_ID: "fixture-client",
+          OLLAMA_CF_ACCESS_CLIENT_SECRET: "fixture-secret",
+        }),
+      ),
+    );
+    await provider.generate({}, "SUMMARY");
+    fetcher.mockRejectedValue(new Error("fixture-client fixture-secret"));
+    await expect(provider.generate({}, "SUMMARY")).rejects.toThrow(
+      /^PROVIDER_UNAVAILABLE$/,
+    );
+    expect(await provider.readiness()).toBe("temporarily unavailable");
+    for (const log of logs) expect(log).not.toHaveBeenCalled();
+  });
   it("disabled never calls a provider", async () => {
     const fetcher = jest.spyOn(global, "fetch");
     const provider = new OllamaAiProvider(new AiConfig(new ConfigService({})));

@@ -17,10 +17,17 @@ export class OllamaAiProvider extends AiProvider {
   private async request(path: string, body?: object) {
     if (!this.config.enabled) throw new AiFailure("AI_DISABLED");
     try {
+      const headers: Record<string, string> = {
+        "Content-Type": "application/json",
+      };
+      if (this.config.cfAccessClientId && this.config.cfAccessClientSecret) {
+        headers["CF-Access-Client-Id"] = this.config.cfAccessClientId;
+        headers["CF-Access-Client-Secret"] = this.config.cfAccessClientSecret;
+      }
       const response = await fetch(new URL(path, this.config.baseUrl), {
         method: body ? "POST" : "GET",
         redirect: "error",
-        headers: { "Content-Type": "application/json" },
+        headers,
         ...(body ? { body: JSON.stringify(body) } : {}),
         signal: AbortSignal.timeout(this.config.timeoutMs),
       });

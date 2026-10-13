@@ -10,6 +10,8 @@ export class AiConfig {
   readonly maxAttempts: number;
   readonly retryDelayMs: number;
   readonly workerEnabled: boolean;
+  readonly cfAccessClientId?: string;
+  readonly cfAccessClientSecret?: string;
 
   constructor(config: ConfigService) {
     const flag = config.get<string>("AI_ENABLED");
@@ -19,6 +21,21 @@ export class AiConfig {
     this.workerEnabled = config.get<string>("AI_WORKER_ENABLED") !== "false";
     this.baseUrl = config.get<string>("OLLAMA_BASE_URL") ?? "";
     this.model = config.get<string>("OLLAMA_MODEL") ?? "";
+    this.cfAccessClientId = config.get<string>("OLLAMA_CF_ACCESS_CLIENT_ID");
+    this.cfAccessClientSecret = config.get<string>(
+      "OLLAMA_CF_ACCESS_CLIENT_SECRET",
+    );
+    for (const key of [
+      "OLLAMA_CF_ACCESS_CLIENT_ID",
+      "OLLAMA_CF_ACCESS_CLIENT_SECRET",
+    ]) {
+      const value = config.get<unknown>(key);
+      if (
+        value !== undefined &&
+        (typeof value !== "string" || /[\r\n]/.test(value))
+      )
+        throw new Error(`Invalid ${key}`);
+    }
     const number = (
       name: string,
       fallback: number,
