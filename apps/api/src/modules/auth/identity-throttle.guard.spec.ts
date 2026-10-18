@@ -1,17 +1,22 @@
 import { Logger, UnauthorizedException } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { ExecutionContextHost } from "@nestjs/core/helpers/execution-context-host";
-import { ThrottlerStorageService } from "@nestjs/throttler";
+import { IdentityThrottleStorage } from "./identity-throttle.storage";
 import { GoogleIdentityService } from "./google-identity.service";
 import { IdentityThrottleGuard } from "./identity-throttle.guard";
 import { refreshLimits } from "./refresh-throttle.guard";
 
-function context(body: unknown, google = true, forwarded = "ignored") {
+function context(
+  body: unknown,
+  google = true,
+  forwarded = "ignored",
+  source = "127.0.0.1",
+) {
   return new ExecutionContextHost(
     [
       {
         body,
-        socket: { remoteAddress: "127.0.0.1" },
+        socket: { remoteAddress: source },
         headers: { "x-forwarded-for": forwarded },
       },
       { setHeader: jest.fn() },
@@ -21,11 +26,11 @@ function context(body: unknown, google = true, forwarded = "ignored") {
   );
 }
 describe("Identity throttling behind shared NextAuth egress", () => {
-  let store: ThrottlerStorageService;
+  let store: IdentityThrottleStorage;
   let guard: IdentityThrottleGuard;
   const google = new GoogleIdentityService(new ConfigService());
   beforeEach(() => {
-    store = new ThrottlerStorageService();
+    store = new IdentityThrottleStorage();
     guard = new IdentityThrottleGuard(google, store);
     jest.spyOn(google, "verify").mockImplementation(async (token) => ({
       email: `${token.split(":")[0]}@fixture.invalid`,
@@ -120,5 +125,129 @@ describe("Identity throttling behind shared NextAuth egress", () => {
     await expect(
       guard.canActivate(context({ idToken: "alice:token" })),
     ).resolves.toBe(true);
+  });
+  it("same identity shares its budget across IPv4, IPv6 and browser cookies", async () => {
+    for (let i = 0; i < 20; i++) {
+      const ctx = context(
+        { idToken: `alice:${i}` },
+        true,
+        `forged-${i}`,
+        i % 2 ? "::1" : "192.0.2.1",
+      );
+      ctx.switchToHttp().getRequest().headers.cookie = `browser=${i}`;
+      await guard.canActivate(ctx);
+    }
+    await expect(
+      guard.canActivate(
+        context({ idToken: "alice:last" }, true, "new", "2001:db8::2"),
+      ),
+    ).rejects.toMatchObject({ status: 429 });
+  });
+  it("concurrent requests after 19 hits admit exactly one", async () => {
+    for (let i = 0; i < 19; i++)
+      await guard.canActivate(context({ idToken: `alice:${i}` }));
+    const outcomes = await Promise.allSettled(
+      Array.from({ length: 10 }, (_, i) =>
+        guard.canActivate(context({ idToken: `alice:race${i}` })),
+      ),
+    );
+    expect(
+      outcomes.filter((result) => result.status === "fulfilled"),
+    ).toHaveLength(1);
+    for (const result of outcomes)
+      if (result.status === "rejected")
+        expect(result.reason).toMatchObject({ status: 429 });
+  });
+  it("blocks for exactly 60s from the rejected request, not first/last request; Retry-After rounds up", async () => {
+    jest.useFakeTimers();
+    for (let i = 0; i < 20; i++)
+      await guard.canActivate(context({ idToken: `alice:${i}` }));
+    jest.advanceTimersByTime(10000);
+    const blocked = context({ idToken: "alice:21" });
+    await expect(guard.canActivate(blocked)).rejects.toMatchObject({
+      status: 429,
+    });
+    expect(blocked.switchToHttp().getResponse().setHeader).toHaveBeenCalledWith(
+      "Retry-After",
+      60,
+    );
+    jest.advanceTimersByTime(50000); // Original hits have expired, but block has not.
+    const retry = context({ idToken: "alice:22" });
+    await expect(guard.canActivate(retry)).rejects.toMatchObject({
+      status: 429,
+    });
+    expect(retry.switchToHttp().getResponse().setHeader).toHaveBeenCalledWith(
+      "Retry-After",
+      10,
+    );
+    jest.advanceTimersByTime(9999);
+    const last = context({ idToken: "alice:23" });
+    await expect(guard.canActivate(last)).rejects.toMatchObject({
+      status: 429,
+    });
+    expect(last.switchToHttp().getResponse().setHeader).toHaveBeenCalledWith(
+      "Retry-After",
+      1,
+    );
+    jest.advanceTimersByTime(1);
+    await expect(
+      guard.canActivate(context({ idToken: "alice:24" })),
+    ).resolves.toBe(true);
+  });
+  it("without a violation, individual hits expire 60s after their own arrival", async () => {
+    jest.useFakeTimers();
+    await guard.canActivate(context({ idToken: "alice:0" }));
+    jest.advanceTimersByTime(10000);
+    for (let i = 1; i < 20; i++)
+      await guard.canActivate(context({ idToken: `alice:${i}` }));
+    jest.advanceTimersByTime(50000);
+    await expect(
+      guard.canActivate(context({ idToken: "alice:20" })),
+    ).resolves.toBe(true);
+    await expect(
+      guard.canActivate(context({ idToken: "alice:21" })),
+    ).rejects.toMatchObject({ status: 429 });
+  });
+  it("random invalid email identifiers only create source/malformed keys", async () => {
+    for (let i = 0; i < 20; i++)
+      await guard.canActivate(context({ email: `invalid-${i}` }, false));
+    await expect(
+      guard.canActivate(context({ email: "another-invalid" }, false)),
+    ).rejects.toMatchObject({ status: 429 });
+    expect(store.storage.size).toBe(2);
+    await expect(
+      guard.canActivate(context({ email: "valid@fixture.invalid" }, false)),
+    ).resolves.toBe(true);
+  });
+  it("lost-response retry of the same Google token is allowed, but repetition is bounded and temporary", async () => {
+    jest.useFakeTimers();
+    for (let i = 0; i < 20; i++)
+      await expect(
+        guard.canActivate(context({ idToken: "alice:unchanged" })),
+      ).resolves.toBe(true);
+    await expect(
+      guard.canActivate(context({ idToken: "alice:unchanged" })),
+    ).rejects.toMatchObject({ status: 429 });
+    jest.advanceTimersByTime(60000);
+    await expect(
+      guard.canActivate(context({ idToken: "alice:unchanged" })),
+    ).resolves.toBe(true);
+  });
+  it("restarting or using another instance resets budgets (explicit single-instance limitation)", async () => {
+    for (let i = 0; i < 20; i++)
+      await guard.canActivate(context({ idToken: "alice:token" }));
+    await expect(
+      guard.canActivate(context({ idToken: "alice:token" })),
+    ).rejects.toMatchObject({ status: 429 });
+    const otherStore = new IdentityThrottleStorage();
+    try {
+      await expect(
+        new IdentityThrottleGuard(google, otherStore).canActivate(
+          context({ idToken: "alice:token" }),
+        ),
+      ).resolves.toBe(true);
+    } finally {
+      otherStore.onApplicationShutdown();
+    }
   });
 });

@@ -1,5 +1,6 @@
 import { RefreshThrottleGuard } from "./refresh-throttle.guard";
 import { IdentityThrottleGuard } from "./identity-throttle.guard";
+import { IdentityThrottleStorage } from "./identity-throttle.storage";
 import { Module } from "@nestjs/common";
 import { JwtModule } from "@nestjs/jwt";
 import { PassportModule } from "@nestjs/passport";
@@ -26,6 +27,7 @@ import { JwtStrategy } from "./strategies/jwt.strategy";
     GoogleIdentityService,
     RefreshThrottleGuard,
     IdentityThrottleGuard,
+    IdentityThrottleStorage,
   ],
   controllers: [AuthController],
   exports: [AuthService],

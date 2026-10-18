@@ -1,3 +1,6 @@
+import { ExecutionContextHost } from "@nestjs/core/helpers/execution-context-host";
+import { IdentityThrottleGuard } from "./identity-throttle.guard";
+import { IdentityThrottleStorage } from "./identity-throttle.storage";
 import { ConfigService } from "@nestjs/config";
 import { OAuth2Client } from "google-auth-library";
 import { CertificateFormat } from "google-auth-library/build/src/auth/oauth2client";
@@ -87,5 +90,37 @@ describe("Google identity verification", () => {
     await expect(
       new GoogleIdentityService(new ConfigService()).verify(token()),
     ).rejects.toThrow("Authentication failed");
+  });
+  it("forged signed claims cannot consume a victim identity budget", async () => {
+    const storage = new IdentityThrottleStorage();
+    const guard = new IdentityThrottleGuard(service, storage);
+    const attacker = generateKeyPairSync("rsa", { modulusLength: 2048 });
+    const context = (idToken: string) =>
+      new ExecutionContextHost(
+        [
+          { body: { idToken }, socket: { remoteAddress: "127.0.0.1" } },
+          { setHeader: jest.fn() },
+        ],
+        class Fixture {},
+        function googleCallback() {},
+      );
+    try {
+      for (let i = 0; i < 25; i++)
+        await expect(
+          guard.canActivate(context(token({ nonce: i }, attacker.privateKey))),
+        ).rejects.toMatchObject({ status: 401 });
+      expect(
+        [...storage.storage.keys()].filter((key) => key.includes(":identity:")),
+      ).toHaveLength(0);
+      for (let i = 0; i < 20; i++)
+        await expect(
+          guard.canActivate(context(token({ nonce: i }))),
+        ).resolves.toBe(true);
+      expect(
+        [...storage.storage.keys()].filter((key) => key.includes(":identity:")),
+      ).toHaveLength(1);
+    } finally {
+      storage.onApplicationShutdown();
+    }
   });
 });

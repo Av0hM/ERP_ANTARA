@@ -12,14 +12,14 @@ Previously AuthController's Nest ThrottlerGuard imposed 20 requests/minute keyed
 
 Login and Google callback now skip only the old generic quota and use IdentityThrottleGuard:
 
-- Google: 20/minute per verified, normalized Google email, independent of token rotation; 20/minute per presented token bounds replay before verification. GoogleIdentityService verifies signatures/claims before selecting identity. AuthService retains its own verification and all existing account policy checks.
+- Google: 20/minute per verified, normalized Google email, independent of token rotation; 20/minute per presented token bounds repeated use before verification (not single-use replay prevention). GoogleIdentityService verifies signatures/claims before selecting identity. AuthService retains its own verification and all existing account policy checks.
 - Credentials: 20/minute per normalized target email, including failed password attempts across IPs. The bucket does not imply authentication or reveal account existence.
 - Malformed input: 20/minute per socket source in a separate bucket; exhausting this does not exhaust valid identities.
 - Each endpoint retains a 3000/minute source flood ceiling, matching the existing refresh guard's shared-infrastructure allowance. This is a last-resort capacity limit, not a replacement login quota. Large floods can still cause source-wide protection; arbitrary random identities/tokens cannot bypass this ceiling.
 - Forwarded headers are never trusted. No browser-supplied user ID or decoded unverified Google claims select verified identity.
 - Refresh retains its existing credential/session/source layers. Invitation acceptance retains its existing protection. Register/logout/me behavior is unchanged.
 
-All keys use process-keyed HMACs. Nest's replaceable ThrottlerStorage remains the storage boundary, compatible with the current single API instance. Multiple replicas would require shared limiter storage and a coordinated key-secret design before deployment.
+All keys use process-keyed HMACs. IdentityThrottleStorage now subclasses Nest's in-memory store with a 50,000-live-key admission cap; new keys at capacity receive 503 rather than evicting live budgets. Invalid email syntax uses the malformed bucket. This is compatible with the current single API instance. Multiple replicas would require shared limiter storage and a coordinated key-secret design before deployment.
 
 API warnings identify operation, bucket type, opaque identifier and limit; web warnings identify exact auth endpoint and HTTP 429. Neither logs email, passwords, ID tokens, source addresses or backend response bodies. Account-level lockout is still possible for deliberately targeted password accounts; unrelated accounts no longer share the small quota.
 
@@ -34,3 +34,7 @@ The Google provider uses the standard accounts.google.com issuer. Repository loc
 Deploy the compatible API patch; the web diagnostic can deploy independently. No new environment variables, migrations, proxy-trust changes or production data operations are required. Existing single-instance in-memory buckets reset on restart as before. Verify two distinct accounts can authenticate while one account hits its own 429 budget. Do not intentionally flood production.
 
 Offline tests cover identity isolation, token rotation/replay, forged forwarding headers, malformed input, source flood limits, expiry, sanitized logs and actual Nest controller HTTP routing. Existing Google signature validation and refresh tests remain authoritative. No production services were contacted for this patch.
+
+## 2026-10-18 production-readiness audit
+
+The exact limiter is a per-hit 60,000 ms expiry counter plus a separate 60,000 ms penalty on exceeding the quota, not a fixed window. Request 20 passes; request 21 starts the block. Retry-After is the ceiling of remaining block seconds. Blocked retries do not extend the block. See `AUTH_RATE_LIMIT_READINESS_AUDIT.md` for measured boundaries, storage/memory limitations, full tests and the conditional single-instance deployment verdict.

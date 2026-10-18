@@ -5,6 +5,7 @@ import { AuthController } from "./auth.controller";
 import { AuthService } from "./auth.service";
 import { GoogleIdentityService } from "./google-identity.service";
 import { IdentityThrottleGuard } from "./identity-throttle.guard";
+import { IdentityThrottleStorage } from "./identity-throttle.storage";
 import { RefreshThrottleGuard } from "./refresh-throttle.guard";
 import { JwtAuthGuard } from "./guards/jwt-auth.guard";
 
@@ -18,6 +19,7 @@ describe("Actual auth route identity throttling over HTTP", () => {
       controllers: [AuthController],
       providers: [
         IdentityThrottleGuard,
+        IdentityThrottleStorage,
         {
           provide: AuthService,
           useValue: {
@@ -77,7 +79,7 @@ describe("Actual auth route identity throttling over HTTP", () => {
       const limited = await post(route, body("alice", 21));
       expect(limited.status).toBe(429);
       expect(limited.headers.get("Retry-After")).toBeTruthy();
-      for (let i = 0; i < 25; i++)
+      for (let i = 0; i < 50; i++)
         expect((await post(route, body(`independent${i}`, 0))).status).toBe(
           201,
         );

@@ -72,6 +72,7 @@ for (const [status, code] of [
   [403, "credentials"],
   [429, "rate_limited"],
   [500, "backend_unavailable"],
+  [503, "backend_unavailable"],
 ] as const) {
   test(`backend ${status} reports ${code}`, async () => {
     const originalFetch = globalThis.fetch;
@@ -136,5 +137,21 @@ test("Google JWT exchange 429 identifies the exact endpoint without logging iden
   } finally {
     globalThis.fetch = originalFetch;
     console.warn = originalWarn;
+  }
+});
+
+test("backend timeout is unavailable, never rate limited", async () => {
+  const originalFetch = globalThis.fetch;
+  try {
+    globalThis.fetch = async () => {
+      throw new DOMException("private timeout detail", "TimeoutError");
+    };
+    await expect(
+      authenticateWithBackend("http://localhost/api", "google-callback", {
+        idToken: "private-token",
+      }),
+    ).rejects.toMatchObject({ code: "backend_unavailable" });
+  } finally {
+    globalThis.fetch = originalFetch;
   }
 });
