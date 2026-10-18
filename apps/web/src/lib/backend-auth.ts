@@ -35,6 +35,14 @@ export async function authenticateWithBackend(
       signal: AbortSignal.timeout(10000),
     });
     if (!response.ok) {
+      if (response.status === 429) {
+        // Server-only diagnostic: never log credentials, Google tokens or response bodies.
+        console.warn({
+          event: "backend_auth_rate_limited",
+          endpoint: `/auth/${provider}`,
+          status: response.status,
+        });
+      }
       throw new BackendAuthError(
         response.status === 429
           ? "rate_limited"

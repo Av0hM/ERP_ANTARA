@@ -1,4 +1,5 @@
 import { RefreshThrottleGuard } from "./refresh-throttle.guard";
+import { IdentityThrottleGuard } from "./identity-throttle.guard";
 import { Body, Controller, Get, Post, UseGuards } from "@nestjs/common";
 
 import { CurrentUser } from "../../common/decorators/current-user.decorator";
@@ -26,11 +27,15 @@ export class AuthController {
   }
 
   @Post("login")
+  @SkipThrottle()
+  @UseGuards(IdentityThrottleGuard)
   login(@Body() payload: LoginDto) {
     return this.authService.login(payload);
   }
 
   @Post("google-callback")
+  @SkipThrottle()
+  @UseGuards(IdentityThrottleGuard)
   googleCallback(@Body() payload: GoogleCallbackDto) {
     return this.authService.googleCallback(payload);
   }

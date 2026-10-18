@@ -1159,7 +1159,7 @@ integration("Phase 2 authentication: isolated PostgreSQL", () => {
     expect(await limited.text()).not.toContain(session.refreshToken);
   });
   it.each(["/auth/login", "/auth/google-callback", "/invitations/accept"])(
-    "HTTP %s retains its small IP bucket",
+    "HTTP %s retains protection for malformed unauthenticated attempts",
     async (route) => {
       const statuses: number[] = [];
       // Missing fields deliberately avoid provider access/password hashing, but still consume attempts.

@@ -105,3 +105,36 @@ test("network failures report service unavailable", async () => {
     globalThis.fetch = originalFetch;
   }
 });
+
+test("Google JWT exchange 429 identifies the exact endpoint without logging identity tokens", async () => {
+  const originalFetch = globalThis.fetch;
+  const originalWarn = console.warn;
+  const logs: unknown[] = [];
+  let requested: unknown;
+  try {
+    console.warn = (entry: unknown) => {
+      logs.push(entry);
+    };
+    globalThis.fetch = async (url) => {
+      requested = url;
+      return new Response("private backend detail", { status: 429 });
+    };
+    await expect(
+      authenticateWithBackend("http://localhost/api", "google-callback", {
+        idToken: "private-google-id-token",
+      }),
+    ).rejects.toMatchObject({ code: "rate_limited" });
+    expect(requested).toBe("http://localhost/api/auth/google-callback");
+    expect(logs).toEqual([
+      {
+        event: "backend_auth_rate_limited",
+        endpoint: "/auth/google-callback",
+        status: 429,
+      },
+    ]);
+    expect(JSON.stringify(logs)).not.toContain("private");
+  } finally {
+    globalThis.fetch = originalFetch;
+    console.warn = originalWarn;
+  }
+});
