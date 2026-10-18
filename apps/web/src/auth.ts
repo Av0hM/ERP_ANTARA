@@ -2,6 +2,7 @@ import NextAuth, { CredentialsSignin } from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import Google from "next-auth/providers/google";
 import { authenticateWithBackend, BackendAuthError } from "./lib/backend-auth";
+import { backendSignIn } from "./lib/backend-sign-in";
 
 class BackendSignInError extends CredentialsSignin {
   constructor(code: string) {
@@ -68,6 +69,7 @@ async function refreshAccessToken(token: {
 export const { handlers, auth, signIn, signOut } = NextAuth({
   secret: resolvedNextAuthSecret,
   trustHost: true,
+  pages: { error: "/login/error" },
   session: {
     strategy: "jwt",
   },
@@ -131,14 +133,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     },
   },
   callbacks: {
-    async jwt({ token, user, account }) {
-      if (account?.provider === "google") {
-        if (!account.id_token)
-          throw new Error("Google identity token is missing");
-        user = await authenticateWithBackend(apiUrl, "google-callback", {
-          idToken: account.id_token,
-        });
-      }
+    signIn: ({ user, account }) => backendSignIn(apiUrl, user, account),
+    async jwt({ token, user }) {
       if (user) {
         const expires = Date.parse(user.accessTokenExpiresAt ?? "");
         if (

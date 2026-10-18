@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { AlertTriangle, Eye, EyeOff, Sparkles } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-
+import { clearExpiredLoginCooldown } from "@/lib/login-cooldown";
 
 export function LoginForm({
   callbackUrl = "/dashboard",
@@ -37,14 +37,24 @@ export function LoginForm({
     const values = new FormData(event.currentTarget);
     setError(null);
     setSubmitting(true);
+    clearExpiredLoginCooldown();
     try {
-      const result = await signIn("credentials", { email: String(values.get("email") ?? ""), password: String(values.get("password") ?? ""), redirect: false, redirectTo: callbackUrl });
+      const result = await signIn("credentials", {
+        email: String(values.get("email") ?? ""),
+        password: String(values.get("password") ?? ""),
+        redirect: false,
+        redirectTo: callbackUrl,
+      });
       if (!result || result.error) {
-        setError(result?.code === "rate_limited"
-          ? "Too many sign-in attempts. Please wait and try again."
-          : result?.code === "backend_unavailable"
-          ? "The sign-in service is unavailable. Please try again shortly."
-          : "Invalid email or password. Use your team login.");
+        if (result?.code === "rate_limited") {
+          router.replace("/login/rate-limited");
+          return;
+        }
+        setError(
+          result?.code === "backend_unavailable"
+            ? "The sign-in service is unavailable. Please try again shortly."
+            : "Invalid email or password. Use your team login.",
+        );
         return;
       }
       router.replace(callbackUrl);
@@ -58,6 +68,7 @@ export function LoginForm({
 
   const handleGoogleSignIn = () => {
     setError(null);
+    clearExpiredLoginCooldown();
     void signIn("google", { callbackUrl }, { prompt: "select_account" });
   };
 
@@ -68,12 +79,17 @@ export function LoginForm({
           <Sparkles className="size-5" />
         </div>
         <div>
-          <p className="text-xs uppercase tracking-[0.32em] text-saffron">Secure Access</p>
-          <h1 className="mt-1 text-3xl font-semibold text-text">Sign in to AntaraERP</h1>
+          <p className="text-xs uppercase tracking-[0.32em] text-saffron">
+            Secure Access
+          </p>
+          <h1 className="mt-1 text-3xl font-semibold text-text">
+            Sign in to AntaraERP
+          </h1>
         </div>
       </div>
       <p className="mt-4 text-sm leading-6 text-muted">
-        Enter the mission workspace with role-aware access, token refresh, and protected operations across tasks, analytics, and AI.
+        Enter the mission workspace with role-aware access, token refresh, and
+        protected operations across tasks, analytics, and AI.
       </p>
 
       <form
@@ -95,43 +111,63 @@ export function LoginForm({
           />
         </label>
         <div>
-          <label htmlFor="login-password" className="mb-2 block text-sm text-muted">Password</label>
-          <div className="relative">
-          <input
-            id="login-password"
-            name="password"
-            disabled={!ready || submitting}
-            className="input-field pr-12"
-            type={showPassword ? "text" : "password"}
-            placeholder="Enter password"
-            autoComplete="current-password"
-            value={password}
-            onChange={(event) => setPassword(event.target.value)}
-          />
-          <button
-            type="button"
-            aria-label={showPassword ? "Hide password" : "Show password"}
-            aria-pressed={showPassword}
-            aria-controls="login-password"
-            disabled={!ready}
-            onClick={() => setShowPassword((current) => !current)}
-            className="absolute inset-y-0 right-0 flex items-center rounded-r-xl px-3 text-muted hover:text-text focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
+          <label
+            htmlFor="login-password"
+            className="mb-2 block text-sm text-muted"
           >
-            {showPassword ? <EyeOff className="size-5" /> : <Eye className="size-5" />}
-          </button>
+            Password
+          </label>
+          <div className="relative">
+            <input
+              id="login-password"
+              name="password"
+              disabled={!ready || submitting}
+              className="input-field pr-12"
+              type={showPassword ? "text" : "password"}
+              placeholder="Enter password"
+              autoComplete="current-password"
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+            />
+            <button
+              type="button"
+              aria-label={showPassword ? "Hide password" : "Show password"}
+              aria-pressed={showPassword}
+              aria-controls="login-password"
+              disabled={!ready}
+              onClick={() => setShowPassword((current) => !current)}
+              className="absolute inset-y-0 right-0 flex items-center rounded-r-xl px-3 text-muted hover:text-text focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
+            >
+              {showPassword ? (
+                <EyeOff className="size-5" />
+              ) : (
+                <Eye className="size-5" />
+              )}
+            </button>
           </div>
         </div>
 
         <div className="flex items-center justify-between">
-          <button type="button" className="text-sm text-saffron transition hover:text-text" onClick={() => setShowForgotPassword((current) => !current)}>
+          <button
+            type="button"
+            className="text-sm text-saffron transition hover:text-text"
+            onClick={() => setShowForgotPassword((current) => !current)}
+          >
             Forgot password?
           </button>
         </div>
 
         {showForgotPassword ? (
           <div className="rounded-xl border border-steel/30 bg-white/5 px-4 py-3 text-sm text-muted flex items-start justify-between gap-3">
-            <p>Password resets are managed by your team administrator. Contact your admin to reset your credentials.</p>
-            <button type="button" className="text-muted transition hover:text-text" onClick={() => setShowForgotPassword(false)}>
+            <p>
+              Password resets are managed by your team administrator. Contact
+              your admin to reset your credentials.
+            </p>
+            <button
+              type="button"
+              className="text-muted transition hover:text-text"
+              onClick={() => setShowForgotPassword(false)}
+            >
               x
             </button>
           </div>
@@ -144,7 +180,11 @@ export function LoginForm({
           </div>
         ) : null}
 
-        <Button className="w-full gap-2" type="submit" disabled={!ready || submitting}>
+        <Button
+          className="w-full gap-2"
+          type="submit"
+          disabled={!ready || submitting}
+        >
           {submitting ? "Signing in..." : "Sign In"}
         </Button>
         <Button
