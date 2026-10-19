@@ -470,6 +470,11 @@ test("Phase 6 Files: upload, authorized open, context filtering, delete and rest
   await card.getByRole("button", { name: "Open / download" }).click();
   expect((await download).suggestedFilename()).toBe("browser-part.step");
   await card.getByRole("button", { name: "Delete", exact: true }).click();
+  await expect(card).toBeVisible();
+  await page
+    .getByRole("alertdialog")
+    .getByRole("button", { name: "Delete file", exact: true })
+    .click();
   await expect(card).not.toBeVisible();
   await page.getByLabel("Retained deleted files").check();
   await expect(card).toBeVisible();
@@ -649,4 +654,289 @@ test("release OWNER task and decision persistence with direct-object denial", as
   expect((await api(page, `/decisions/${createdDecision.id}`)).status()).toBe(
     403,
   );
+});
+
+test("task failures show service/permission feedback, not an empty task board", async ({
+  page,
+}) => {
+  await login(page, "owner");
+  await page.route("**/api/tasks", (route) =>
+    route.fulfill({
+      status: 503,
+      json: { message: "private provider details" },
+    }),
+  );
+  await page.goto("/tasks");
+  await expect(
+    page.getByText("ANTARA services are temporarily unavailable"),
+  ).toBeVisible();
+  await expect(
+    page.getByText("No tasks are currently available", { exact: false }),
+  ).toHaveCount(0);
+  await expect(page.locator("body")).not.toContainText(
+    "private provider details",
+  );
+  await page.unroute("**/api/tasks");
+  await page.route("**/api/tasks", (route) =>
+    route.fulfill({ status: 403, json: {} }),
+  );
+  await page.reload();
+  await expect(
+    page.getByText("Access unavailable", { exact: true }),
+  ).toBeVisible();
+});
+
+test("failed task creation preserves draft and requires explicit discard", async ({
+  page,
+}) => {
+  await login(page, "owner");
+  await page.goto("/tasks");
+  await page.getByRole("button", { name: "Create Task", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "Create task", exact: true });
+  await dialog
+    .getByPlaceholder("Telemetry integration validation")
+    .fill("Unsaved fixture task");
+  await dialog
+    .getByPlaceholder(
+      "Describe dependencies, objectives, and review criteria...",
+    )
+    .fill("Preserve this draft");
+  await dialog.locator('input[type="date"]').fill("2030-01-01");
+  let submissions = 0;
+  await page.route("**/api/tasks", async (route) => {
+    if (route.request().method() !== "POST") return route.continue();
+    submissions++;
+    await route.fulfill({ status: 503, json: {} });
+  });
+  await dialog
+    .getByRole("button", { name: "Create Task", exact: true })
+    .click();
+  await expect(
+    page
+      .getByText(
+        "We could not complete this request. Check the latest state before repeating a change.",
+      )
+      .first(),
+  ).toBeVisible();
+  await expect(
+    dialog.getByPlaceholder("Telemetry integration validation"),
+  ).toHaveValue("Unsaved fixture task");
+  expect(submissions).toBe(1);
+  await dialog.getByRole("button", { name: "Cancel", exact: true }).click();
+  const confirmation = page.getByRole("alertdialog");
+  await expect(
+    confirmation.getByText("You have unsaved changes", { exact: true }),
+  ).toBeVisible();
+  await confirmation
+    .getByRole("button", { name: "Cancel", exact: true })
+    .click();
+  await expect(dialog).toBeVisible();
+  await dialog.getByRole("button", { name: "Cancel", exact: true }).click();
+  await confirmation.getByRole("button", { name: "Discard changes" }).click();
+  await expect(dialog).toHaveCount(0);
+});
+
+test("offline notice does not resubmit mutations", async ({ page }) => {
+  await login(page, "member");
+  await page.evaluate(() => window.dispatchEvent(new Event("offline")));
+  await expect(
+    page.getByText("You're offline.", { exact: false }),
+  ).toBeVisible();
+  await page.evaluate(() => window.dispatchEvent(new Event("online")));
+  await expect(page.getByText("Back online.", { exact: false })).toBeVisible();
+});
+
+test("offline task submission stays local and is not replayed on reconnect", async ({
+  page,
+  context,
+}) => {
+  await login(page, "owner");
+  await page.goto("/tasks");
+  await page.getByRole("button", { name: "Create Task", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "Create task", exact: true });
+  await dialog
+    .getByPlaceholder("Telemetry integration validation")
+    .fill("Offline draft");
+  await dialog
+    .getByPlaceholder(
+      "Describe dependencies, objectives, and review criteria...",
+    )
+    .fill("Keep offline draft");
+  await dialog.locator('input[type="date"]').fill("2030-01-01");
+  let writes = 0;
+  page.on("request", (request) => {
+    if (request.url().endsWith("/api/tasks") && request.method() === "POST")
+      writes++;
+  });
+  await context.setOffline(true);
+  await dialog
+    .getByRole("button", { name: "Create Task", exact: true })
+    .click();
+  await expect(
+    dialog.getByText(
+      "Reconnect to continue. Do not resubmit a change until you have checked whether it was saved.",
+    ),
+  ).toBeVisible();
+  await expect(
+    dialog.getByPlaceholder("Telemetry integration validation"),
+  ).toHaveValue("Offline draft");
+  await context.setOffline(false);
+  await expect(page.getByText("Back online.", { exact: false })).toBeVisible();
+  await expect(
+    dialog.getByRole("button", { name: "Create Task", exact: true }),
+  ).toBeEnabled();
+  expect(writes).toBe(0);
+});
+
+test("optional AI failure leaves authorized analytics available", async ({
+  page,
+}) => {
+  await login(page, "owner");
+  await page.route("**/api/ai/bundle", (route) =>
+    route.fulfill({ status: 503, json: { message: "private AI host" } }),
+  );
+  await page.goto("/analytics");
+  await expect(
+    page.getByText("Productivity Index", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByText("ANTARA AI is currently unavailable", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByText(
+      "Tasks, files, calendar and other ERP features are unaffected.",
+      { exact: true },
+    ),
+  ).toBeVisible();
+  await expect(page.locator("body")).not.toContainText("private AI host");
+});
+
+test("empty task form identifies required fields and unchanged close needs no discard", async ({
+  page,
+}) => {
+  await login(page, "owner");
+  await page.goto("/tasks");
+  await page.getByRole("button", { name: "Create Task", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "Create task", exact: true });
+  await dialog
+    .getByRole("button", { name: "Create Task", exact: true })
+    .click();
+  await expect(dialog.getByLabel("Title", { exact: true })).toHaveAttribute(
+    "aria-invalid",
+    "true",
+  );
+  await expect(
+    dialog.getByText("Enter a task title.", { exact: true }),
+  ).toBeVisible();
+  await dialog.getByRole("button", { name: "Cancel", exact: true }).click();
+  await expect(page.getByRole("alertdialog")).toHaveCount(0);
+  await expect(dialog).toHaveCount(0);
+});
+
+test("task filter survives refresh and Back without putting search text in URL", async ({
+  page,
+}) => {
+  await login(page, "owner");
+  await page.goto("/tasks");
+  await page
+    .getByRole("combobox", { name: "Task priority filter" })
+    .selectOption("HIGH");
+  await expect(page).toHaveURL(/priority=HIGH/);
+  await page.reload();
+  await expect(
+    page.getByRole("combobox", { name: "Task priority filter" }),
+  ).toHaveValue("HIGH");
+  await page
+    .getByRole("combobox", { name: "Task priority filter" })
+    .selectOption("LOW");
+  await expect(page).toHaveURL(/priority=LOW/);
+  await page.goBack();
+  await expect(page).toHaveURL(/priority=HIGH/);
+  await expect(
+    page.getByRole("combobox", { name: "Task priority filter" }),
+  ).toHaveValue("HIGH");
+  await page
+    .getByPlaceholder("Search tasks, dependencies, tags...")
+    .fill("private draft search");
+  expect(page.url()).not.toContain("private");
+});
+
+test("Calendar distinguishes confirmed sync, not configured, and failed save without clearing input", async ({
+  page,
+}) => {
+  await login(page, "owner");
+  let status: "SYNCED" | "NOT_CONFIGURED" | "FAILED" = "SYNCED";
+  let writes = 0;
+  await page.route("**/api/calendar/events", async (route) => {
+    if (route.request().method() !== "POST") return route.fulfill({ json: [] });
+    writes++;
+    if (status === "FAILED")
+      return route.fulfill({
+        status: 503,
+        json: { message: "private Google credential" },
+      });
+    return route.fulfill({
+      json: {
+        id: `event-${writes}`,
+        ...route.request().postDataJSON(),
+        integrationStatus: status,
+      },
+    });
+  });
+  for (const outcome of ["SYNCED", "NOT_CONFIGURED", "FAILED"] as const) {
+    status = outcome;
+    await page.goto("/calendar");
+    await page.getByLabel("Event title", { exact: true }).fill("Fixture event");
+    await page
+      .getByLabel("Starts at", { exact: true })
+      .fill("2030-01-01T10:00");
+    await page.getByLabel("Ends at", { exact: true }).fill("2030-01-01T11:00");
+    await page
+      .getByRole("button", { name: "Schedule Event", exact: true })
+      .click();
+    if (outcome === "SYNCED")
+      await expect(
+        page.getByText("Event saved in ANTARA ERP. Google Calendar synced.", {
+          exact: true,
+        }),
+      ).toBeVisible();
+    else if (outcome === "NOT_CONFIGURED")
+      await expect(
+        page.getByText(
+          "Event saved in ANTARA ERP. Google Calendar is not configured; no external event was created.",
+          { exact: true },
+        ),
+      ).toBeVisible();
+    else {
+      await expect(
+        page.getByText("Your changes are still here.", { exact: true }),
+      ).toBeVisible();
+      await expect(page.getByLabel("Event title", { exact: true })).toHaveValue(
+        "Fixture event",
+      );
+      await expect(page.locator("body")).not.toContainText(
+        "private Google credential",
+      );
+    }
+  }
+  expect(writes).toBe(3);
+});
+
+test("mobile Calendar keeps view controls accessible without horizontal overflow", async ({
+  page,
+}) => {
+  await login(page, "owner");
+  await page.setViewportSize({ width: 375, height: 812 });
+  await page.route("**/api/calendar/events", (route) =>
+    route.fulfill({ json: [] }),
+  );
+  await page.goto("/calendar");
+  const week = page.getByRole("button", { name: "week", exact: true });
+  await week.scrollIntoViewIfNeeded();
+  await expect(week).toBeInViewport();
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= window.innerWidth,
+    ),
+  ).toBe(true);
 });

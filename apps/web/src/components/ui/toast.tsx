@@ -1,6 +1,14 @@
 "use client";
 
-import { createContext, useEffect, useCallback, useContext, useMemo, useState, type ReactNode } from "react";
+import {
+  createContext,
+  useEffect,
+  useCallback,
+  useContext,
+  useMemo,
+  useState,
+  type ReactNode,
+} from "react";
 import { createPortal } from "react-dom";
 import { AlertTriangle, CheckCircle2, Info, X } from "lucide-react";
 
@@ -58,7 +66,8 @@ export function ToastProvider({ children }: { children: ReactNode }) {
             <div className="fixed bottom-4 right-4 z-[60] flex w-[calc(100vw-2rem)] max-w-sm flex-col gap-3 md:w-full">
               {toasts.map((toast) => {
                 const styles = {
-                  success: "border-emerald-500/40 text-emerald-200 bg-emerald-900/80",
+                  success:
+                    "border-emerald-500/40 text-emerald-200 bg-emerald-900/80",
                   error: "border-red-500/40 text-red-200 bg-red-900/80",
                   info: "border-ice/40 text-ice bg-panel/90",
                 }[toast.type];
@@ -76,7 +85,12 @@ export function ToastProvider({ children }: { children: ReactNode }) {
                   >
                     <Icon className="mt-0.5 size-4 shrink-0" />
                     <p className="flex-1">{toast.message}</p>
-                    <button type="button" className="text-current/80 transition hover:text-current" onClick={() => removeToast(toast.id)}>
+                    <button
+                      type="button"
+                      aria-label="Dismiss notification"
+                      className="text-current/80 transition hover:text-current"
+                      onClick={() => removeToast(toast.id)}
+                    >
                       <X className="size-4" />
                     </button>
                   </div>

@@ -1,5 +1,5 @@
 import type { UiContext } from "@antara/contracts";
-import { rejectApiResponse } from "./http-error";
+import { apiFetch, apiJson, checkApiResponse } from "./http-error";
 import {
   DashboardMetric,
   InsightSeverity,
@@ -40,7 +40,7 @@ async function request<T>(
   init?: RequestInit,
   accessToken?: string,
 ): Promise<T> {
-  const response = await fetch(`${baseUrl}${path}`, {
+  const response = await apiFetch(`${baseUrl}${path}`, {
     ...init,
     headers: {
       "Content-Type": "application/json",
@@ -48,10 +48,15 @@ async function request<T>(
       ...(init?.headers ?? {}),
     },
   });
-  if (!response.ok) {
-    rejectApiResponse(response.status);
-  }
-  return response.json() as Promise<T>;
+  await checkApiResponse(response, [
+    "title",
+    "description",
+    "deadline",
+    "startsAt",
+    "endsAt",
+    "content",
+  ]);
+  return apiJson<T>(response);
 }
 
 export function fetchUiContext(accessToken: string) {
@@ -338,19 +343,7 @@ export async function fetchAttachments(
 }
 
 async function fileResponse(response: Response) {
-  if (!response.ok) {
-    if (response.status === 401 || response.status === 403)
-      rejectApiResponse(response.status);
-    const error = (await response.json().catch(() => null)) as {
-      message?: string;
-    } | null;
-    throw new Error(
-      typeof error?.message === "string"
-        ? error.message
-        : "File operation failed",
-    );
-  }
-  return response;
+  return checkApiResponse(response);
 }
 export async function createAttachment(
   input: {
@@ -366,8 +359,9 @@ export async function createAttachment(
   if (input.taskId) body.append("taskId", input.taskId);
   return (
     await fileResponse(
-      await fetch(`${baseUrl}/files/upload`, {
+      await apiFetch(`${baseUrl}/files/upload`, {
         method: "POST",
+        signal: AbortSignal.timeout(120_000),
         headers: { Authorization: `Bearer ${accessToken}` },
         body,
       }),
@@ -381,7 +375,7 @@ export async function fileLifecycle(
 ) {
   return (
     await fileResponse(
-      await fetch(
+      await apiFetch(
         `${baseUrl}/files/${action === "delete" ? `attachments/${id}` : `${id}/restore`}`,
         {
           method: action === "delete" ? "DELETE" : "POST",
@@ -397,7 +391,7 @@ export async function openAttachment(
   accessToken?: string,
 ) {
   const response = await fileResponse(
-    await fetch(`${baseUrl}/files/${id}/open`, {
+    await apiFetch(`${baseUrl}/files/${id}/open`, {
       headers: { Authorization: `Bearer ${accessToken}` },
       cache: "no-store",
     }),

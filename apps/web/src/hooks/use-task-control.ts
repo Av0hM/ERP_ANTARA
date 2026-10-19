@@ -5,6 +5,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { TaskStatus } from "@antara/contracts";
 import { io, Socket } from "socket.io-client";
 
+import { classifyError } from "@/lib/ux-error";
 import { useToast } from "@/components/ui/toast";
 import {
   addTaskComment,
@@ -180,9 +181,9 @@ export function useTaskControl(initialTasks: TaskRecord[]) {
     },
     onError: (error, _variables, context) => {
       addToast(
-        error.message.includes("403")
-          ? "You do not have permission to perform this action."
-          : "Unable to save changes. Please try again.",
+        classifyError(error).code === "FORBIDDEN"
+          ? "You do not have permission to change this task. Check your current context."
+          : classifyError(error).message,
         "error",
       );
       if (context?.previous) {
@@ -231,9 +232,9 @@ export function useTaskControl(initialTasks: TaskRecord[]) {
     },
     onError: (error, _variables, context) => {
       addToast(
-        error.message.includes("403")
-          ? "You do not have permission to perform this action."
-          : "Unable to save changes. Please try again.",
+        classifyError(error).code === "FORBIDDEN"
+          ? "You do not have permission to change this task. Check your current context."
+          : classifyError(error).message,
         "error",
       );
       if (context?.previous) {
@@ -303,9 +304,9 @@ export function useTaskControl(initialTasks: TaskRecord[]) {
     },
     onError: (error, _variables, context) => {
       addToast(
-        error.message.includes("403")
-          ? "You do not have permission to perform this action."
-          : "Unable to save changes. Please try again.",
+        classifyError(error).code === "FORBIDDEN"
+          ? "You do not have permission to change this task. Check your current context."
+          : classifyError(error).message,
         "error",
       );
       if (context?.previous) {
@@ -341,7 +342,7 @@ export function useTaskControl(initialTasks: TaskRecord[]) {
     },
   });
 
-  const tasks = tasksQuery.data ?? initialTasks;
+  const tasks = tasksQuery.isError ? [] : (tasksQuery.data ?? initialTasks);
   const activity = activityQuery.data ?? [];
 
   const summary = useMemo(
@@ -355,6 +356,11 @@ export function useTaskControl(initialTasks: TaskRecord[]) {
   );
 
   return {
+    error: tasksQuery.error,
+    isLoading: tasksQuery.isLoading,
+    retry: () => {
+      void tasksQuery.refetch();
+    },
     tasks,
     activity,
     presence,
@@ -365,7 +371,7 @@ export function useTaskControl(initialTasks: TaskRecord[]) {
     createTask: (input: CreateTaskInput) =>
       createTaskMutation.mutateAsync(input),
     addComment: (taskId: string, content: string) =>
-      commentMutation.mutate({
+      commentMutation.mutateAsync({
         taskId,
         authorId: actor!.id,
         content,

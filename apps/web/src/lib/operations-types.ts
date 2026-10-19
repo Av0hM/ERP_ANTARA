@@ -23,6 +23,7 @@ export type NotificationRecord = {
 };
 
 export type CalendarEventRecord = {
+  integrationStatus?: "SYNCED" | "NOT_CONFIGURED";
   id: string;
   title: string;
   description?: string;

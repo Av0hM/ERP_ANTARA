@@ -28,7 +28,7 @@ type TaskDetailPanelProps = {
   task?: TaskRecord;
   typing: TypingRecord | null;
   onStatusChange: (taskId: string, status: TaskStatus) => void;
-  onCommentSubmit: (taskId: string, content: string) => void;
+  onCommentSubmit: (taskId: string, content: string) => Promise<unknown>;
   onTyping: (taskId: string) => void;
   isMutating: boolean;
 };
@@ -211,12 +211,18 @@ export function TaskDetailPanel({
         />
         <Button
           className="mt-3 gap-2"
-          onClick={() => {
-            if (!comment.trim()) {
+          disabled={isMutating || !comment.trim()}
+          onClick={async () => {
+            if (isMutating || !comment.trim()) {
               return;
             }
-            onCommentSubmit(task.id, comment.trim());
-            setComment("");
+            const submitted = comment;
+            try {
+              await onCommentSubmit(task.id, submitted.trim());
+              setComment((current) => (current === submitted ? "" : current));
+            } catch {
+              // Mutation reports the failure; retain the unsaved text.
+            }
           }}
         >
           <Send className="size-4" />

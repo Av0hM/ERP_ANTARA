@@ -108,6 +108,21 @@ export function AiSummaryPanel() {
                 ? "AI is temporarily unavailable; queued work has bounded retries"
                 : "AI is available"}
       </p>
+      {(health.isError || health.data?.status !== "available") &&
+        !health.isPending && (
+          <div className="mt-3 text-sm text-muted">
+            <p>Tasks, files, calendar and other ERP features are unaffected.</p>
+            <Button
+              variant="secondary"
+              disabled={health.isFetching}
+              onClick={() => {
+                void health.refetch();
+              }}
+            >
+              Retry availability check
+            </Button>
+          </div>
+        )}
       <div className="mt-5 space-y-4">
         <label className="block">
           Context

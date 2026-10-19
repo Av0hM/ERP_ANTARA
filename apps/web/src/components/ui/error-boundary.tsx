@@ -1,6 +1,6 @@
 "use client";
 
-import { Component, type ErrorInfo, type ReactNode } from "react";
+import { Component, type ReactNode } from "react";
 
 import { Button } from "@/components/ui/button";
 
@@ -22,16 +22,17 @@ export class ErrorBoundary extends Component<Props, State> {
     return { hasError: true, error };
   }
 
-  componentDidCatch(error: Error, info: ErrorInfo) {
-    console.error("ErrorBoundary caught error", error, info);
-  }
-
   render() {
     if (this.state.hasError) {
       return (
         <div className="section-dark grid-texture-dark flex min-h-[50vh] flex-col items-center justify-center rounded-[2rem] p-8 text-center">
-          <h2 className="text-xl font-semibold">Something went wrong</h2>
-          <p className="mt-3 text-sm text-muted">{this.state.error?.message ?? "An unexpected error occurred."}</p>
+          <h2 className="text-xl font-semibold">
+            ANTARA ERP could not display this page
+          </h2>
+          <p className="mt-3 text-sm text-muted">
+            Return to the dashboard or reload. Check saved records before
+            repeating a change.
+          </p>
           <Button className="mt-6" onClick={() => window.location.reload()}>
             Reload page
           </Button>

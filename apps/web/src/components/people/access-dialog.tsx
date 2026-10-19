@@ -1,6 +1,6 @@
 "use client";
 import * as Dialog from "@radix-ui/react-dialog";
-import { useState, type FormEvent } from "react";
+import { useRef, useState, type FormEvent } from "react";
 import type {
   AccessSelection,
   InvitationCreated,
@@ -37,10 +37,13 @@ export function AccessDialog({
   const [email, setEmail] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const submitting = useRef(false);
   const [created, setCreated] = useState<InvitationCreated>();
   const [copied, setCopied] = useState(false);
   const submit = async (event: FormEvent) => {
     event.preventDefault();
+    if (busy || created || submitting.current) return;
+    submitting.current = true;
     setError("");
     setBusy(true);
     const memberships =
@@ -72,6 +75,7 @@ export function AccessDialog({
         cause instanceof Error ? cause.message : "Unable to save access.",
       );
     } finally {
+      submitting.current = false;
       setBusy(false);
     }
   };

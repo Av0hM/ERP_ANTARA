@@ -1,4 +1,4 @@
-import { rejectApiResponse } from "./http-error";
+import { apiFetch, apiJson, checkApiResponse } from "./http-error";
 import { TaskCard, TaskStatus } from "@antara/contracts";
 
 import {
@@ -75,7 +75,7 @@ async function request<T>(
   init?: RequestInit,
   accessToken?: string,
 ): Promise<T> {
-  const response = await fetch(`${baseUrl}${path}`, {
+  const response = await apiFetch(`${baseUrl}${path}`, {
     ...init,
     headers: {
       "Content-Type": "application/json",
@@ -84,19 +84,24 @@ async function request<T>(
     },
   });
 
-  if (!response.ok) {
-    rejectApiResponse(response.status);
-  }
+  await checkApiResponse(response, [
+    "title",
+    "description",
+    "deadline",
+    "startsAt",
+    "endsAt",
+    "content",
+  ]);
 
-  return response.json() as Promise<T>;
+  return apiJson<T>(response);
 }
 
 export async function fetchTasks(accessToken?: string): Promise<TaskRecord[]> {
   try {
     const tasks = await request<ApiTask[]>("/tasks", undefined, accessToken);
     return tasks.map(mapTask);
-  } catch {
-    return [];
+  } catch (error) {
+    throw error;
   }
 }
 
@@ -109,8 +114,8 @@ export async function fetchActivityFeed(
       undefined,
       accessToken,
     );
-  } catch {
-    return [];
+  } catch (error) {
+    throw error;
   }
 }
 

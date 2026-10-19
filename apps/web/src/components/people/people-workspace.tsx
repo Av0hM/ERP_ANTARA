@@ -1,4 +1,5 @@
 "use client";
+import { useUrlChoice } from "@/hooks/use-url-choice";
 import { useState } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -14,7 +15,11 @@ export function PeopleWorkspace() {
   const actor = useActorProfile();
   const cache = useQueryClient();
   const permitted = shell.data.permissions.viewPeople;
-  const [tab, setTab] = useState<"members" | "invitations">("members");
+  const [tab, setTab] = useUrlChoice(
+    "view",
+    ["members", "invitations"] as const,
+    "members",
+  );
   const [editor, setEditor] = useState<"invite" | PersonRecord>();
   const [action, setAction] = useState<{
     title: string;
@@ -43,7 +48,7 @@ export function PeopleWorkspace() {
     shell.refresh();
   };
   const confirm = async () => {
-    if (!action || !actor) return;
+    if (busy || !action || !actor) return;
     setBusy(true);
     setError("");
     try {

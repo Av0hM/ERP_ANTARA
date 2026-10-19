@@ -31,6 +31,7 @@ async function refreshAccessToken(token: {
   try {
     const response = await fetch(`${apiUrl}/auth/refresh`, {
       method: "POST",
+      signal: AbortSignal.timeout(10_000),
       headers: {
         "Content-Type": "application/json",
       },

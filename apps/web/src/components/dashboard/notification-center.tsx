@@ -97,6 +97,7 @@ export function NotificationCenter() {
                   variant="danger"
                   size="sm"
                   onClick={() => deleteNotification(notification.id)}
+                  disabled={isUpdating}
                   aria-label="Delete notification"
                 >
                   <Trash2 className="size-3" />

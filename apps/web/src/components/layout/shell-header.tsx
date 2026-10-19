@@ -91,6 +91,7 @@ export function ShellHeader() {
                 notifications.notifications.slice(0, 5).map((notification) => (
                   <Dropdown.Item
                     key={notification.id}
+                    disabled={notifications.isUpdating}
                     className={item}
                     onSelect={(event) => {
                       event.preventDefault();

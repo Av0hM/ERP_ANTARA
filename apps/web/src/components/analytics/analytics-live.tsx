@@ -1,5 +1,7 @@
 "use client";
 
+import { OperationFeedback } from "@/components/ui/operation-feedback";
+import { classifyError, UxRequestError, uxError } from "@/lib/ux-error";
 import { HeatmapGrid } from "@/components/analytics/heatmap-grid";
 import { InsightList } from "@/components/dashboard/insight-list";
 import { VelocityChart } from "@/components/analytics/velocity-chart";
@@ -16,10 +18,14 @@ export function AnalyticsLive() {
     schedule,
     workload,
     error,
+    retry,
+    aiError,
+    retryAi,
     isLoading,
   } = useAnalyticsData();
 
-  if (error) return <p role="alert">{error.message}</p>;
+  if (error)
+    return <OperationFeedback state="error" error={error} onRetry={retry} />;
   if (isLoading) return <p role="status">Loading analytics…</p>;
   return (
     <div className="space-y-6">
@@ -77,6 +83,19 @@ export function AnalyticsLive() {
         </div>
       </div>
 
+      {aiError && (
+        <OperationFeedback
+          state="error"
+          error={
+            ["FORBIDDEN", "SESSION_EXPIRED", "RATE_LIMITED"].includes(
+              classifyError(aiError).code,
+            )
+              ? aiError
+              : new UxRequestError(uxError("AI_UNAVAILABLE"))
+          }
+          onRetry={retryAi}
+        />
+      )}
       <InsightList insights={insights} />
 
       <div className="grid gap-4 md:grid-cols-3">

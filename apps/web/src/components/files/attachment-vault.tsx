@@ -1,5 +1,8 @@
 "use client";
-import { useState } from "react";
+import { OperationFeedback } from "@/components/ui/operation-feedback";
+import { ConfirmAction } from "@/components/ui/confirm-action";
+import { classifyError } from "@/lib/ux-error";
+import { useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useShell } from "@/components/layout/app-shell";
 import { Button } from "@/components/ui/button";
@@ -19,7 +22,9 @@ export function AttachmentVault() {
   const [category, setCategory] =
     useState<AttachmentRecord["category"]>("DOCUMENT");
   const [file, setFile] = useState<File>();
+  const uploading = useRef(false);
   const [message, setMessage] = useState("");
+  const [deleting, setDeleting] = useState<AttachmentRecord>();
   const [busy, setBusy] = useState<string>();
   const current = shell.current.subsystemId;
   const visible = vault.attachments.filter(
@@ -42,15 +47,25 @@ export function AttachmentVault() {
         await queryClient.invalidateQueries({ queryKey: ["attachments"] });
       }
     } catch (error) {
-      setMessage(
-        error instanceof Error ? error.message : "File operation failed",
-      );
+      setMessage(classifyError(error).message);
     } finally {
       setBusy(undefined);
     }
   }
   return (
     <section className="section-dark rounded-[2rem] p-6">
+      <ConfirmAction
+        open={!!deleting}
+        title={`Delete ${deleting?.name ?? "file"}?`}
+        description="This file will disappear from normal views immediately. It can be restored during the configured retention period if its stored content is intact."
+        confirmLabel="Delete file"
+        busy={!!busy}
+        onCancel={() => setDeleting(undefined)}
+        onConfirm={() => {
+          if (deleting)
+            void action(deleting, "delete").then(() => setDeleting(undefined));
+        }}
+      />
       <h2 className="text-xl font-semibold">ERP files</h2>
       <p className="mt-2 text-sm text-muted">
         Documents and meeting reports use Drive. CAD, images, exports and other
@@ -110,7 +125,18 @@ export function AttachmentVault() {
               className="input-field"
               type="file"
               aria-label="File"
-              onChange={(e) => setFile(e.target.files?.[0])}
+              onChange={(e) => {
+                const selected = e.target.files?.[0];
+                if (selected && !selected.size) {
+                  setMessage(
+                    "Choose a file with content. Empty files cannot be uploaded.",
+                  );
+                  setFile(undefined);
+                } else {
+                  setMessage("");
+                  setFile(selected);
+                }
+              }}
             />
           </label>
           <Button
@@ -120,16 +146,20 @@ export function AttachmentVault() {
               (!taskId && !shell.data.globalAuthority)
             }
             onClick={() => {
-              if (file)
-                vault.createAttachment(
-                  { file, category, taskId: taskId || undefined },
-                  {
-                    onSuccess: () => {
-                      setFile(undefined);
-                      void vault.refetch();
-                    },
+              if (!file || uploading.current) return;
+              uploading.current = true;
+              vault.createAttachment(
+                { file, category, taskId: taskId || undefined },
+                {
+                  onSettled: () => {
+                    uploading.current = false;
                   },
-                );
+                  onSuccess: () => {
+                    setFile(undefined);
+                    void vault.refetch();
+                  },
+                },
+              );
             }}
           >
             {vault.isCreating ? "Uploading…" : "Upload file"}
@@ -139,6 +169,17 @@ export function AttachmentVault() {
             unless configured otherwise.
           </p>
         </div>
+      )}
+      <OperationFeedback
+        state={vault.uploadError && !vault.isCreating ? "error" : "idle"}
+        error={vault.uploadError}
+        preserved={!!file}
+        page="Files"
+      />
+      {vault.isCreating && (
+        <p role="status" className="mt-3">
+          Uploading your file. Keep this page open until it finishes.
+        </p>
       )}
       {shell.data.permissions.manageOperations && (
         <label className="mt-4 flex gap-2">
@@ -203,7 +244,9 @@ export function AttachmentVault() {
                 <Button
                   disabled={busy === item.id}
                   onClick={() =>
-                    void action(item, item.deletedAt ? "restore" : "delete")
+                    item.deletedAt
+                      ? void action(item, "restore")
+                      : setDeleting(item)
                   }
                 >
                   {item.deletedAt ? "Restore" : "Delete"}

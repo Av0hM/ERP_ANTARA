@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { SessionProvider } from "next-auth/react";
 import { ReactNode, useState } from "react";
 
+import { ConnectivityStatus } from "./connectivity-status";
 import { TransitionOverlay } from "@/components/providers/transition-overlay";
 import { ToastProvider } from "@/components/ui/toast";
 
@@ -20,6 +21,8 @@ export function AppProviders({ children }: { children: ReactNode }) {
             retry: 1,
           },
           mutations: {
+            // Never queue an offline write for automatic reconnect execution.
+            networkMode: "always",
             retry: 0,
           },
         },
@@ -29,7 +32,10 @@ export function AppProviders({ children }: { children: ReactNode }) {
   return (
     <SessionProvider>
       <QueryClientProvider client={queryClient}>
-        <ToastProvider>{children}</ToastProvider>
+        <ToastProvider>
+          <ConnectivityStatus />
+          {children}
+        </ToastProvider>
         <TransitionOverlay />
       </QueryClientProvider>
     </SessionProvider>

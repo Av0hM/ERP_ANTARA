@@ -62,23 +62,27 @@ export function WorklogWorkspace() {
     durationMinutesValue: number,
     startedAtIso?: string,
   ) => {
-    if (!taskId) {
+    if (!taskId || isCreating) {
       return;
     }
 
-    await createWorklog({
-      taskId,
-      startedAt:
-        startedAtIso ??
-        new Date(Date.now() - durationMinutesValue * 60 * 1000).toISOString(),
-      endedAt: new Date().toISOString(),
-      durationMin: durationMinutesValue,
-      notes,
-    });
-    setNotes("");
-    setIsRunning(false);
-    setStartedAt(null);
-    setElapsedSeconds(0);
+    try {
+      await createWorklog({
+        taskId,
+        startedAt:
+          startedAtIso ??
+          new Date(Date.now() - durationMinutesValue * 60 * 1000).toISOString(),
+        endedAt: new Date().toISOString(),
+        durationMin: durationMinutesValue,
+        notes,
+      });
+      setNotes("");
+      setIsRunning(false);
+      setStartedAt(null);
+      setElapsedSeconds(0);
+    } catch {
+      // Mutation displays failure; preserve notes and timer state for review.
+    }
   };
 
   return (

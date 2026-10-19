@@ -3,6 +3,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { InsightCard } from "@antara/contracts";
 
+import { classifyError, UxRequestError, uxError } from "@/lib/ux-error";
 import { useShell } from "@/components/layout/app-shell";
 import { canManageOperations } from "@/lib/permissions";
 import { useToast } from "@/components/ui/toast";
@@ -68,39 +69,44 @@ export function useAnalyticsData() {
   const { current } = useShell();
   const analytics = useQuery({
     queryKey: ["analytics-bundle", actor?.accessToken, current.id],
-    queryFn: async () => {
-      const analytics = await fetchAnalyticsBundle(
-        actor!.accessToken,
-        current.subsystemId,
-      );
-      const ai =
-        analytics.scope === "GLOBAL"
-          ? await fetchAiBundle(actor!.accessToken)
-          : {
-              insights: analytics.insights,
-              reminders: [],
-              schedule: [],
-              workload: [],
-            };
-      return { ...analytics, ...ai };
-    },
+    queryFn: () =>
+      fetchAnalyticsBundle(actor!.accessToken, current.subsystemId),
     enabled: !!actor && current.view === "ANALYTICS",
   });
+  const ai = useQuery({
+    queryKey: ["analytics-ai", actor?.accessToken, current.id],
+    queryFn: () => fetchAiBundle(actor!.accessToken),
+    enabled:
+      !!actor &&
+      !analytics.isError &&
+      analytics.data?.scope === "GLOBAL" &&
+      current.view === "ANALYTICS",
+    retry: false,
+  });
+  const supplement =
+    analytics.data?.scope === "GLOBAL" && !ai.isError ? ai.data : undefined;
   return {
     overview: analytics.data?.overview,
     velocity: analytics.data?.velocity ?? [],
     heatmap: analytics.data?.heatmap ?? [],
     subsystems: analytics.data?.subsystems ?? [],
     insights:
-      analytics.data?.insights.map((insight) => ({
+      (supplement?.insights ?? analytics.data?.insights)?.map((insight) => ({
         ...insight,
         severity: insight.severity as InsightCard["severity"],
       })) ?? [],
-    reminders: analytics.data?.reminders ?? [],
-    schedule: analytics.data?.schedule ?? [],
-    workload: analytics.data?.workload ?? [],
+    reminders: supplement?.reminders ?? [],
+    schedule: supplement?.schedule ?? [],
+    workload: supplement?.workload ?? [],
     isLoading: analytics.isLoading,
     error: analytics.error,
+    retry: () => {
+      void analytics.refetch();
+    },
+    aiError: analytics.data?.scope === "GLOBAL" ? ai.error : null,
+    retryAi: () => {
+      void ai.refetch();
+    },
   };
 }
 
@@ -126,17 +132,17 @@ export function useNotificationCenter() {
     mutationFn: (input: { id: string; isRead: boolean }) =>
       updateNotification(input.id, input.isRead, actor!.accessToken),
     onSuccess: invalidate,
-    onError: () => addToast("Unable to update notification", "error"),
+    onError: (error) => addToast(classifyError(error).message, "error"),
   });
   const remove = useMutation({
     mutationFn: (id: string) => deleteNotification(id, actor!.accessToken),
     onSuccess: invalidate,
-    onError: () => addToast("Unable to delete notification", "error"),
+    onError: (error) => addToast(classifyError(error).message, "error"),
   });
   const all = useMutation({
     mutationFn: () => markAllNotificationsRead(actor!.accessToken),
     onSuccess: invalidate,
-    onError: () => addToast("Unable to mark notifications read", "error"),
+    onError: (error) => addToast(classifyError(error).message, "error"),
   });
   return {
     notifications: notifications.isError ? [] : (notifications.data ?? []),
@@ -175,15 +181,23 @@ export function useCalendarData() {
         ["calendar-events", actor?.accessToken],
         (current = []) => [...current, created],
       );
-      addToast("Event created", "success");
+      addToast("Event saved in ANTARA ERP", "success");
     },
-    onError: () => {
-      addToast("Something went wrong. Please try again.", "error");
+    onError: (error) => {
+      addToast(classifyError(error).message, "error");
     },
   });
 
   return {
     events: events.data ?? [],
+    error: events.error,
+    isLoading: events.isLoading,
+    retry: () => {
+      void events.refetch();
+    },
+    saveError: createEvent.error,
+    isSaved: createEvent.isSuccess,
+    integrationStatus: createEvent.data?.integrationStatus,
     createEvent: createEvent.mutate,
     isCreating: createEvent.isPending,
   };
@@ -212,32 +226,15 @@ export function useWorklogData() {
       durationMin: number;
       notes?: string;
     }) => createWorklog(input, actor!.accessToken),
-    onSuccess: (created) => {
-      queryClient.setQueryData<WorklogRecord[]>(
-        ["worklogs", actor?.accessToken],
-        (current = []) => [
-          {
-            id: String(
-              (created as { id?: string }).id ?? `worklog-${Date.now()}`,
-            ),
-            startedAt:
-              (created as { startedAt?: string }).startedAt ??
-              new Date().toISOString(),
-            endedAt: (created as { endedAt?: string }).endedAt,
-            durationMin: Number(
-              (created as { durationMin?: number }).durationMin ?? 0,
-            ),
-            notes: (created as { notes?: string }).notes,
-            task: { title: "Manual worklog entry" },
-            user: { name: actor!.name },
-          },
-          ...current,
-        ],
-      );
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["worklogs"] }),
+        queryClient.invalidateQueries({ queryKey: ["worklog-summary"] }),
+      ]);
       addToast("Worklog submitted", "success");
     },
-    onError: () => {
-      addToast("Something went wrong. Please try again.", "error");
+    onError: (error) => {
+      addToast(classifyError(error).message, "error");
     },
   });
 
@@ -277,13 +274,19 @@ export function useAttachmentVault(deleted = false) {
       file: File;
       category: AttachmentRecord["category"];
       taskId?: string;
-    }) => createAttachment(input, actor!.accessToken),
+    }) =>
+      createAttachment(input, actor!.accessToken).catch((error: unknown) => {
+        const failure = classifyError(error);
+        if (["SERVICE_UNAVAILABLE", "UNKNOWN_ERROR"].includes(failure.code))
+          throw new UxRequestError(uxError("UPLOAD_FAILED"));
+        throw error;
+      }),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["attachments"] });
       addToast("File uploaded", "success");
     },
     onError: (error) => {
-      addToast(error.message, "error");
+      addToast(classifyError(error).message, "error");
     },
   });
 
@@ -292,6 +295,7 @@ export function useAttachmentVault(deleted = false) {
     isLoading: attachments.isLoading,
     error: attachments.error,
     refetch: attachments.refetch,
+    uploadError: create.error,
     createAttachment: create.mutate,
     isCreating: create.isPending,
   };
@@ -337,8 +341,8 @@ export function useReassignTask() {
       });
       addToast("Task reassigned", "success");
     },
-    onError: () => {
-      addToast("Failed to reassign task", "error");
+    onError: (error) => {
+      addToast(classifyError(error).message, "error");
     },
   });
 }
@@ -403,8 +407,8 @@ export function useCreateDecision() {
       await queryClient.invalidateQueries({ queryKey: ["decisions"] });
       addToast("Decision created", "success");
     },
-    onError: () => {
-      addToast("Failed to create decision", "error");
+    onError: (error) => {
+      addToast(classifyError(error).message, "error");
     },
   });
 }
@@ -437,8 +441,8 @@ export function useUpdateDecision() {
       });
       addToast("Decision updated", "success");
     },
-    onError: () => {
-      addToast("Failed to update decision", "error");
+    onError: (error) => {
+      addToast(classifyError(error).message, "error");
     },
   });
 }
@@ -453,8 +457,8 @@ export function useDeleteDecision() {
       await queryClient.invalidateQueries({ queryKey: ["decisions"] });
       addToast("Decision deleted", "success");
     },
-    onError: () => {
-      addToast("Failed to delete decision", "error");
+    onError: (error) => {
+      addToast(classifyError(error).message, "error");
     },
   });
 }
@@ -498,8 +502,8 @@ export function useApplyResourceMove() {
       await queryClient.invalidateQueries({ queryKey: ["tasks"] });
       addToast("Task reassigned", "success");
     },
-    onError: () => {
-      addToast("Failed to reassign task", "error");
+    onError: (error) => {
+      addToast(classifyError(error).message, "error");
     },
   });
 }

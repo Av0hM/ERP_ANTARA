@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { signIn, useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { AlertTriangle, Eye, EyeOff, Sparkles } from "lucide-react";
@@ -24,6 +24,7 @@ export function LoginForm({
   const [showForgotPassword, setShowForgotPassword] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [ready, setReady] = useState(false);
+  const submittingRef = useRef(false);
   useEffect(() => setReady(true), []);
 
   useEffect(() => {
@@ -34,6 +35,8 @@ export function LoginForm({
 
   const handleCredentialsSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (submittingRef.current) return;
+    submittingRef.current = true;
     const values = new FormData(event.currentTarget);
     setError(null);
     setSubmitting(true);
@@ -62,14 +65,27 @@ export function LoginForm({
     } catch {
       setError("Unable to sign in. Please try again.");
     } finally {
+      submittingRef.current = false;
       setSubmitting(false);
     }
   };
 
-  const handleGoogleSignIn = () => {
+  const handleGoogleSignIn = async () => {
+    if (submittingRef.current) return;
+    submittingRef.current = true;
+    setSubmitting(true);
     setError(null);
     clearExpiredLoginCooldown();
-    void signIn("google", { callbackUrl }, { prompt: "select_account" });
+    try {
+      await signIn("google", { callbackUrl }, { prompt: "select_account" });
+    } catch {
+      setError(
+        "Google sign-in could not be started. Check your connection and try again.",
+      );
+    } finally {
+      submittingRef.current = false;
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -192,7 +208,7 @@ export function LoginForm({
           variant="secondary"
           className="w-full"
           onClick={handleGoogleSignIn}
-          disabled={!googleAuthEnabled}
+          disabled={!ready || submitting || !googleAuthEnabled}
           title={!googleAuthEnabled ? "Google OAuth not configured" : undefined}
         >
           Continue with Google Workspace

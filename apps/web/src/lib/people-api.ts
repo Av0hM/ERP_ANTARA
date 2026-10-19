@@ -4,7 +4,7 @@ import type {
   InvitationView,
   InvitationCreated,
 } from "@antara/contracts";
-import { rejectApiResponse } from "./http-error";
+import { apiFetch, apiJson, checkApiResponse } from "./http-error";
 const base = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000/api";
 export async function peopleRequest<T>(
   path: string,
@@ -12,7 +12,7 @@ export async function peopleRequest<T>(
   method = "GET",
   body?: unknown,
 ): Promise<T> {
-  const response = await fetch(`${base}${path}`, {
+  const response = await apiFetch(`${base}${path}`, {
     method,
     cache: "no-store",
     headers: {
@@ -21,21 +21,8 @@ export async function peopleRequest<T>(
     },
     ...(body ? { body: JSON.stringify(body) } : {}),
   });
-  if (response.status === 401 || response.status === 403)
-    rejectApiResponse(response.status);
-  if (!response.ok) {
-    const payload: { message?: string | string[] } = await response
-      .json()
-      .catch(() => ({}));
-    throw new Error(
-      response.status >= 500
-        ? "The operation could not finish. Please try again."
-        : Array.isArray(payload.message)
-          ? payload.message.join(". ")
-          : (payload.message ?? "The operation could not finish."),
-    );
-  }
-  return response.json() as Promise<T>;
+  await checkApiResponse(response, ["email", "name", "skills", "capacity"]);
+  return apiJson<T>(response);
 }
 export const fetchPeople = (token: string) =>
   peopleRequest<PersonRecord[]>("/users", token);

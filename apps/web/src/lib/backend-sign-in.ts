@@ -23,6 +23,11 @@ export async function backendSignIn(
     if (error instanceof BackendAuthError && error.code === "rate_limited") {
       return "/login/rate-limited";
     }
+    if (error instanceof BackendAuthError) {
+      return error.code === "backend_unavailable"
+        ? "/login/error?reason=service-unavailable"
+        : "/login/error?reason=account-denied";
+    }
     throw error;
   }
 }

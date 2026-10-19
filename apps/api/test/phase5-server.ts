@@ -1,3 +1,5 @@
+import { IdentityThrottleGuard } from "../src/modules/auth/identity-throttle.guard";
+import { IdentityThrottleStorage } from "../src/modules/auth/identity-throttle.storage";
 import { PeopleService } from "../src/modules/users/people.service";
 import { UsersController } from "../src/modules/users/users.controller";
 import { UsersService } from "../src/modules/users/users.service";
@@ -279,6 +281,8 @@ async function main() {
       JwtStrategy,
       SessionService,
       RefreshThrottleGuard,
+      IdentityThrottleGuard,
+      IdentityThrottleStorage,
       AuthorizationService,
       CoreAuthorizationService,
       UiContextService,

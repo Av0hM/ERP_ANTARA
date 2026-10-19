@@ -60,28 +60,34 @@ export function AppShell({ children }: { children: ReactNode }) {
     refetchInterval: 60_000,
     refetchIntervalInBackground: false,
   });
-  const logout = useCallback(async () => {
-    setLeaving(true);
-    await client.cancelQueries();
-    client.clear();
-    try {
-      await signOut({ redirect: false });
-      window.location.replace("/login");
-    } catch {
-      setNotice("Sign out could not finish. Please retry.");
-      setLeaving(false);
-    }
-  }, [client]);
+  const logout = useCallback(
+    async (expired = false) => {
+      setLeaving(true);
+      await client.cancelQueries();
+      client.clear();
+      try {
+        await signOut({ redirect: false });
+        window.location.replace(
+          expired ? "/login?reason=session-expired" : "/login",
+        );
+      } catch {
+        setNotice("Sign out could not finish. Please retry.");
+        setLeaving(false);
+      }
+    },
+    [client],
+  );
   useEffect(() => {
     if (status === "unauthenticated") {
       client.clear();
       router.replace("/login");
     }
-    if (session?.error || (status === "authenticated" && !token)) void logout();
+    if (session?.error || (status === "authenticated" && !token))
+      void logout(true);
   }, [status, session?.error, token, client, router, logout]);
   useEffect(() => {
     const handle = (event: Event) => {
-      if ((event as CustomEvent<number>).detail === 401) void logout();
+      if ((event as CustomEvent<number>).detail === 401) void logout(true);
       else {
         setNotice("Access changed. Available contexts have been refreshed.");
         void client.invalidateQueries({ queryKey: ["ui-context"] });

@@ -1,4 +1,6 @@
 "use client";
+import { OperationFeedback } from "@/components/ui/operation-feedback";
+import { useUrlChoice } from "@/hooks/use-url-choice";
 import { useShell } from "@/components/layout/app-shell";
 
 import { useEffect, useMemo, useState } from "react";
@@ -30,8 +32,12 @@ type TaskWorkspaceProps = {
 export function TaskWorkspace({ tasks }: TaskWorkspaceProps) {
   const { data: subsystemData = [] } = useSubsystemCatalog();
   const [query, setQuery] = useState("");
-  const [priority, setPriority] = useState<(typeof priorities)[number]>("ALL");
-  const [subsystem, setSubsystem] = useState<string>("ALL");
+  const [priority, setPriority] = useUrlChoice("priority", priorities, "ALL");
+  const [subsystem, setSubsystem] = useUrlChoice(
+    "subsystem",
+    ["ALL", ...subsystemData.map((item) => item.id)],
+    "ALL",
+  );
   const [selectedTaskId, setSelectedTaskId] = useState<string | undefined>(
     tasks[0]?.id,
   );
@@ -57,7 +63,7 @@ export function TaskWorkspace({ tasks }: TaskWorkspaceProps) {
 
       const matchesPriority = priority === "ALL" || task.priority === priority;
       const matchesSubsystem =
-        subsystem === "ALL" || task.subsystem === subsystem;
+        subsystem === "ALL" || task.subsystemId === subsystem;
 
       return matchesQuery && matchesPriority && matchesSubsystem;
     });
@@ -84,6 +90,23 @@ export function TaskWorkspace({ tasks }: TaskWorkspaceProps) {
       icon: Users,
     },
   ];
+
+  if (control.error)
+    return (
+      <OperationFeedback
+        state="error"
+        error={control.error}
+        onRetry={control.retry}
+        page="Tasks"
+      />
+    );
+  if (control.isLoading)
+    return (
+      <OperationFeedback
+        state="loading"
+        message="Loading tasks in your current access scope…"
+      />
+    );
 
   return (
     <div className="space-y-6">
@@ -136,6 +159,7 @@ export function TaskWorkspace({ tasks }: TaskWorkspaceProps) {
           </label>
 
           <select
+            aria-label="Task priority filter"
             value={priority}
             onChange={(event) =>
               setPriority(event.target.value as (typeof priorities)[number])
@@ -154,30 +178,29 @@ export function TaskWorkspace({ tasks }: TaskWorkspaceProps) {
           </select>
 
           <select
+            aria-label="Task subsystem filter"
             value={subsystem}
             onChange={(event) => setSubsystem(event.target.value)}
             className="input-field"
           >
-            {["ALL", ...subsystemData.map((option) => option.name)].map(
-              (option) => (
-                <option
-                  key={option}
-                  value={option}
-                  className="bg-panel text-text"
-                >
-                  {option}
-                </option>
-              ),
-            )}
+            <option value="ALL">All readable subsystems</option>
+            {subsystemData.map((item) => (
+              <option
+                key={item.id}
+                value={item.id}
+                className="bg-panel text-text"
+              >
+                {item.name}
+              </option>
+            ))}
           </select>
         </div>
       </section>
 
       {control.tasks.length === 0 ? (
         <section className="section-dark grid-texture-dark rounded-[2rem] border border-dashed border-steel/30 p-6 text-sm text-muted">
-          No live tasks are loaded yet. Once the backend is populated, this
-          board will show subsystem work, dependencies, and collaboration
-          history.
+          No tasks are currently available in your access scope. Tasks will
+          appear here when your team adds work.
         </section>
       ) : null}
 

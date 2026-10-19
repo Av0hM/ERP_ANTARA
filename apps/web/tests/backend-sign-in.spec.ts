@@ -26,11 +26,13 @@ for (const status of [401, 403, 429, 500, 502, 503]) {
           await backendSignIn("http://localhost/api", actor, account),
         ).toBe("/login/rate-limited");
       } else {
-        await expect(
-          backendSignIn("http://localhost/api", actor, account),
-        ).rejects.toMatchObject({
-          code: status < 500 ? "credentials" : "backend_unavailable",
-        });
+        expect(
+          await backendSignIn("http://localhost/api", actor, account),
+        ).toBe(
+          status < 500
+            ? "/login/error?reason=account-denied"
+            : "/login/error?reason=service-unavailable",
+        );
       }
       expect(actor.accessToken).toBeUndefined();
     } finally {
@@ -77,9 +79,9 @@ test("timeout is not a cooldown redirect", async () => {
     globalThis.fetch = async () => {
       throw new DOMException("timeout", "TimeoutError");
     };
-    await expect(
-      backendSignIn("http://localhost/api", user(), account),
-    ).rejects.toMatchObject({ code: "backend_unavailable" });
+    expect(await backendSignIn("http://localhost/api", user(), account)).toBe(
+      "/login/error?reason=service-unavailable",
+    );
   } finally {
     globalThis.fetch = original;
   }

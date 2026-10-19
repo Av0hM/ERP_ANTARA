@@ -1,4 +1,6 @@
 "use client";
+import { useUrlChoice } from "@/hooks/use-url-choice";
+import { OperationFeedback } from "@/components/ui/operation-feedback";
 
 import { useState } from "react";
 import { Plus, Search, Filter, FileText, ChevronDown, X } from "lucide-react";
@@ -25,15 +27,23 @@ type StatusFilter = (typeof statusOptions)[number];
 export default function DecisionsPage() {
   const actor = useActorProfile();
   const { data: subsystemData = [] } = useSubsystemCatalog();
-  const { data, isLoading, refetch } = useDecisions();
+  const { data, isLoading, refetch, error: loadError } = useDecisions();
   const manageableSubsystems = subsystemData.filter(
     (subsystem) => subsystem.canManage,
   );
   const canCreate = actor?.role === "OWNER" || manageableSubsystems.length > 0;
   const createMutation = useCreateDecision();
 
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>("ALL");
-  const [subsystemFilter, setSubsystemFilter] = useState<string>("ALL");
+  const [statusFilter, setStatusFilter] = useUrlChoice(
+    "status",
+    statusOptions,
+    "ALL",
+  );
+  const [subsystemFilter, setSubsystemFilter] = useUrlChoice(
+    "subsystem",
+    ["ALL", ...subsystemData.map((item) => item.id)],
+    "ALL",
+  );
   const [searchQuery, setSearchQuery] = useState("");
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [selectedDecision, setSelectedDecision] =
@@ -106,6 +116,16 @@ export default function DecisionsPage() {
 
   if (!actor) return null;
 
+  if (loadError)
+    return (
+      <OperationFeedback
+        state="error"
+        error={loadError}
+        onRetry={() => {
+          void refetch();
+        }}
+      />
+    );
   return (
     <div className="space-y-6">
       <section className="section-dark grid-texture-dark rounded-[2rem] p-6 md:p-8">

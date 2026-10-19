@@ -5,6 +5,8 @@ import { signIn, signOut, useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { AlertTriangle, Sparkles, CheckCircle2 } from "lucide-react";
 
+import { apiFetch, checkApiResponse } from "@/lib/http-error";
+import { classifyError } from "@/lib/ux-error";
 import { Button } from "@/components/ui/button";
 
 const baseUrl =
@@ -45,7 +47,7 @@ export function InviteAcceptForm({
   useEffect(() => {
     let cancelled = false;
 
-    fetch(`${baseUrl}/invitations/validate/${token}`)
+    apiFetch(`${baseUrl}/invitations/validate/${token}`)
       .then((res) => {
         if (!res.ok) throw new Error("Unavailable");
         return res.json();
@@ -105,12 +107,12 @@ export function InviteAcceptForm({
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (wrongAccount || sessionStatus === "loading") return;
+    if (submitting || wrongAccount || sessionStatus === "loading") return;
     setError(null);
     setSubmitting(true);
 
     try {
-      const res = await fetch(
+      const res = await apiFetch(
         `${baseUrl}/invitations/${acceptAsAccount ? "accept-existing" : "accept"}`,
         {
           method: "POST",
@@ -126,20 +128,13 @@ export function InviteAcceptForm({
         },
       );
 
-      if (!res.ok) {
-        const body = await res
-          .json()
-          .catch(() => ({ message: "Something went wrong. Try again." }));
-        setError(body.message ?? "Something went wrong. Try again.");
-        setSubmitting(false);
-        return;
-      }
+      await checkApiResponse(res, ["name", "password"]);
 
       if (acceptAsAccount) await signOut({ redirect: false });
       setAccepted(true);
       window.setTimeout(() => router.push("/login"), 1500);
-    } catch {
-      setError("Something went wrong. Try again.");
+    } catch (cause) {
+      setError(classifyError(cause).message);
       setSubmitting(false);
     }
   };
