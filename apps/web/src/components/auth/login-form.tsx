@@ -25,7 +25,10 @@ export function LoginForm({
   const [submitting, setSubmitting] = useState(false);
   const [ready, setReady] = useState(false);
   const submittingRef = useRef(false);
-  useEffect(() => setReady(true), []);
+  useEffect(() => {
+    clearExpiredLoginCooldown();
+    setReady(true);
+  }, []);
 
   useEffect(() => {
     if (status === "authenticated") {

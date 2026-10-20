@@ -3,6 +3,7 @@ import { z } from "zod";
 export class BackendAuthError extends Error {
   constructor(
     readonly code: "credentials" | "rate_limited" | "backend_unavailable",
+    readonly retryAt?: number,
   ) {
     super(code);
     this.name = "BackendAuthError";
@@ -20,6 +21,19 @@ const authResponse = z.object({
   refreshToken: z.string().min(1),
   accessTokenExpiresAt: z.string().datetime(),
 });
+
+export function backendRetryAt(
+  value: string | null,
+  now = Date.now(),
+): number | undefined {
+  if (!value) return undefined;
+  const deadline = /^\d+$/.test(value.trim())
+    ? now + Number(value) * 1000
+    : Date.parse(value);
+  return Number.isSafeInteger(deadline) && deadline > now
+    ? deadline
+    : undefined;
+}
 
 export async function authenticateWithBackend(
   apiUrl: string,
@@ -41,6 +55,7 @@ export async function authenticateWithBackend(
           event: "backend_auth_rate_limited",
           endpoint: `/auth/${provider}`,
           status: response.status,
+          retryAt: backendRetryAt(response.headers.get("Retry-After")),
         });
       }
       throw new BackendAuthError(
@@ -49,6 +64,9 @@ export async function authenticateWithBackend(
           : response.status === 401 || response.status === 403
             ? "credentials"
             : "backend_unavailable",
+        response.status === 429
+          ? backendRetryAt(response.headers.get("Retry-After"))
+          : undefined,
       );
     }
     const payload = authResponse.parse(await response.json());

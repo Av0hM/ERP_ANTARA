@@ -2,15 +2,15 @@ export const loginCooldownKey = "antara.auth.rateLimitUntil";
 export const loginCooldownMs = 90_000;
 
 /** UX only. An expired timestamp is retained so reloading never restarts it. */
-export function loginCooldownUntil(now: number): number {
-  const fallback = now + loginCooldownMs;
+export function loginCooldownUntil(now: number, retryAt?: number): number {
+  const fallback = Math.max(now + loginCooldownMs, retryAt ?? 0);
   try {
     const stored = window.sessionStorage.getItem(loginCooldownKey);
     const timestamp = stored && /^\d+$/.test(stored) ? Number(stored) : NaN;
     if (
       Number.isSafeInteger(timestamp) &&
       timestamp > 0 &&
-      timestamp <= fallback
+      (retryAt === undefined || timestamp >= retryAt)
     ) {
       return timestamp;
     }

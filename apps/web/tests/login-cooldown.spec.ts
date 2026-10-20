@@ -141,3 +141,50 @@ test("mobile cooldown fits the viewport", async ({ page }) => {
     ),
   ).toBe(true);
 });
+
+test("longer backend Retry-After survives reload and expiry removes the key on return", async ({
+  page,
+}) => {
+  await page.goto(
+    `/login/rate-limited?retryAt=${Date.parse("2030-01-01T00:03:00Z")}`,
+  );
+  await expect(page.getByRole("timer")).toHaveText("Retry available in 03:00");
+  await page.clock.runFor(90000);
+  await page.reload();
+  await expect(page.getByRole("timer")).toHaveText("Retry available in 01:30");
+  await expect(page.getByRole("button", { name: "Try again" })).toBeDisabled();
+  await page.clock.runFor(90000);
+  await page.clock.resume();
+  await page.getByRole("button", { name: "Back to login" }).click();
+  await expect(page).toHaveURL(/\/login$/);
+  expect(
+    await page.evaluate(() =>
+      sessionStorage.getItem("antara.auth.rateLimitUntil"),
+    ),
+  ).toBeNull();
+});
+
+for (const offset of [-1000, 180000]) {
+  test(`stored cooldown (${offset}) cannot redirect the login page`, async ({
+    page,
+  }) => {
+    await page.addInitScript(
+      ({ key, deadline }) => sessionStorage.setItem(key, String(deadline)),
+      {
+        key,
+        deadline: Date.parse("2030-01-01T00:00:00Z") + offset,
+      },
+    );
+    await page.goto("/login");
+    await expect(
+      page.getByRole("button", { name: "Sign In", exact: true }),
+    ).toBeEnabled();
+    await expect(page).toHaveURL(/\/login$/);
+    if (offset < 0)
+      expect(
+        await page.evaluate(() =>
+          sessionStorage.getItem("antara.auth.rateLimitUntil"),
+        ),
+      ).toBeNull();
+  });
+}

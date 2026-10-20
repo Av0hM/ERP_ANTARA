@@ -1,5 +1,8 @@
 import { test, expect } from "@playwright/test";
-import { authenticateWithBackend } from "../src/lib/backend-auth";
+import {
+  authenticateWithBackend,
+  backendRetryAt,
+} from "../src/lib/backend-auth";
 
 test("Google exchange retains backend identity and tokens", async () => {
   const originalFetch = globalThis.fetch;
@@ -154,4 +157,14 @@ test("backend timeout is unavailable, never rate limited", async () => {
   } finally {
     globalThis.fetch = originalFetch;
   }
+});
+
+test("Retry-After supports seconds and HTTP dates without shortening the wait", () => {
+  const now = Date.parse("2030-01-01T00:00:00Z");
+  expect(backendRetryAt("180", now)).toBe(now + 180000);
+  expect(backendRetryAt("Tue, 01 Jan 2030 00:03:00 GMT", now)).toBe(
+    now + 180000,
+  );
+  for (const value of [null, "invalid", "0", "-1"])
+    expect(backendRetryAt(value, now)).toBeUndefined();
 });

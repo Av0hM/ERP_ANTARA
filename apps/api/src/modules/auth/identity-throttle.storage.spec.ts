@@ -15,6 +15,36 @@ describe("bounded identity throttle storage", () => {
   });
   const consume = (store: IdentityThrottleStorage, key: string) =>
     store.increment(key, 60000, 20, 60000, "identity");
+  it.each([60000, 90000])(
+    "admits the same key after %i ms without extending blocks",
+    async (elapsed) => {
+      for (let i = 1; i <= 20; i++)
+        expect(await consume(store, "identity")).toMatchObject({
+          totalHits: i,
+          isBlocked: false,
+        });
+      expect(await consume(store, "identity")).toMatchObject({
+        isBlocked: true,
+        timeToBlockExpire: 60,
+      });
+      const deadline = store.storage.get("identity")!.blockExpiresAt;
+      jest.advanceTimersByTime(59000);
+      expect(await consume(store, "identity")).toMatchObject({
+        isBlocked: true,
+        timeToBlockExpire: 1,
+      });
+      expect(store.storage.get("identity")!.blockExpiresAt).toBe(deadline);
+      jest.advanceTimersByTime(elapsed - 59000);
+      expect(await consume(store, "identity")).toMatchObject({
+        totalHits: 1,
+        isBlocked: false,
+      });
+      expect(await consume(store, "identity")).toMatchObject({
+        totalHits: 2,
+        isBlocked: false,
+      });
+    },
+  );
   it("caps concurrent new-key admission without evicting existing budgets", async () => {
     // Capacity fixture without allocating 50,000 timers. Admission uses the real Map.
     for (let i = 0; i < identityMaxKeys - 1; i++)

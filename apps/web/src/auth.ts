@@ -2,7 +2,7 @@ import NextAuth, { CredentialsSignin } from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import Google from "next-auth/providers/google";
 import { authenticateWithBackend, BackendAuthError } from "./lib/backend-auth";
-import { backendSignIn } from "./lib/backend-sign-in";
+import { backendAuthCallbacks } from "./lib/auth-callbacks";
 
 class BackendSignInError extends CredentialsSignin {
   constructor(code: string) {
@@ -15,57 +15,6 @@ const apiUrl = process.env.API_URL ?? "http://localhost:4000/api";
 const resolvedNextAuthSecret =
   process.env.NEXTAUTH_SECRET ??
   (process.env.NODE_ENV === "production" ? undefined : "dev-nextauth-secret");
-async function refreshAccessToken(token: {
-  accessToken?: string;
-  accessTokenExpires?: number;
-  refreshToken?: string;
-  role?: string;
-  sub?: string;
-  email?: string | null;
-  name?: string | null;
-}) {
-  if (!token.refreshToken) {
-    return { ...token, error: "RefreshAccessTokenError" };
-  }
-
-  try {
-    const response = await fetch(`${apiUrl}/auth/refresh`, {
-      method: "POST",
-      signal: AbortSignal.timeout(10_000),
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        refreshToken: token.refreshToken,
-      }),
-    });
-
-    if (!response.ok) {
-      throw new Error("Refresh failed");
-    }
-
-    const payload = (await response.json()) as {
-      user: { id: string; email: string; name: string; role: string };
-      accessToken: string;
-      refreshToken: string;
-      accessTokenExpiresAt: string;
-    };
-
-    return {
-      ...token,
-      sub: payload.user.id,
-      email: payload.user.email,
-      name: payload.user.name,
-      role: payload.user.role,
-      accessToken: payload.accessToken,
-      refreshToken: payload.refreshToken,
-      accessTokenExpires: new Date(payload.accessTokenExpiresAt).getTime(),
-      error: undefined,
-    };
-  } catch {
-    return { ...token, error: "RefreshAccessTokenError" };
-  }
-}
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   secret: resolvedNextAuthSecret,
@@ -133,51 +82,5 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       }
     },
   },
-  callbacks: {
-    signIn: ({ user, account }) => backendSignIn(apiUrl, user, account),
-    async jwt({ token, user }) {
-      if (user) {
-        const expires = Date.parse(user.accessTokenExpiresAt ?? "");
-        if (
-          !user.id ||
-          !["OWNER", "ADMIN", "MEMBER"].includes(user.role) ||
-          !user.accessToken ||
-          !user.refreshToken ||
-          !Number.isFinite(expires)
-        ) {
-          throw new Error("Backend session is incomplete");
-        }
-        token.sub = user.id;
-        token.email = user.email;
-        token.name = user.name;
-        token.role = user.role;
-        token.accessToken = user.accessToken;
-        token.refreshToken = user.refreshToken;
-        token.accessTokenExpires = expires;
-        return token;
-      }
-
-      if (
-        typeof token.accessTokenExpires === "number" &&
-        Date.now() < token.accessTokenExpires - 30_000
-      ) {
-        return token;
-      }
-
-      return refreshAccessToken(token);
-    },
-    async session({ session, token }) {
-      if (session.user) {
-        session.user.id = String(token.sub ?? "");
-        session.user.email = token.email ?? session.user.email;
-        session.user.name = token.name ?? session.user.name;
-        session.user.role = typeof token.role === "string" ? token.role : "";
-        session.accessToken =
-          typeof token.accessToken === "string" ? token.accessToken : undefined;
-      }
-
-      session.error = typeof token.error === "string" ? token.error : undefined;
-      return session;
-    },
-  },
+  callbacks: backendAuthCallbacks(apiUrl),
 });

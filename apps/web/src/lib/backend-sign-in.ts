@@ -21,7 +21,9 @@ export async function backendSignIn(
     return true;
   } catch (error) {
     if (error instanceof BackendAuthError && error.code === "rate_limited") {
-      return "/login/rate-limited";
+      return error.retryAt
+        ? `/login/rate-limited?retryAt=${error.retryAt}`
+        : "/login/rate-limited";
     }
     if (error instanceof BackendAuthError) {
       return error.code === "backend_unavailable"

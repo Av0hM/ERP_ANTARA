@@ -9,19 +9,19 @@ import {
   loginCooldownUntil,
 } from "@/lib/login-cooldown";
 
-export function LoginCooldown() {
+export function LoginCooldown({ retryAt }: { retryAt?: number }) {
   const router = useRouter();
   const [remaining, setRemaining] = useState(90);
   const [initialized, setInitialized] = useState(false);
   useEffect(() => {
-    const blockedUntil = loginCooldownUntil(Date.now());
+    const blockedUntil = loginCooldownUntil(Date.now(), retryAt);
     const update = () =>
       setRemaining(Math.max(0, Math.ceil((blockedUntil - Date.now()) / 1000)));
     update();
     setInitialized(true);
     const timer = window.setInterval(update, 1000);
     return () => window.clearInterval(timer);
-  }, []);
+  }, [retryAt]);
   const ready = remaining === 0;
   const countdown = `${String(Math.floor(remaining / 60)).padStart(2, "0")}:${String(remaining % 60).padStart(2, "0")}`;
   return (
@@ -35,8 +35,8 @@ export function LoginCooldown() {
         Too many login attempts
       </h1>
       <p className="mt-4 text-sm leading-6 text-muted">
-        For security, sign-in has been temporarily limited. Please wait 90
-        seconds before trying again.
+        For security, sign-in has been temporarily limited. Please wait until
+        the countdown finishes before trying again.
       </p>
       <p
         className="my-6 font-mono text-lg tabular-nums text-text"

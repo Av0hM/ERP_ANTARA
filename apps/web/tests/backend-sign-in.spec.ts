@@ -1,3 +1,4 @@
+import { backendAuthCallbacks } from "../src/lib/auth-callbacks";
 import { expect, test } from "@playwright/test";
 import type { Account, User } from "next-auth";
 import { backendSignIn } from "../src/lib/backend-sign-in";
@@ -121,4 +122,91 @@ test("missing Google token cannot become cooldown", async () => {
       id_token: undefined,
     }),
   ).rejects.toThrow("Google identity token is missing");
+});
+
+test("production signIn -> JWT -> session callbacks exchange once; refresh never exchanges Google again", async () => {
+  const original = globalThis.fetch;
+  const calls: string[] = [];
+  const callbacks = backendAuthCallbacks("http://localhost/api");
+  try {
+    globalThis.fetch = async (url) => {
+      calls.push(String(url));
+      return Response.json({
+        user: {
+          id: "db-id",
+          email: "fixture@example.invalid",
+          name: "Fixture",
+          role: "MEMBER",
+        },
+        accessToken: "access",
+        refreshToken: "refresh",
+        accessTokenExpiresAt: "2099-01-01T00:00:00.000Z",
+      });
+    };
+    const actor = user();
+    expect(await callbacks.signIn!({ user: actor, account })).toBe(true);
+    let token = await callbacks.jwt!({
+      token: {},
+      user: actor,
+      account,
+      trigger: "signIn",
+    });
+    for (let i = 0; i < 3; i++) {
+      // Auth.js session reads omit user/account (the public callback type requires user).
+      token = await callbacks.jwt!({ token } as Parameters<
+        NonNullable<typeof callbacks.jwt>
+      >[0]);
+      await callbacks.session!({
+        session: {
+          user: { id: "", role: "", emailVerified: null },
+          expires: "2099-01-01",
+        },
+        token,
+      } as Parameters<NonNullable<typeof callbacks.session>>[0]);
+    }
+    token!.accessTokenExpires = 0;
+    await callbacks.jwt!({ token } as Parameters<
+      NonNullable<typeof callbacks.jwt>
+    >[0]);
+    expect(calls).toEqual([
+      "http://localhost/api/auth/google-callback",
+      "http://localhost/api/auth/refresh",
+    ]);
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+
+test("a backend 429 cannot persist into the next OAuth attempt", async () => {
+  const original = globalThis.fetch;
+  let calls = 0;
+  try {
+    globalThis.fetch = async () => {
+      calls++;
+      if (calls === 1) return new Response(null, { status: 429 });
+      return Response.json({
+        user: {
+          id: "db-id",
+          email: "fixture@example.invalid",
+          name: "Fixture",
+          role: "MEMBER",
+        },
+        accessToken: "access",
+        refreshToken: "refresh",
+        accessTokenExpiresAt: "2099-01-01T00:00:00.000Z",
+      });
+    };
+    expect(await backendSignIn("http://localhost/api", user(), account)).toBe(
+      "/login/rate-limited",
+    );
+    expect(
+      await backendSignIn("http://localhost/api", user(), {
+        ...account,
+        id_token: "fresh-token",
+      }),
+    ).toBe(true);
+    expect(calls).toBe(2);
+  } finally {
+    globalThis.fetch = original;
+  }
 });

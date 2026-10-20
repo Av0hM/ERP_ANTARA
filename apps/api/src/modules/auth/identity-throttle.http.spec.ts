@@ -1,3 +1,4 @@
+import { backendSignIn } from "../../../../web/src/lib/backend-sign-in";
 import { INestApplication, Logger, ValidationPipe } from "@nestjs/common";
 import { Test } from "@nestjs/testing";
 import { ThrottlerModule } from "@nestjs/throttler";
@@ -24,7 +25,17 @@ describe("Actual auth route identity throttling over HTTP", () => {
           provide: AuthService,
           useValue: {
             login: async () => ({ ok: true }),
-            googleCallback: async () => ({ ok: true }),
+            googleCallback: async () => ({
+              user: {
+                id: "db-id",
+                email: "fixture@example.invalid",
+                name: "Fixture",
+                role: "MEMBER",
+              },
+              accessToken: "access",
+              refreshToken: "refresh",
+              accessTokenExpiresAt: "2030-01-01T00:00:00.000Z",
+            }),
           },
         },
         {
@@ -67,6 +78,45 @@ describe("Actual auth route identity throttling over HTTP", () => {
       },
       body: JSON.stringify(body),
     });
+  it("fresh Google sign-in succeeds after a 90s identity block, with one exchange and no cooldown redirect", async () => {
+    const now = Date.now();
+    const clock = jest.spyOn(Date, "now").mockReturnValue(now);
+    const fetchSpy = jest.spyOn(globalThis, "fetch");
+    const login = (attempt: number) =>
+      backendSignIn(
+        `${origin}/api`,
+        { id: "google-id" },
+        {
+          provider: "google",
+          providerAccountId: "fixture",
+          type: "oidc",
+          id_token: `recovery:${attempt}`,
+        },
+      );
+    try {
+      for (let i = 0; i < 20; i++) expect(await login(i)).toBe(true);
+      expect(await login(20)).toBe(
+        `/login/rate-limited?retryAt=${now + 60000}`,
+      );
+      expect(Logger.prototype.warn).toHaveBeenCalledWith(
+        expect.objectContaining({
+          bucket: "identity",
+          operation: "googleCallback",
+        }),
+      );
+      clock.mockReturnValue(now + 59000);
+      expect(await login(21)).toBe(
+        `/login/rate-limited?retryAt=${now + 60000}`,
+      );
+      clock.mockReturnValue(now + 90000);
+      fetchSpy.mockClear();
+      expect(await login(22)).toBe(true);
+      expect(fetchSpy).toHaveBeenCalledTimes(1);
+    } finally {
+      fetchSpy.mockRestore();
+      clock.mockRestore();
+    }
+  });
   it.each(["google-callback", "login"])(
     "%s isolates real controller budgets behind one source",
     async (route) => {
